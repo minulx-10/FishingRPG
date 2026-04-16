@@ -1,0 +1,25 @@
+name: Deploy Discord Bot
+
+on:
+  push:
+    branches:
+      - main 
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: GSM SV 서버에 접속해서 배포 대본 실행하기
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          password: ${{ secrets.PASSWORD }}
+          port: 24111
+          script: |
+            # 🌟 서버에 있는 봇 폴더 경로로 이동
+            cd /home/ubuntu/discord_bot
+            
+            # 배포 스크립트 실행 권한 주고 실행
+            chmod +x deploy.sh
+            ./deploy.sh

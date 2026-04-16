@@ -1,0 +1,6 @@
+*.pem
+*.db
+*.txt
+__pycache__/
+.env
+bot.py
