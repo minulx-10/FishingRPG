@@ -50,6 +50,13 @@ cursor.execute('''
 ''')
 conn.commit()
 
+# 기존 유저 테이블에 출석체크용 날짜 컬럼 추가 (이미 있으면 무시됨)
+try:
+    cursor.execute("ALTER TABLE user_data ADD COLUMN last_daily TEXT DEFAULT ''")
+    conn.commit()
+except sqlite3.OperationalError:
+    pass # 이미 컬럼이 존재함
+
 def get_user_data(user_id):
     cursor.execute("INSERT OR IGNORE INTO user_data (user_id) VALUES (?)", (user_id,))
     cursor.execute("SELECT coins, rod_tier, rating FROM user_data WHERE user_id=?", (user_id,))
@@ -264,8 +271,24 @@ class BattleView(View):
 async def 낚시(interaction: discord.Interaction):
     coins, rod_tier, rating = get_user_data(interaction.user.id)
     
+    # 🌟 미끼 보유 여부 확인 및 차감 로직 추가
+    cursor.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name='고급 미끼 🪱'", (interaction.user.id,))
+    bait_res = cursor.fetchone()
+    has_bait = bait_res and bait_res[0] > 0
+    
+    if has_bait:
+        cursor.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name='고급 미끼 🪱'", (interaction.user.id,))
+        conn.commit()
+        bait_text = " (🪱 고급 미끼 사용됨!)"
+    else:
+        bait_text = ""
+
     # 낚싯대 티어에 따른 확률 보정
     roll = random.uniform(0, 100) / (1 + (rod_tier - 1) * 0.2) 
+    
+    # 🌟 미끼가 있으면 확률 주사위 값을 절반으로 깎아서 희귀도 대폭 상승!
+    if has_bait:
+        roll = roll * 0.5 
     
     # 확률표를 역순으로 확인하여 등급 판정
     target_fish = "낡은 장화 🥾"
@@ -275,7 +298,7 @@ async def 낚시(interaction: discord.Interaction):
             break
 
     view = FishingView(interaction.user, target_fish, rod_tier)
-    await interaction.response.send_message(f"🌊 찌를 던졌습니다... 조용히 기다리세요. (내 낚싯대: Lv.{rod_tier})", view=view)
+    await interaction.response.send_message(f"🌊 찌를 던졌습니다... 조용히 기다리세요.{bait_text}\n(내 낚싯대: Lv.{rod_tier})", view=view)
     
     # 비동기 대기 (2~6초) - 서버 멈춤 현상 없음
     wait_time = random.uniform(2, 6)
@@ -388,6 +411,53 @@ async def 배틀(interaction: discord.Interaction):
     # 3. 배틀 뷰 생성 및 시작
     view = BattleView(interaction.user, my_best_fish, npc_fish)
     await interaction.response.send_message(embed=view.generate_embed(), view=view)
+
+@bot.tree.command(name="출석", description="하루에 한 번 출석체크하고 1000 코인을 받습니다!")
+async def 출석(interaction: discord.Interaction):
+    get_user_data(interaction.user.id) # 유저 데이터 초기화 보장
+    
+    # 오늘 날짜 구하기 (한국 시간 기준)
+    today = datetime.datetime.now(kst).strftime('%Y-%m-%d')
+    
+    cursor.execute("SELECT last_daily FROM user_data WHERE user_id=?", (interaction.user.id,))
+    last_daily = cursor.fetchone()[0]
+    
+    if last_daily == today:
+        return await interaction.response.send_message("❌ 오늘은 이미 출석하셨습니다! 내일 다시 와주세요.", ephemeral=True)
+    
+    reward = 1000
+    cursor.execute("UPDATE user_data SET coins = coins + ?, last_daily = ? WHERE user_id = ?", (reward, today, interaction.user.id))
+    conn.commit()
+    
+    await interaction.response.send_message(f"✅ 출석 완료! 보상으로 `{reward} C`를 받았습니다. (잔액 확인: `/인벤토리`)")
+
+@bot.tree.command(name="상점", description="유용한 아이템을 구경할 수 있는 상점입니다.")
+async def 상점(interaction: discord.Interaction):
+    embed = discord.Embed(title="🏪 수산시장 아이템 상점", color=0xf1c40f)
+    embed.add_field(name="고급 미끼 🪱 (가격: 500 C)", 
+                    value="다음 낚시 때 희귀 물고기 등장 확률을 대폭 올려줍니다.\n명령어: `/구매 아이템:고급 미끼 🪱 수량:1`", inline=False)
+    await interaction.response.send_message(embed=embed)
+
+@bot.tree.command(name="구매", description="상점에서 아이템을 구매합니다.")
+@app_commands.choices(아이템=[
+    app_commands.Choice(name="고급 미끼 🪱", value="고급 미끼 🪱")
+])
+async def 구매(interaction: discord.Interaction, 아이템: app_commands.Choice[str], 수량: int = 1):
+    if 수량 <= 0: 
+        return await interaction.response.send_message("❌ 수량은 1개 이상이어야 합니다.", ephemeral=True)
+        
+    coins, _, _ = get_user_data(interaction.user.id)
+    price = 500 * 수량
+    
+    if coins < price:
+        return await interaction.response.send_message(f"❌ 코인이 부족합니다! (필요: {price} C / 현재: {coins} C)", ephemeral=True)
+    
+    # 코인 차감 및 인벤토리에 아이템 지급
+    cursor.execute("UPDATE user_data SET coins = coins - ? WHERE user_id = ?", (price, interaction.user.id))
+    cursor.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, ?) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?", (interaction.user.id, 아이템.value, 수량, 수량))
+    conn.commit()
+    
+    await interaction.response.send_message(f"🛍️ **{아이템.value}** {수량}개를 구매했습니다! (남은 코인: `{coins - price} C`)")
 
 # ==========================================
 # 6. 관리자 전용 직권 명령어 (어뷰징 관리, 이벤트용)
