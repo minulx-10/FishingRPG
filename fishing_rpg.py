@@ -424,4 +424,4 @@ if __name__ == "__main__":
     # 쪽지에 적힌 DISCORD_TOKEN 값을 가져와라!
     TOKEN = os.getenv('DISCORD_TOKEN') 
     
-    bot.run(TOKEN) # 가져온 토큰으로 실행!
+    bot.run(TOKEN)
