@@ -63,6 +63,17 @@ def get_user_data(user_id):
     conn.commit()
     return cursor.fetchone()
 
+# 통(배틀 전용) 테이블
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS bucket (
+        user_id INTEGER,
+        item_name TEXT,
+        amount INTEGER DEFAULT 0,
+        PRIMARY KEY (user_id, item_name)
+    )
+''')
+conn.commit()
+
 # ==========================================
 # 3. 게임 핵심 데이터 (물고기 도감 & 시세)
 # ==========================================
@@ -101,6 +112,46 @@ def get_element_multiplier(atk_elem, def_elem):
 # 4. 상호작용 UI (버튼 뷰)
 # ==========================================
 
+# [새로운 기능] 낚시 성공 후 보관/판매 선택 UI
+class FishActionView(View):
+    def __init__(self, user, target_fish):
+        super().__init__(timeout=30)
+        self.user = user
+        self.target_fish = target_fish
+        self.action_taken = False # 중복 클릭 방지
+
+    @discord.ui.button(label="가방에 보관 (판매용)", style=discord.ButtonStyle.primary, emoji="🎒")
+    async def btn_inv(self, interaction: discord.Interaction, button: Button):
+        if interaction.user != self.user: return
+        if self.action_taken: return
+        self.action_taken = True
+        
+        cursor.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (self.user.id, self.target_fish))
+        conn.commit()
+        await interaction.response.edit_message(content=f"🎒 **{self.target_fish}**을(를) 가방에 안전하게 넣었습니다!", view=None)
+
+    @discord.ui.button(label="통에 보관 (배틀용)", style=discord.ButtonStyle.success, emoji="🪣")
+    async def btn_bucket(self, interaction: discord.Interaction, button: Button):
+        if interaction.user != self.user: return
+        if self.action_taken: return
+        self.action_taken = True
+        
+        cursor.execute("INSERT INTO bucket (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (self.user.id, self.target_fish))
+        conn.commit()
+        await interaction.response.edit_message(content=f"🪣 **{self.target_fish}**을(를) 통에 담았습니다! 이제 배틀에 출전할 수 있습니다.", view=None)
+
+    @discord.ui.button(label="바로 판매", style=discord.ButtonStyle.danger, emoji="💰")
+    async def btn_sell(self, interaction: discord.Interaction, button: Button):
+        if interaction.user != self.user: return
+        if self.action_taken: return
+        self.action_taken = True
+        
+        # 현재 글로벌 시세 가져오기
+        price = MARKET_PRICES.get(self.target_fish, FISH_DATA[self.target_fish]["price"])
+        cursor.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (price, self.user.id))
+        conn.commit()
+        await interaction.response.edit_message(content=f"💰 **{self.target_fish}**을(를) 시장에 바로 넘겨서 `{price} C`를 벌었습니다!", view=None)
+
 # [1] 낚시 미니게임 UI
 class FishingView(View):
     def __init__(self, user, target_fish, rod_tier):
@@ -130,10 +181,18 @@ class FishingView(View):
             
         elapsed = datetime.datetime.now().timestamp() - self.start_time
         
+        # --- FishingView 클래스 내부의 성공 처리 부분 수정 ---
         if elapsed <= self.limit_time:
-            # 성공 처리
-            cursor.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (self.user.id, self.target_fish))
-            conn.commit()
+            # 🌟 [수정됨] 직접 인벤토리에 넣지 않고, 선택 창(FishActionView)을 띄움
+            grade = FISH_DATA[self.target_fish]["grade"]
+            embed = discord.Embed(title=f"🎉 낚시 성공! [{grade}]", description=f"**{self.target_fish}**을(를) 낚았습니다!", color=0x00ff00)
+            embed.add_field(name="반응 속도", value=f"`{elapsed:.3f}초` (판정 한도: {self.limit_time:.2f}초)")
+            
+            # 여기서 선택 버튼 뷰 생성
+            action_view = FishActionView(self.user, self.target_fish)
+            await interaction.response.edit_message(content="🎊 앗, 낚았습니다! 이 물고기를 어떻게 할까요?", embed=embed, view=action_view)
+        else:
+            # 실패 처리 (그대로 둠)
             
             grade = FISH_DATA[self.target_fish]["grade"]
             embed = discord.Embed(title=f"🎉 낚시 성공! [{grade}]", description=f"**{self.target_fish}**을(를) 낚았습니다!", color=0x00ff00)
@@ -389,9 +448,13 @@ async def 강화(interaction: discord.Interaction):
 async def 배틀(interaction: discord.Interaction):
     get_user_data(interaction.user.id) # 유저 데이터 초기화 보장
     
-    # 1. 내 가방에서 가장 전투력이 높은 물고기 찾기
-    cursor.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0", (interaction.user.id,))
+# --- /배틀 명령어 내부 수정 ---
+    # 1. '가방'이 아니라 '통'에서 가장 전투력이 높은 물고기 찾기
+    cursor.execute("SELECT item_name FROM bucket WHERE user_id=? AND amount > 0", (interaction.user.id,))
     items = cursor.fetchall()
+    
+    if not items:
+        return await interaction.response.send_message("❌ 통(배틀용)이 비어있습니다! 낚시 후 '통에 보관'을 선택해 전사를 포획하세요.", ephemeral=True)
     
     if not items:
         return await interaction.response.send_message("❌ 가방이 비어있습니다! 먼저 `/낚시`를 통해 전사를 포획하세요.", ephemeral=True)
@@ -458,6 +521,48 @@ async def 구매(interaction: discord.Interaction, 아이템: app_commands.Choic
     conn.commit()
     
     await interaction.response.send_message(f"🛍️ **{아이템.value}** {수량}개를 구매했습니다! (남은 코인: `{coins - price} C`)")
+
+@bot.tree.command(name="통", description="배틀에 출전할 수 있는 통(배틀 전용 저장소)을 확인합니다.")
+async def 통(interaction: discord.Interaction):
+    cursor.execute("SELECT item_name, amount FROM bucket WHERE user_id=? AND amount > 0", (interaction.user.id,))
+    items = cursor.fetchall()
+    
+    embed = discord.Embed(title=f"🪣 {interaction.user.name}의 통 (배틀 대기조)", color=0x2ecc71)
+    if items:
+        item_list = "\n".join([f"• {name}: {amt}마리 (전투력: {FISH_DATA[name]['power']}⚡)" for name, amt in items])
+        embed.add_field(name="출전 가능한 물고기", value=item_list, inline=False)
+    else:
+        embed.add_field(name="텅 비었습니다...", value="낚시 성공 후 '통에 보관'을 눌러주세요.", inline=False)
+    await interaction.response.send_message(embed=embed)
+
+# 선택 가능한 물고기 리스트 생성 (자동완성용)
+fish_choices = [app_commands.Choice(name=fish, value=fish) for fish in FISH_DATA.keys()]
+
+@bot.tree.command(name="개별판매", description="가방에 있는 특정 물고기를 원하는 수량만큼 판매합니다.")
+@app_commands.choices(물고기=fish_choices)
+async def 개별판매(interaction: discord.Interaction, 물고기: app_commands.Choice[str], 수량: int):
+    target_fish = 물고기.value
+    
+    if 수량 <= 0:
+        return await interaction.response.send_message("❌ 수량은 1마리 이상이어야 합니다.", ephemeral=True)
+        
+    # 가방에 해당 물고기가 충분히 있는지 확인
+    cursor.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, target_fish))
+    res = cursor.fetchone()
+    current_amount = res[0] if res else 0
+    
+    if current_amount < 수량:
+        return await interaction.response.send_message(f"❌ 가방에 **{target_fish}**가 부족합니다. (현재 보유: {current_amount}마리)", ephemeral=True)
+    
+    # 판매 처리 (글로벌 시세 반영)
+    price_per_item = MARKET_PRICES.get(target_fish, FISH_DATA[target_fish]["price"])
+    total_earned = price_per_item * 수량
+    
+    cursor.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name=?", (수량, interaction.user.id, target_fish))
+    cursor.execute("UPDATE user_data SET coins = coins + ? WHERE user_id=?", (total_earned, interaction.user.id))
+    conn.commit()
+    
+    await interaction.response.send_message(f"💰 **{target_fish}** {수량}마리를 팔아서 총 `{total_earned:,} C`를 얻었습니다! (개당 {price_per_item}C)")
 
 # ==========================================
 # 6. 관리자 전용 직권 명령어 (어뷰징 관리, 이벤트용)
