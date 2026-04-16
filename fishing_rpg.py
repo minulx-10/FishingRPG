@@ -193,13 +193,6 @@ class FishingView(View):
             await interaction.response.edit_message(content="🎊 앗, 낚았습니다! 이 물고기를 어떻게 할까요?", embed=embed, view=action_view)
         else:
             # 실패 처리 (그대로 둠)
-            
-            grade = FISH_DATA[self.target_fish]["grade"]
-            embed = discord.Embed(title=f"🎉 낚시 성공! [{grade}]", description=f"**{self.target_fish}**을(를) 낚았습니다!", color=0x00ff00)
-            embed.add_field(name="반응 속도", value=f"`{elapsed:.3f}초` (판정 한도: {self.limit_time:.2f}초)")
-            await interaction.response.edit_message(content="🎊 앗, 낚았습니다!", embed=embed, view=None)
-        else:
-            # 실패 처리
             await interaction.response.edit_message(content=f"⏰ 너무 늦었습니다! `{elapsed:.3f}초` 걸림.\n(놓친 물고기: **{self.target_fish}** / 제한: {self.limit_time:.2f}초)", view=None)
 
 # [2] 턴제 PvE 배틀 UI
