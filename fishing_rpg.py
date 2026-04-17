@@ -73,6 +73,14 @@ async def init_db():
             PRIMARY KEY (user_id, buff_type)
         )
     ''')
+
+    await db.execute('''
+        CREATE TABLE IF NOT EXISTS aquarium (
+            user_id INTEGER,
+            item_name TEXT,
+            PRIMARY KEY (user_id, item_name)
+        )
+    ''')
     
     try:
         await db.execute("ALTER TABLE user_data ADD COLUMN last_daily TEXT DEFAULT ''")
@@ -425,7 +433,7 @@ async def 낚시(interaction: discord.Interaction):
         active_buffs = [row[0] for row in await cursor.fetchall()]
 
     # 3. 확률 주사위 굴리기
-    roll = random.uniform(0, 100) / (1 + (rod_tier - 1) * 0.2) 
+    roll = random.uniform(0, 75) / (1 + (rod_tier - 1) * 0.2) 
     if has_bait: roll = roll * 0.5 
     if "deep_sea_boost" in active_buffs: roll = roll * 0.6 
     
@@ -820,6 +828,83 @@ async def 의뢰(interaction: discord.Interaction):
 
     view = QuestDeliveryView(interaction.user, q_item, q_amount, q_reward)
     await interaction.response.send_message(embed=embed, view=view)
+
+# ==========================================
+# 🌟 나만의 수족관 (플렉스/자랑하기) 기능
+# ==========================================
+
+# 수족관 전용 자동완성 (내 가방에 있는 것만 보여줌)
+async def inv_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    async with db.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0", (interaction.user.id,)) as cursor:
+        items = await cursor.fetchall()
+    return [app_commands.Choice(name=row[0], value=row[0]) for row in items if current.lower() in row[0].lower()][:25]
+
+# 수족관 전용 자동완성 (내 수족관에 있는 것만 보여줌)
+async def aqua_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    async with db.execute("SELECT item_name FROM aquarium WHERE user_id=?", (interaction.user.id,)) as cursor:
+        items = await cursor.fetchall()
+    return [app_commands.Choice(name=row[0], value=row[0]) for row in items if current.lower() in row[0].lower()][:25]
+
+@bot.tree.command(name="전시", description="가방에 있는 물고기를 수족관에 전시합니다. (최대 5마리)")
+@app_commands.autocomplete(물고기=inv_autocomplete)
+async def 전시(interaction: discord.Interaction, 물고기: str):
+    # 1. 5마리 제한 확인
+    async with db.execute("SELECT COUNT(*) FROM aquarium WHERE user_id=?", (interaction.user.id,)) as cursor:
+        count = (await cursor.fetchone())[0]
+    if count >= 5:
+        return await interaction.response.send_message("❌ 수족관이 꽉 찼습니다! (최대 5마리). `/전시해제`를 먼저 해주세요.", ephemeral=True)
+        
+    # 2. 가방에 물고기가 있는지 확인
+    async with db.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기)) as cursor:
+        res = await cursor.fetchone()
+    if not res or res[0] <= 0:
+        return await interaction.response.send_message(f"❌ 가방에 **{물고기}**가 없습니다!", ephemeral=True)
+        
+    # 3. 전시 처리 (가방에서 빼고 수족관에 넣기)
+    await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기))
+    await db.execute("INSERT INTO aquarium (user_id, item_name) VALUES (?, ?)", (interaction.user.id, 물고기))
+    await db.commit()
+    
+    await interaction.response.send_message(f"✨ **{물고기}**을(를) 수족관에 멋지게 전시했습니다! (`/수족관`으로 확인해보세요!)")
+
+@bot.tree.command(name="전시해제", description="수족관에 전시된 물고기를 다시 가방으로 되돌립니다.")
+@app_commands.autocomplete(물고기=aqua_autocomplete)
+async def 전시해제(interaction: discord.Interaction, 물고기: str):
+    async with db.execute("SELECT item_name FROM aquarium WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기)) as cursor:
+        res = await cursor.fetchone()
+    if not res:
+        return await interaction.response.send_message(f"❌ 수족관에 **{물고기}**가 없습니다!", ephemeral=True)
+        
+    # 해제 처리
+    await db.execute("DELETE FROM aquarium WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기))
+    await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id, 물고기))
+    await db.commit()
+    
+    await interaction.response.send_message(f"🎒 **{물고기}**을(를) 수족관에서 조심스럽게 꺼내 가방에 넣었습니다.")
+
+@bot.tree.command(name="수족관", description="나 또는 다른 유저의 수족관을 구경합니다.")
+async def 수족관(interaction: discord.Interaction, 유저: discord.Member = None):
+    target = 유저 or interaction.user
+    async with db.execute("SELECT item_name FROM aquarium WHERE user_id=?", (target.id,)) as cursor:
+        items = await cursor.fetchall()
+        
+    embed = discord.Embed(title=f"🏛️ {target.name}님의 수족관", color=0x00ffff)
+    if not items:
+        embed.description = "수족관이 텅 비어있습니다... 휑~ 🌬️"
+    else:
+        desc = ""
+        # 등급별로 어울리는 이모지 매핑
+        grade_emojis = {"일반": "⚪", "희귀": "🔵", "초희귀": "🟣", "에픽": "🔴", "레전드": "🟡", "신화": "🔥", "히든": "✨"}
+        
+        for (name,) in items:
+            grade = FISH_DATA[name]["grade"]
+            emoji = grade_emojis.get(grade, "🐟")
+            desc += f"{emoji} **{name}** `[{grade}]`\n\n"
+            
+        embed.description = desc
+        embed.set_footer(text="남들에게 자랑할 만한 희귀한 물고기를 수집해 보세요!")
+        
+    await interaction.response.send_message(embed=embed)
 
 # ==========================================
 # 6. 관리자 전용 직권 명령어 (어뷰징 관리, 이벤트용)
