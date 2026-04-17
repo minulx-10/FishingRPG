@@ -147,11 +147,13 @@ class FishActionView(View):
         await db.commit()
         await interaction.response.edit_message(content=f"💰 **{self.target_fish}**을(를) 시장에 바로 넘겨서 `{price} C`를 벌었습니다!", view=None)
 
+# [1] 낚시 미니게임 UI (신화급 기믹 추가 버전)
 class FishingView(View):
     def __init__(self, user, target_fish, rod_tier):
         super().__init__(timeout=15) 
         self.user = user
         self.target_fish = target_fish
+        self.rod_tier = rod_tier # 낚싯대 파괴 기믹을 위해 저장
         
         base_window = FISH_DATA[target_fish]["base_window"]
         bonus_time = (rod_tier - 1) * 0.2 
@@ -171,20 +173,46 @@ class FishingView(View):
             return await interaction.response.edit_message(content="🎣 앗! 너무 일찍 챘습니다. 물고기가 도망갔어요! 💨", view=None)
             
         elapsed = datetime.datetime.now().timestamp() - self.start_time
+        grade = FISH_DATA[self.target_fish]["grade"]
         
+        # ==========================================
+        # 🟢 낚시 성공 처리
+        # ==========================================
         if elapsed <= self.limit_time:
-            if elapsed <= self.limit_time:
-                # 👇 물고기를 낚는 즉시 도감에 영구 기록! (이미 있으면 무시) 👇
-                await db.execute("INSERT OR IGNORE INTO fish_dex (user_id, item_name) VALUES (?, ?)", (self.user.id, self.target_fish))
-                await db.commit()
-            grade = FISH_DATA[self.target_fish]["grade"]
+            await db.execute("INSERT OR IGNORE INTO fish_dex (user_id, item_name) VALUES (?, ?)", (self.user.id, self.target_fish))
+            await db.commit()
+            
             embed = discord.Embed(title=f"🎉 낚시 성공! [{grade}]", description=f"**{self.target_fish}**을(를) 낚았습니다!", color=0x00ff00)
             embed.add_field(name="반응 속도", value=f"`{elapsed:.3f}초` (판정 한도: {self.limit_time:.2f}초)")
             
             action_view = FishActionView(self.user, self.target_fish)
             await interaction.response.edit_message(content="🎊 앗, 낚았습니다! 이 물고기를 어떻게 할까요?", embed=embed, view=action_view)
+            
+            # 🌟 [신화급 기믹] 서버 전체 알림!
+            if grade == "신화":
+                alert_embed = discord.Embed(
+                    title="🚨 [경고] 심해의 거대한 진동이 감지되었습니다...", 
+                    description=f"**{self.user.mention}**님이 방금 전설 속의 마수,\n**{self.target_fish}**을(를) 심연에서 끌어올렸습니다!!!",
+                    color=0xff0000
+                )
+                alert_embed.set_footer(text="바다가 요동치기 시작합니다...")
+                # interaction.channel을 통해 해당 낚시가 진행된 채널에 알림 전송
+                await interaction.channel.send(content="@here", embed=alert_embed)
+
+        # ==========================================
+        # 🔴 낚시 실패 처리
+        # ==========================================
         else:
-            await interaction.response.edit_message(content=f"⏰ 너무 늦었습니다! `{elapsed:.3f}초` 걸림.\n(놓친 물고기: **{self.target_fish}** / 제한: {self.limit_time:.2f}초)", view=None)
+            fail_msg = f"⏰ 너무 늦었습니다! `{elapsed:.3f}초` 걸림.\n(놓친 물고기: **{self.target_fish}** / 제한: {self.limit_time:.2f}초)"
+            
+            # 🌟 [페널티 기믹] 괴수의 힘에 낚싯대 파괴!
+            if grade in ["레전드", "신화"] and self.rod_tier > 1:
+                if random.random() < 0.5: # 50% 확률로 낚싯대 박살
+                    await db.execute("UPDATE user_data SET rod_tier = rod_tier - 1 WHERE user_id = ?", (self.user.id,))
+                    await db.commit()
+                    fail_msg += "\n\n💥 **[치명적 손상]** 괴수의 힘을 이기지 못하고 **낚싯대가 부러졌습니다!** (낚싯대 레벨 1 하락)"
+            
+            await interaction.response.edit_message(content=fail_msg, view=None)
 
 class BattleView(View):
     def __init__(self, user, my_fish, npc_fish):
