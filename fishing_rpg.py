@@ -101,6 +101,19 @@ async def market_update_loop():
         MARKET_PRICES[fish] = int(data["price"] * fluctuation)
     print(f"[{datetime.datetime.now(kst).strftime('%H:%M')}] 📈 수산시장 시세가 변동되었습니다!")
 
+# ==========================================
+# 🌟 [신규] 날씨 환경 시스템
+# ==========================================
+CURRENT_WEATHER = "☀️ 맑음"
+WEATHER_TYPES = ["☀️ 맑음", "☁️ 흐림", "🌧️ 비", "🌩️ 폭풍우", "🌫️ 안개"]
+
+# 매 정각(60분)마다 날씨가 무작위로 바뀝니다.
+@tasks.loop(minutes=60)
+async def weather_update_loop():
+    global CURRENT_WEATHER
+    # 맑음(40%), 흐림(25%), 비(20%), 폭풍우(5%), 안개(10%) 확률
+    CURRENT_WEATHER = random.choices(WEATHER_TYPES, weights=[40, 25, 20, 5, 10], k=1)[0]
+
 def get_element_multiplier(atk_elem, def_elem):
     if atk_elem == "무속성" or def_elem == "무속성": return 1.0
     if atk_elem == "표층" and def_elem == "심해": return 1.5
@@ -348,6 +361,22 @@ async def 낚시(interaction: discord.Interaction):
             target_fish = fish
             break
 
+    # 👇 여기서부터 새로 추가! (특수 환경 조건 체크) 👇
+    now_hour = datetime.datetime.now(kst).hour
+    
+    # [기믹 1] 우미보즈는 새벽 0~4시에만 등장
+    if target_fish == "바다의 원혼, 우미보즈 🌑":
+        if not (0 <= now_hour < 4):
+            target_fish = "낡은 장화 🥾"
+            bait_text += "\n*(으스스한 기운이 맴돌았지만, 날이 밝아 흩어졌습니다...)*"
+            
+    # [기믹 2] 네시는 비나 안개가 낀 날에만 등장
+    if target_fish == "네스호의 그림자, 네시 🦕":
+        if CURRENT_WEATHER not in ["🌧️ 비", "🌫️ 안개"]:
+            target_fish = "낡은 장화 🥾"
+            bait_text += "\n*(거대한 그림자가 지나갔지만, 날씨가 맑아 깊은 곳으로 숨어버렸습니다...)*"
+    # 👆 여기까지 추가 👆
+
     view = FishingView(interaction.user, target_fish, rod_tier)
     await interaction.response.send_message(f"🌊 찌를 던졌습니다... 조용히 기다리세요.{bait_text}\n(내 낚싯대: Lv.{rod_tier})", view=view)
     
@@ -575,6 +604,26 @@ async def 도감(interaction: discord.Interaction):
         
     await interaction.response.send_message(embed=embed)
 
+@bot.tree.command(name="바다", description="현재 바다의 시간대와 날씨 환경을 확인합니다.")
+async def 바다(interaction: discord.Interaction):
+    now_hour = datetime.datetime.now(kst).hour
+    if 6 <= now_hour < 18: time_str = "☀️ 낮"
+    elif 18 <= now_hour < 24: time_str = "🌙 밤"
+    else: time_str = "🌑 새벽"
+
+    embed = discord.Embed(title="🌊 현재 바다 상황", color=0x3498db)
+    embed.add_field(name="현재 시간대", value=f"**{time_str}** (`{now_hour}시`)", inline=True)
+    embed.add_field(name="현재 날씨", value=f"**{CURRENT_WEATHER}**", inline=True)
+    
+    # 환경에 따른 출몰 힌트
+    hints = ""
+    if time_str == "🌑 새벽": hints += "- ⚠️ [신화] 우미보즈가 출몰할 수 있는 으스스한 시간입니다.\n"
+    if CURRENT_WEATHER in ["🌧️ 비", "🌫️ 안개"]: hints += "- ⚠️ [레전드] 네시가 활동하기 좋은 날씨입니다.\n"
+    if not hints: hints = "- 평화로운 바다입니다. 낚시하기 딱 좋네요!"
+    
+    embed.add_field(name="생태계 정보", value=hints, inline=False)
+    await interaction.response.send_message(embed=embed)
+
 # ==========================================
 # 6. 관리자 전용 직권 명령어 (어뷰징 관리, 이벤트용)
 # ==========================================
@@ -597,10 +646,14 @@ async def setup_hook():
 @bot.event
 async def on_ready():
     print(f'🎣 수산시장 낚시 RPG 봇 로딩 완료: {bot.user.name}')
-    await bot.change_presence(activity=discord.Game("/낚시 | /시세 | /배틀"))
+    await bot.change_presence(activity=discord.Game("/낚시 | /시세 | /배틀 | /바다")) # 상태메시지 업데이트
     
     if not market_update_loop.is_running():
         market_update_loop.start()
+        
+    # 👇 봇이 켜질 때 날씨 루프도 함께 시작되도록 추가! 👇
+    if not weather_update_loop.is_running():
+        weather_update_loop.start()
 
 if __name__ == "__main__":
     load_dotenv() 
