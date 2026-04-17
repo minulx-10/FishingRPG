@@ -1,0 +1,20 @@
+{
+  "장어 덮밥 🍱": {
+    "ingredients": {"민물장어 (뱀장어) 🐍": 2},
+    "description": "1시간 동안 낚시 대기 시간이 짧아집니다 (1~3초).",
+    "buff_type": "cooldown_reduction",
+    "duration": 60
+  },
+  "복어 지리탕 🍲": {
+    "ingredients": {"복어 🐡": 2, "미역치 🐠": 1},
+    "description": "30분 동안 희귀/심해 어종 낚시 확률이 대폭 증가합니다. (단, 10% 확률로 독에 걸려 5,000C 상실)",
+    "buff_type": "deep_sea_boost",
+    "duration": 30
+  },
+  "특급 참치 초밥 🍣": {
+    "ingredients": {"특급 참치 🍣": 2},
+    "description": "버프는 없지만, 판매 시 아주 비싼 가격(2000C)에 팔립니다.",
+    "buff_type": "sell_only",
+    "price": 2000
+  }
+}
