@@ -64,6 +64,15 @@ async def init_db():
             PRIMARY KEY (user_id, item_name)
         )
     ''')
+
+    await db.execute('''
+        CREATE TABLE IF NOT EXISTS active_buffs (
+            user_id INTEGER,
+            buff_type TEXT,
+            end_time TEXT,
+            PRIMARY KEY (user_id, buff_type)
+        )
+    ''')
     
     try:
         await db.execute("ALTER TABLE user_data ADD COLUMN last_daily TEXT DEFAULT ''")
@@ -93,6 +102,16 @@ def load_fish_data():
 
 FISH_DATA = load_fish_data()
 MARKET_PRICES = {fish: data["price"] for fish, data in FISH_DATA.items()}
+
+def load_recipes():
+    try:
+        with open('recipes.json', 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        print("❌ 오류: recipes.json 파일이 없습니다!")
+        return {}
+
+RECIPES = load_recipes()
 
 @tasks.loop(minutes=10)
 async def market_update_loop():
@@ -334,6 +353,44 @@ class BattleView(View):
         if interaction.user != self.user: return
         await self.execute_turn(interaction, "defend")
 
+class MarketPaginationView(View):
+    def __init__(self, items, per_page=10):
+        super().__init__(timeout=120)
+        self.items = list(items.items())
+        self.per_page = per_page
+        self.current_page = 0
+
+    def make_embed(self):
+        start = self.current_page * self.per_page
+        end = start + self.per_page
+        current_items = self.items[start:end]
+        
+        embed = discord.Embed(title="📊 현재 수산시장 시세표", description=f"총 {len(self.items)}종의 물고기 시세입니다.", color=0xf1c40f)
+        for fish, current_price in current_items:
+            base = FISH_DATA[fish]["price"]
+            ratio = current_price / base
+            status = "📈 떡상" if ratio > 1.2 else ("📉 떡락" if ratio < 0.8 else "➖ 평범")
+            embed.add_field(name=fish, value=f"현재가: **{current_price} C**\n({status})", inline=True)
+        
+        embed.set_footer(text=f"페이지: {self.current_page + 1} / {int((len(self.items)-1)/self.per_page) + 1}")
+        return embed
+
+    @discord.ui.button(label="◀ 이전", style=discord.ButtonStyle.secondary)
+    async def prev_btn(self, interaction: discord.Interaction, button: Button):
+        if self.current_page > 0:
+            self.current_page -= 1
+            await interaction.response.edit_message(embed=self.make_embed(), view=self)
+        else:
+            await interaction.response.defer()
+
+    @discord.ui.button(label="다음 ▶", style=discord.ButtonStyle.secondary)
+    async def next_btn(self, interaction: discord.Interaction, button: Button):
+        if (self.current_page + 1) * self.per_page < len(self.items):
+            self.current_page += 1
+            await interaction.response.edit_message(embed=self.make_embed(), view=self)
+        else:
+            await interaction.response.defer()
+
 # ==========================================
 # 5. 슬래시 명령어 (Slash Commands)
 # ==========================================
@@ -341,6 +398,7 @@ class BattleView(View):
 async def 낚시(interaction: discord.Interaction):
     coins, rod_tier, rating = await get_user_data(interaction.user.id)
     
+    # 1. 미끼 확인 로직
     async with db.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name='고급 미끼 🪱'", (interaction.user.id,)) as cursor:
         bait_res = await cursor.fetchone()
     has_bait = bait_res and bait_res[0] > 0
@@ -352,8 +410,15 @@ async def 낚시(interaction: discord.Interaction):
     else:
         bait_text = ""
 
+    # 2. 🌟 버프 확인 로직
+    now_str = datetime.datetime.now(kst).strftime('%Y-%m-%d %H:%M:%S')
+    async with db.execute("SELECT buff_type FROM active_buffs WHERE user_id=? AND end_time > ?", (interaction.user.id, now_str)) as cursor:
+        active_buffs = [row[0] for row in await cursor.fetchall()]
+
+    # 3. 확률 계산 (버프 적용)
     roll = random.uniform(0, 100) / (1 + (rod_tier - 1) * 0.2) 
     if has_bait: roll = roll * 0.5 
+    if "deep_sea_boost" in active_buffs: roll = roll * 0.6 # 복어 지리탕 버프 (확률 업!)
     
     target_fish = "낡은 장화 🥾"
     for fish, data in reversed(list(FISH_DATA.items())):
@@ -361,26 +426,22 @@ async def 낚시(interaction: discord.Interaction):
             target_fish = fish
             break
 
-    # 👇 여기서부터 새로 추가! (특수 환경 조건 체크) 👇
+    # 4. 환경 (날씨/시간) 기믹 적용
     now_hour = datetime.datetime.now(kst).hour
-    
-    # [기믹 1] 우미보즈는 새벽 0~4시에만 등장
-    if target_fish == "바다의 원혼, 우미보즈 🌑":
-        if not (0 <= now_hour < 4):
-            target_fish = "낡은 장화 🥾"
-            bait_text += "\n*(으스스한 기운이 맴돌았지만, 날이 밝아 흩어졌습니다...)*"
+    if target_fish == "바다의 원혼, 우미보즈 🌑" and not (0 <= now_hour < 4):
+        target_fish = "낡은 장화 🥾"
+        bait_text += "\n*(으스스한 기운이 맴돌았지만, 날이 밝아 흩어졌습니다...)*"
             
-    # [기믹 2] 네시는 비나 안개가 낀 날에만 등장
-    if target_fish == "네스호의 그림자, 네시 🦕":
-        if CURRENT_WEATHER not in ["🌧️ 비", "🌫️ 안개"]:
-            target_fish = "낡은 장화 🥾"
-            bait_text += "\n*(거대한 그림자가 지나갔지만, 날씨가 맑아 깊은 곳으로 숨어버렸습니다...)*"
-    # 👆 여기까지 추가 👆
+    if target_fish == "네스호의 그림자, 네시 🦕" and 'CURRENT_WEATHER' in globals() and CURRENT_WEATHER not in ["🌧️ 비", "🌫️ 안개"]:
+        target_fish = "낡은 장화 🥾"
+        bait_text += "\n*(거대한 그림자가 지나갔지만, 날씨가 맑아 깊은 곳으로 숨어버렸습니다...)*"
 
     view = FishingView(interaction.user, target_fish, rod_tier)
     await interaction.response.send_message(f"🌊 찌를 던졌습니다... 조용히 기다리세요.{bait_text}\n(내 낚싯대: Lv.{rod_tier})", view=view)
     
-    wait_time = random.uniform(2, 6)
+    # 5. 🌟 버프 적용: 대기 시간 감소 (장어 덮밥 버프)
+    wait_min, wait_max = (1, 3) if "cooldown_reduction" in active_buffs else (2, 6)
+    wait_time = random.uniform(wait_min, wait_max)
     await asyncio.sleep(wait_time)
     
     view.is_bite = True
@@ -394,7 +455,7 @@ async def 낚시(interaction: discord.Interaction):
     try:
         await interaction.edit_original_response(content="❗ **찌가 격렬하게 흔들립니다! 지금 누르세요!!!**", view=view)
     except: 
-        pass 
+        pass
 
 @bot.tree.command(name="인벤토리", description="내 가방과 현재 스탯을 확인합니다.")
 async def 인벤토리(interaction: discord.Interaction):
@@ -414,15 +475,10 @@ async def 인벤토리(interaction: discord.Interaction):
         embed.add_field(name="🐟 물고기 도감", value="텅 비었습니다...", inline=False)
     await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="시세", description="현재 수산시장의 글로벌 시세를 확인합니다.")
+@bot.tree.command(name="시세", description="현재 수산시장의 글로벌 시세를 확인합니다. (페이지별 확인 가능)")
 async def 시세(interaction: discord.Interaction):
-    embed = discord.Embed(title="📊 현재 수산시장 시세표", description="매 10분마다 시세가 변동됩니다. 떡상할 때 일괄 판매하세요!", color=0xf1c40f)
-    for fish, current_price in MARKET_PRICES.items():
-        base = FISH_DATA[fish]["price"]
-        ratio = current_price / base
-        status = "📈 떡상" if ratio > 1.2 else ("📉 떡락" if ratio < 0.8 else "➖ 평범")
-        embed.add_field(name=fish, value=f"현재가: **{current_price} C**\n(기준가: {base}C / {status})", inline=True)
-    await interaction.response.send_message(embed=embed)
+    view = MarketPaginationView(MARKET_PRICES)
+    await interaction.response.send_message(embed=view.make_embed(), view=view)
 
 @bot.tree.command(name="판매", description="인벤토리에 있는 모든 물고기를 현재 시세로 일괄 판매합니다.")
 async def 판매(interaction: discord.Interaction):
@@ -623,6 +679,48 @@ async def 바다(interaction: discord.Interaction):
     
     embed.add_field(name="생태계 정보", value=hints, inline=False)
     await interaction.response.send_message(embed=embed)
+
+async def recipe_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    return [app_commands.Choice(name=r, value=r) for r in RECIPES.keys() if current.lower() in r.lower()][:25]
+
+@bot.tree.command(name="요리", description="잡은 물고기로 요리를 만들어 버프를 얻거나 비싸게 팝니다.")
+@app_commands.autocomplete(선택=recipe_autocomplete)
+async def 요리(interaction: discord.Interaction, 선택: str):
+    recipe = RECIPES.get(선택)
+    if not recipe:
+        return await interaction.response.send_message("❌ 존재하지 않는 레시피입니다.", ephemeral=True)
+
+    # 재료 확인
+    for item, amt in recipe["ingredients"].items():
+        async with db.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, item)) as cursor:
+            res = await cursor.fetchone()
+            if not res or res[0] < amt:
+                return await interaction.response.send_message(f"❌ 재료가 부족합니다! (필요: `{item}` {amt}마리)", ephemeral=True)
+
+    # 재료 차감
+    for item, amt in recipe["ingredients"].items():
+        await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name=?", (amt, interaction.user.id, item))
+    
+    # 결과 처리
+    if recipe["buff_type"] == "sell_only":
+        await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id, 선택))
+        msg = f"👨‍🍳 **{선택}** 완성! 가방에 보관되었습니다. 시장에 비싸게 파세요!"
+    else:
+        end_time = datetime.datetime.now(kst) + datetime.timedelta(minutes=recipe["duration"])
+        end_time_str = end_time.strftime('%Y-%m-%d %H:%M:%S')
+        
+        # 복어 독 기믹
+        if 선택 == "복어 지리탕 🍲" and random.random() < 0.1:
+            await db.execute("UPDATE user_data SET coins = MAX(0, coins - 5000) WHERE user_id=?", (interaction.user.id,))
+            msg = "🤢 **아야!** 복어 독에 당했습니다... 해독비로 `5,000C`를 썼지만, 버프는 적용되었습니다."
+        else:
+            msg = f"😋 **{선택}**을(를) 맛있게 먹었습니다!\n**효과:** {recipe['description']}"
+        
+        await db.execute("INSERT OR REPLACE INTO active_buffs (user_id, buff_type, end_time) VALUES (?, ?, ?)", 
+                         (interaction.user.id, recipe["buff_type"], end_time_str))
+    
+    await db.commit()
+    await interaction.response.send_message(msg)
 
 # ==========================================
 # 6. 관리자 전용 직권 명령어 (어뷰징 관리, 이벤트용)
