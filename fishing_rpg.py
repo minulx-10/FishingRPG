@@ -415,16 +415,27 @@ async def 낚시(interaction: discord.Interaction):
     async with db.execute("SELECT buff_type FROM active_buffs WHERE user_id=? AND end_time > ?", (interaction.user.id, now_str)) as cursor:
         active_buffs = [row[0] for row in await cursor.fetchall()]
 
-    # 3. 확률 계산 (버프 적용)
+    # 3. 확률 주사위 굴리기
     roll = random.uniform(0, 100) / (1 + (rod_tier - 1) * 0.2) 
     if has_bait: roll = roll * 0.5 
-    if "deep_sea_boost" in active_buffs: roll = roll * 0.6 # 복어 지리탕 버프 (확률 업!)
+    if "deep_sea_boost" in active_buffs: roll = roll * 0.6 
     
+    # 👇 [버그 수정됨] 공평한 물고기 추첨 로직 👇
+    eligible_fish = []
+    
+    # 주사위 값(roll)보다 크거나 같은 확률(prob)을 가진 물고기들 필터링
+    for fish, data in FISH_DATA.items():
+        if data["prob"] >= roll:
+            eligible_fish.append((fish, data["prob"]))
+            
     target_fish = "낡은 장화 🥾"
-    for fish, data in reversed(list(FISH_DATA.items())):
-        if roll <= data["prob"]:
-            target_fish = fish
-            break
+    if eligible_fish:
+        # 조건을 만족하는 물고기 중 가장 희귀한(prob가 가장 낮은) 수치 찾기
+        min_prob = min(f[1] for f in eligible_fish)
+        # 해당 희귀도를 가진 물고기들만 모아서 그 중 하나를 랜덤으로 뽑기!
+        final_candidates = [f[0] for f in eligible_fish if f[1] == min_prob]
+        target_fish = random.choice(final_candidates)
+    # 👆 수정 끝 👆
 
     # 4. 환경 (날씨/시간) 기믹 적용
     now_hour = datetime.datetime.now(kst).hour
@@ -439,7 +450,7 @@ async def 낚시(interaction: discord.Interaction):
     view = FishingView(interaction.user, target_fish, rod_tier)
     await interaction.response.send_message(f"🌊 찌를 던졌습니다... 조용히 기다리세요.{bait_text}\n(내 낚싯대: Lv.{rod_tier})", view=view)
     
-    # 5. 🌟 버프 적용: 대기 시간 감소 (장어 덮밥 버프)
+    # 5. 🌟 버프 적용: 대기 시간 감소
     wait_min, wait_max = (1, 3) if "cooldown_reduction" in active_buffs else (2, 6)
     wait_time = random.uniform(wait_min, wait_max)
     await asyncio.sleep(wait_time)
