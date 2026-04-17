@@ -77,16 +77,19 @@ conn.commit()
 # ==========================================
 # 3. 게임 핵심 데이터 (물고기 도감 & 시세)
 # ==========================================
-# 속성 상성: 표층 > 심해 > 암초 > 표층
-FISH_DATA = {
-    "낡은 장화 🥾": {"grade": "일반", "prob": 100, "base_window": 3.5, "price": 5, "power": 1, "element": "무속성"},
-    "싱싱한 고등어 🐟": {"grade": "일반", "prob": 60, "base_window": 3.0, "price": 50, "power": 5, "element": "표층"},
-    "특급 참치 🍣": {"grade": "희귀", "prob": 25, "base_window": 2.5, "price": 300, "power": 20, "element": "표층"},
-    "암초의 돌돔 🐠": {"grade": "초희귀", "prob": 12, "base_window": 2.0, "price": 1000, "power": 45, "element": "암초"},
-    "전설의 흰수염고래 🐋": {"grade": "에픽", "prob": 5, "base_window": 1.5, "price": 2500, "power": 100, "element": "심해"},
-    "심해의 용궁 가디언 🐉": {"grade": "레전드", "prob": 0.5, "base_window": 1.3, "price": 15000, "power": 500, "element": "심해"},
-    "💎 GSM 황금 키보드": {"grade": "히든", "prob": 0.01, "base_window": 1.2, "price": 500000, "power": 9999, "element": "무속성"}
-}
+import json # (맨 위에 적었다면 생략 가능)
+
+# JSON 파일에서 100종의 물고기 데이터를 통째로 불러오는 함수
+def load_fish_data():
+    try:
+        with open('fish_data.json', 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        print("❌ 오류: fish_data.json 파일이 없습니다! 봇이 종료됩니다.")
+        exit()
+
+# 봇 시작 시 데이터 로딩 (이제 100종이 모두 여기에 들어갑니다)
+FISH_DATA = load_fish_data()
 
 # 전역 시세 저장소 (시장판매 시 사용)
 MARKET_PRICES = {fish: data["price"] for fish, data in FISH_DATA.items()}
