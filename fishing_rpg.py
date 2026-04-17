@@ -8,6 +8,7 @@ import asyncio
 from discord.ui import View, Button
 import os # 추가
 from dotenv import load_dotenv # 추가
+import json # (맨 위에 적었다면 생략 가능)
 
 # ==========================================
 # 1. 봇 기본 설정 및 준비
@@ -77,7 +78,6 @@ conn.commit()
 # ==========================================
 # 3. 게임 핵심 데이터 (물고기 도감 & 시세)
 # ==========================================
-import json # (맨 위에 적었다면 생략 가능)
 
 # JSON 파일에서 100종의 물고기 데이터를 통째로 불러오는 함수
 def load_fish_data():
