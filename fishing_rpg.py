@@ -532,12 +532,41 @@ async def 통(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed)
 
 # 선택 가능한 물고기 리스트 생성 (자동완성용)
-fish_choices = [app_commands.Choice(name=fish, value=fish) for fish in FISH_DATA.keys()]
+# 사용자가 글자를 입력할 때 실시간으로 물고기를 찾아주는 자동완성 함수
+async def fish_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    # 사용자가 입력한 글자가 포함된 물고기만 필터링
+    choices = [
+        app_commands.Choice(name=fish, value=fish)
+        for fish in FISH_DATA.keys() if current.lower() in fish.lower()
+    ]
+    # 디스코드 제한에 맞춰 무조건 25개까지만 잘라서 반환
+    return choices[:25]
 
 @bot.tree.command(name="개별판매", description="가방에 있는 특정 물고기를 원하는 수량만큼 판매합니다.")
-@app_commands.choices(물고기=fish_choices)
-async def 개별판매(interaction: discord.Interaction, 물고기: app_commands.Choice[str], 수량: int):
-    target_fish = 물고기.value
+@app_commands.autocomplete(물고기=fish_autocomplete)
+async def 개별판매(interaction: discord.Interaction, 물고기: str, 수량: int):
+    target_fish = 물고기 # 자동완성은 value가 바로 문자열로 들어옵니다.
+    
+    if 수량 <= 0:
+        return await interaction.response.send_message("❌ 수량은 1마리 이상이어야 합니다.", ephemeral=True)
+        
+    # 가방에 해당 물고기가 충분히 있는지 확인
+    cursor.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, target_fish))
+    res = cursor.fetchone()
+    current_amount = res[0] if res else 0
+    
+    if current_amount < 수량:
+        return await interaction.response.send_message(f"❌ 가방에 **{target_fish}**가 부족합니다. (현재 보유: {current_amount}마리)", ephemeral=True)
+    
+    # 판매 처리 (글로벌 시세 반영)
+    price_per_item = MARKET_PRICES.get(target_fish, FISH_DATA[target_fish]["price"])
+    total_earned = price_per_item * 수량
+    
+    cursor.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name=?", (수량, interaction.user.id, target_fish))
+    cursor.execute("UPDATE user_data SET coins = coins + ? WHERE user_id=?", (total_earned, interaction.user.id))
+    conn.commit()
+    
+    await interaction.response.send_message(f"💰 **{target_fish}** {수량}마리를 팔아서 총 `{total_earned:,} C`를 얻었습니다! (개당 {price_per_item}C)")
     
     if 수량 <= 0:
         return await interaction.response.send_message("❌ 수량은 1마리 이상이어야 합니다.", ephemeral=True)
