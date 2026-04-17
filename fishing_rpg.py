@@ -55,6 +55,15 @@ async def init_db():
             PRIMARY KEY (user_id, item_name)
         )
     ''')
+
+    # 👇 여기에 도감(fish_dex) 테이블 생성 코드 추가! 👇
+    await db.execute('''
+        CREATE TABLE IF NOT EXISTS fish_dex (
+            user_id INTEGER,
+            item_name TEXT,
+            PRIMARY KEY (user_id, item_name)
+        )
+    ''')
     
     try:
         await db.execute("ALTER TABLE user_data ADD COLUMN last_daily TEXT DEFAULT ''")
@@ -164,6 +173,10 @@ class FishingView(View):
         elapsed = datetime.datetime.now().timestamp() - self.start_time
         
         if elapsed <= self.limit_time:
+            if elapsed <= self.limit_time:
+                # 👇 물고기를 낚는 즉시 도감에 영구 기록! (이미 있으면 무시) 👇
+                await db.execute("INSERT OR IGNORE INTO fish_dex (user_id, item_name) VALUES (?, ?)", (self.user.id, self.target_fish))
+                await db.commit()
             grade = FISH_DATA[self.target_fish]["grade"]
             embed = discord.Embed(title=f"🎉 낚시 성공! [{grade}]", description=f"**{self.target_fish}**을(를) 낚았습니다!", color=0x00ff00)
             embed.add_field(name="반응 속도", value=f"`{elapsed:.3f}초` (판정 한도: {self.limit_time:.2f}초)")
@@ -501,6 +514,38 @@ async def 개별판매(interaction: discord.Interaction, 물고기: str, 수량:
     await db.commit()
     
     await interaction.response.send_message(f"💰 **{target_fish}** {수량}마리를 팔아서 총 `{total_earned:,} C`를 얻었습니다! (개당 {price_per_item}C)")
+
+@bot.tree.command(name="도감", description="내가 지금까지 발견한 모든 물고기 기록과 수집률을 확인합니다.")
+async def 도감(interaction: discord.Interaction):
+    # 유저의 도감 기록 불러오기
+    async with db.execute("SELECT item_name FROM fish_dex WHERE user_id=?", (interaction.user.id,)) as cursor:
+        dex_items = await cursor.fetchall()
+    
+    collected_names = [item[0] for item in dex_items]
+    total_fish = len(FISH_DATA)
+    collected_count = len(collected_names)
+    percent = (collected_count / total_fish) * 100
+    
+    # 수집률에 따른 칭호(등급) 판별
+    if percent == 100: dex_rank = "👑 그랜드 마스터 앵글러"
+    elif percent >= 70: dex_rank = "🥇 엘리트 어류학자"
+    elif percent >= 50: dex_rank = "🥈 어류학자"
+    elif percent >= 30: dex_rank = "🥉 낚시계의 새싹"
+    elif percent >= 10: dex_rank = "🌱 낚시계의 떡잎"
+    else: dex_rank = "🥚 초보 낚시꾼"
+
+    embed = discord.Embed(title=f"📖 {interaction.user.name}님의 낚시 도감", color=0x9b59b6)
+    embed.add_field(name="현재 수집률", value=f"**{collected_count} / {total_fish} 종** (`{percent:.1f}%`)", inline=False)
+    embed.add_field(name="도감 등급", value=f"**{dex_rank}**", inline=False)
+    
+    # 최근 모은 5가지 물고기 보여주기
+    if collected_names:
+        recent_fish = "\n".join([f"• {name}" for name in collected_names[-5:]]) # 리스트의 마지막 5개
+        embed.add_field(name="최근 발견한 어종", value=recent_fish, inline=False)
+    else:
+        embed.add_field(name="최근 발견한 어종", value="아직 발견한 물고기가 없습니다.", inline=False)
+        
+    await interaction.response.send_message(embed=embed)
 
 # ==========================================
 # 6. 관리자 전용 직권 명령어 (어뷰징 관리, 이벤트용)
