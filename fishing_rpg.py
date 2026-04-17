@@ -79,6 +79,15 @@ async def init_db():
     except aiosqlite.OperationalError:
         pass # 이미 컬럼이 존재함
 
+    try:
+        await db.execute("ALTER TABLE user_data ADD COLUMN quest_date TEXT DEFAULT ''")
+        await db.execute("ALTER TABLE user_data ADD COLUMN quest_item TEXT DEFAULT ''")
+        await db.execute("ALTER TABLE user_data ADD COLUMN quest_amount INTEGER DEFAULT 0")
+        await db.execute("ALTER TABLE user_data ADD COLUMN quest_reward INTEGER DEFAULT 0")
+        await db.execute("ALTER TABLE user_data ADD COLUMN quest_is_cleared INTEGER DEFAULT 0")
+    except aiosqlite.OperationalError:
+        pass
+
     await db.commit()
 
 # 🌟 모든 DB 접근 함수에 async/await 추가
@@ -732,6 +741,85 @@ async def 요리(interaction: discord.Interaction, 선택: str):
     
     await db.commit()
     await interaction.response.send_message(msg)
+
+# ==========================================
+# 🌟 항구 게시판 (일일 의뢰) 기능
+# ==========================================
+
+# 납품하기 버튼 UI
+class QuestDeliveryView(View):
+    def __init__(self, user, item, amount, reward):
+        super().__init__(timeout=60)
+        self.user = user
+        self.item = item
+        self.amount = amount
+        self.reward = reward
+
+    @discord.ui.button(label="📦 의뢰 납품하기", style=discord.ButtonStyle.success)
+    async def deliver_btn(self, interaction: discord.Interaction, button: Button):
+        if interaction.user != self.user: return
+
+        # 가방에 물고기가 충분히 있는지 확인
+        async with db.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (self.user.id, self.item)) as cursor:
+            res = await cursor.fetchone()
+
+        current_amount = res[0] if res else 0
+
+        if current_amount < self.amount:
+            return await interaction.response.send_message(f"❌ 가방에 물고기가 부족합니다! (현재: {current_amount} / 필요: {self.amount})", ephemeral=True)
+
+        # 납품 처리: 물고기 차감, 보상 지급, 퀘스트 완료 처리
+        await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name=?", (self.amount, self.user.id, self.item))
+        await db.execute("UPDATE user_data SET coins = coins + ?, quest_is_cleared = 1 WHERE user_id=?", (self.reward, self.user.id))
+        await db.commit()
+
+        embed = discord.Embed(title="🎉 의뢰 완료!", description=f"항구 촌장님께 **{self.item}** {self.amount}마리를 납품했습니다!\n보상으로 두둑한 `{self.reward:,} C`를 받았습니다!", color=0xf1c40f)
+        await interaction.response.edit_message(embed=embed, view=None)
+
+# 의뢰 확인 명령어
+@bot.tree.command(name="의뢰", description="항구 게시판에서 오늘의 특별한 낚시 의뢰를 확인합니다.")
+async def 의뢰(interaction: discord.Interaction):
+    await get_user_data(interaction.user.id) # 유저 데이터 보장
+    today = datetime.datetime.now(kst).strftime('%Y-%m-%d')
+
+    async with db.execute("SELECT quest_date, quest_item, quest_amount, quest_reward, quest_is_cleared FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+        q_date, q_item, q_amount, q_reward, q_cleared = await cursor.fetchone()
+
+    # 오늘 첫 확인이거나 날짜가 지났으면 새로운 의뢰 발급
+    if q_date != today:
+        # 무리한 요구를 하지 않도록 일반~초희귀 중에서만 픽!
+        quest_pool = [fish for fish, data in FISH_DATA.items() if data["grade"] in ["일반", "희귀", "초희귀"]]
+        q_item = random.choice(quest_pool)
+        q_amount = random.randint(1, 3) # 1~3마리 요구
+        # 기본 가격의 3~5배에 달하는 엄청난 보상 책정
+        q_reward = FISH_DATA[q_item]["price"] * q_amount * random.randint(3, 5)
+        q_cleared = 0
+        q_date = today
+
+        await db.execute("UPDATE user_data SET quest_date=?, quest_item=?, quest_amount=?, quest_reward=?, quest_is_cleared=0 WHERE user_id=?",
+                         (q_date, q_item, q_amount, q_reward, interaction.user.id))
+        await db.commit()
+
+    # 이미 오늘 의뢰를 완료한 경우
+    if q_cleared == 1:
+        embed = discord.Embed(title="📜 오늘의 항구 의뢰", description="오늘의 의뢰는 이미 완료했습니다!\n마을이 평화롭네요. 내일 다시 와주세요.", color=0x95a5a6)
+        return await interaction.response.send_message(embed=embed)
+
+    # 의뢰 내용 보여주기
+    embed = discord.Embed(title="📜 오늘의 항구 의뢰", description="마을 촌장님이 급하게 생선을 찾고 있습니다!", color=0xe67e22)
+    embed.add_field(name="🎯 타겟 어종", value=f"**{q_item}**", inline=True)
+    embed.add_field(name="🔢 필요 수량", value=f"`{q_amount}마리`", inline=True)
+    embed.add_field(name="💰 납품 보상", value=f"`{q_reward:,} C`", inline=False)
+
+    # 유저가 현재 가방에 몇 마리를 가지고 있는지 체크해서 힌트 표시
+    async with db.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, q_item)) as cursor:
+        res = await cursor.fetchone()
+    current = res[0] if res else 0
+
+    embed.set_footer(text=f"내 가방에 보유한 수량: {current} / {q_amount}")
+
+    view = QuestDeliveryView(interaction.user, q_item, q_amount, q_reward)
+    await interaction.response.send_message(embed=embed, view=view)
 
 # ==========================================
 # 6. 관리자 전용 직권 명령어 (어뷰징 관리, 이벤트용)
