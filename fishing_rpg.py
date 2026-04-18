@@ -370,6 +370,131 @@ class BattleView(View):
         if interaction.user != self.user: return
         await self.execute_turn(interaction, "defend")
 
+# [3] 턴제 PvP (유저 간 약탈/대결) 배틀 UI
+class PvPBattleView(View):
+    def __init__(self, p1, p2, p1_fish, p2_fish):
+        super().__init__(timeout=120) # 2분 동안 반응 없으면 종료
+        self.p1 = p1
+        self.p2 = p2
+        self.p1_fish = p1_fish
+        self.p2_fish = p2_fish
+        
+        # P1(공격자) 스탯
+        self.p1_max_hp = self.p1_hp = FISH_DATA[p1_fish]["power"] * 10
+        self.p1_atk = FISH_DATA[p1_fish]["power"]
+        self.p1_ap = 1
+        self.p1_elem = FISH_DATA[p1_fish]["element"]
+        self.p1_defending = False
+        
+        # P2(방어자) 스탯
+        self.p2_max_hp = self.p2_hp = FISH_DATA[p2_fish]["power"] * 10
+        self.p2_atk = FISH_DATA[p2_fish]["power"]
+        self.p2_ap = 1
+        self.p2_elem = FISH_DATA[p2_fish]["element"]
+        self.p2_defending = False
+
+        self.turn_count = 1
+        self.current_turn_user = p1 # 공격자가 먼저 선공
+        self.battle_log = f"⚔️ {p1.name}님이 {p2.name}님에게 수산대전을 걸었습니다!\n"
+
+    def generate_embed(self):
+        embed = discord.Embed(title=f"⚔️ 수산대전 PvP (Turn {self.turn_count})", color=0xff0000)
+        embed.description = f"**현재 턴:** {self.current_turn_user.mention} 님의 행동을 기다리는 중..."
+
+        p1_hp_bar = "🟩" * max(0, int((self.p1_hp / self.p1_max_hp) * 5)) + "⬛" * (5 - max(0, int((self.p1_hp / self.p1_max_hp) * 5)))
+        embed.add_field(name=f"🔵 {self.p1.name} [{self.p1_elem}]", 
+                        value=f"**{self.p1_fish}**\n체력: {self.p1_hp}/{self.p1_max_hp} {p1_hp_bar}\nAP: ⚡x{self.p1_ap}", inline=True)
+        
+        embed.add_field(name="VS", value="⚡", inline=True)
+
+        p2_hp_bar = "🟥" * max(0, int((self.p2_hp / self.p2_max_hp) * 5)) + "⬛" * (5 - max(0, int((self.p2_hp / self.p2_max_hp) * 5)))
+        embed.add_field(name=f"🔴 {self.p2.name} [{self.p2_elem}]", 
+                        value=f"**{self.p2_fish}**\n체력: {self.p2_hp}/{self.p2_max_hp} {p2_hp_bar}\nAP: ⚡x{self.p2_ap}", inline=True)
+        
+        # 로그가 너무 길어지지 않게 최근 5줄만 표시
+        log_display = "\n".join(self.battle_log.split("\n")[-6:]) 
+        embed.add_field(name="📜 전투 로그", value=f"```\n{log_display}\n```", inline=False)
+        return embed
+
+    async def execute_turn(self, interaction: discord.Interaction, action: str):
+        if interaction.user != self.current_turn_user:
+            return await interaction.response.send_message("❌ 당신의 턴이 아닙니다! 기다리세요.", ephemeral=True)
+
+        is_p1 = (interaction.user == self.p1)
+
+        attacker_name = self.p1.name if is_p1 else self.p2.name
+        attacker_fish = self.p1_fish if is_p1 else self.p2_fish
+        attacker_elem = self.p1_elem if is_p1 else self.p2_elem
+        attacker_atk = self.p1_atk if is_p1 else self.p2_atk
+        attacker_ap = self.p1_ap if is_p1 else self.p2_ap
+
+        defender_elem = self.p2_elem if is_p1 else self.p1_elem
+        defender_defending = self.p2_defending if is_p1 else self.p1_defending
+
+        if action == "attack":
+            if is_p1: self.p1_defending = False
+            else: self.p2_defending = False
+
+            mult = get_element_multiplier(attacker_elem, defender_elem)
+            dmg = int(attacker_atk * attacker_ap * mult)
+            if defender_defending: dmg //= 2
+
+            if is_p1:
+                self.p2_hp -= dmg
+                self.p1_ap = 1
+            else:
+                self.p1_hp -= dmg
+                self.p2_ap = 1
+
+            elem_txt = "(효과 발군!)" if mult > 1.0 else ("(효과 미미...)" if mult < 1.0 else "")
+            self.battle_log += f"[{attacker_name}] {attacker_fish}의 공격! 💥 {dmg} 피해! {elem_txt}\n"
+
+        else: # defend
+            if is_p1:
+                self.p1_defending = True
+                self.p1_ap += 1
+            else:
+                self.p2_defending = True
+                self.p2_ap += 1
+            self.battle_log += f"[{attacker_name}] 방어 태세! 피해 반감 & AP 1 회복.\n"
+
+        # 사망(승패) 체크
+        if self.p1_hp <= 0 or self.p2_hp <= 0:
+            winner = self.p1 if self.p2_hp <= 0 else self.p2
+            loser = self.p2 if self.p2_hp <= 0 else self.p1
+            return await self.end_battle(interaction, winner, loser)
+
+        # 다음 턴으로 넘기기
+        self.current_turn_user = self.p2 if is_p1 else self.p1
+        self.turn_count += 1
+        await interaction.response.edit_message(embed=self.generate_embed(), view=self)
+
+    async def end_battle(self, interaction, winner, loser):
+        self.stop() 
+        embed = self.generate_embed()
+        
+        # 🌟 마라맛 보상 & 패널티 시스템
+        reward_rp = random.randint(15, 30)
+        reward_coin = random.randint(500, 2000) 
+        
+        # 승자는 얻고, 패자는 잃는다! (약탈)
+        await db.execute("UPDATE user_data SET rating = rating + ?, coins = coins + ? WHERE user_id = ?", (reward_rp, reward_coin, winner.id))
+        await db.execute("UPDATE user_data SET rating = MAX(0, rating - ?), coins = MAX(0, coins - ?) WHERE user_id = ?", (reward_rp, int(reward_coin * 0.5), loser.id))
+        await db.commit()
+
+        embed.description = f"🏆 **{winner.mention}님의 승리!!**\n\n**승자({winner.name}):** `+{reward_rp} RP`, `+{reward_coin} C`\n**패자({loser.name}):** `-{reward_rp} RP`, `-{int(reward_coin * 0.5)} C` (약탈당함!)"
+        embed.color = 0x00ff00
+
+        await interaction.response.edit_message(embed=embed, view=None)
+
+    @discord.ui.button(label="공격 (AP소모)", style=discord.ButtonStyle.danger, emoji="⚔️")
+    async def btn_attack(self, interaction: discord.Interaction, button: Button):
+        await self.execute_turn(interaction, "attack")
+
+    @discord.ui.button(label="방어/기모으기 (AP+1)", style=discord.ButtonStyle.primary, emoji="🛡️")
+    async def btn_defend(self, interaction: discord.Interaction, button: Button):
+        await self.execute_turn(interaction, "defend")
+
 class MarketPaginationView(View):
     def __init__(self, items, per_page=10):
         super().__init__(timeout=120)
@@ -905,6 +1030,51 @@ async def 수족관(interaction: discord.Interaction, 유저: discord.Member = N
         embed.set_footer(text="남들에게 자랑할 만한 희귀한 물고기를 수집해 보세요!")
         
     await interaction.response.send_message(embed=embed)
+
+@bot.tree.command(name="수산대전", description="다른 유저를 지목하여 마라맛 PvP 배틀(약탈)을 겁니다!")
+async def 수산대전(interaction: discord.Interaction, 상대: discord.Member):
+    if interaction.user == 상대:
+        return await interaction.response.send_message("❌ 자기 자신과는 싸울 수 없습니다!", ephemeral=True)
+    if 상대.bot:
+        return await interaction.response.send_message("❌ 봇과는 싸울 수 없습니다!", ephemeral=True)
+
+    await get_user_data(interaction.user.id)
+    await get_user_data(상대.id)
+
+    # 1. 내 통에 물고기가 있는지 확인
+    async with db.execute("SELECT item_name FROM bucket WHERE user_id=? AND amount > 0", (interaction.user.id,)) as cursor:
+        items1 = await cursor.fetchall()
+    if not items1:
+        return await interaction.response.send_message("❌ 내 통(배틀용)이 비어있습니다! `/낚시` 후 통에 보관하세요.", ephemeral=True)
+
+    # 2. 상대방 통에 물고기가 있는지 확인
+    async with db.execute("SELECT item_name FROM bucket WHERE user_id=? AND amount > 0", (상대.id,)) as cursor:
+        items2 = await cursor.fetchall()
+    if not items2:
+        return await interaction.response.send_message(f"❌ 상대방({상대.name})의 통이 비어있어 약탈할 수 없습니다!", ephemeral=True)
+
+    # 통에서 가장 전투력이 높은 물고기를 대표로 선출
+    def get_best_fish(items):
+        best = None
+        max_p = -1
+        for (name,) in items:
+            p = FISH_DATA[name]["power"]
+            if p > max_p:
+                max_p = p
+                best = name
+        return best
+
+    p1_fish = get_best_fish(items1)
+    p2_fish = get_best_fish(items2)
+
+    view = PvPBattleView(interaction.user, 상대, p1_fish, p2_fish)
+    
+    # 상대를 멘션하며 전투 시작!
+    await interaction.response.send_message(
+        f"⚔️ {상대.mention}! **{interaction.user.name}**님이 수산대전을 걸어왔습니다!\n(방어하지 못하면 코인과 RP를 약탈당합니다!)", 
+        embed=view.generate_embed(), 
+        view=view
+    )
 
 # ==========================================
 # 6. 관리자 전용 직권 명령어 (어뷰징 관리, 이벤트용)
