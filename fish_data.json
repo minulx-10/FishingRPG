@@ -95,6 +95,7 @@
 
   "잉어 🐟": {"grade": "일반", "prob": 50, "base_window": 2.8, "price": 30, "power": 5, "element": "무속성"},
   "붕어 🐟": {"grade": "일반", "prob": 55, "base_window": 2.8, "price": 25, "power": 4, "element": "무속성"},
+  "떡붕어 🐟": {"grade": "일반", "prob": 55, "base_window": 2.8, "price": 25, "power": 4, "element": "무속성"},
   "블루길 🐟": {"grade": "일반", "prob": 45, "base_window": 2.7, "price": 20, "power": 6, "element": "무속성"},
   "큰입배스 🐟": {"grade": "일반", "prob": 40, "base_window": 2.6, "price": 40, "power": 10, "element": "무속성"},
   "메기 🐟": {"grade": "희귀", "prob": 25, "base_window": 2.5, "price": 150, "power": 18, "element": "무속성"},
