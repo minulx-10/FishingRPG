@@ -536,48 +536,77 @@ class MarketPaginationView(View):
 # ==========================================
 # 5. 슬래시 명령어 (Slash Commands)
 # ==========================================
-@bot.tree.command(name="낚시", description="찌를 던져 물고기를 낚습니다! (타이밍 미니게임)")
-async def 낚시(interaction: discord.Interaction):
+# ==========================================
+# 낚시 로직 전면 개편 (가중치 기반 & 자석 미끼 로직)
+# ==========================================
+@bot.tree.command(name="낚시", description="찌를 던져 물고기(또는 보물)를 낚습니다! (타이밍 미니게임)")
+@app_commands.choices(사용할미끼=[
+    app_commands.Choice(name="미끼 없음 (기본)", value="none"),
+    app_commands.Choice(name="고급 미끼 🪱", value="고급 미끼 🪱"),
+    app_commands.Choice(name="자석 미끼 🧲", value="자석 미끼 🧲")
+])
+async def 낚시(interaction: discord.Interaction, 사용할미끼: app_commands.Choice[str]):
     coins, rod_tier, rating = await get_user_data(interaction.user.id)
     
-    # 1. 미끼 확인 로직
-    async with db.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name='고급 미끼 🪱'", (interaction.user.id,)) as cursor:
-        bait_res = await cursor.fetchone()
-    has_bait = bait_res and bait_res[0] > 0
+    bait_used = 사용할미끼.value
+    bait_text = ""
     
-    if has_bait:
-        await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name='고급 미끼 🪱'", (interaction.user.id,))
+    # 1. 미끼 인벤토리 확인
+    if bait_used != "none":
+        async with db.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, bait_used)) as cursor:
+            bait_res = await cursor.fetchone()
+        
+        if not bait_res or bait_res[0] <= 0:
+            return await interaction.response.send_message(f"❌ 가방에 **{bait_used}**가 없습니다! 상점에서 먼저 구매해주세요.", ephemeral=True)
+            
+        # 미끼 차감
+        await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (interaction.user.id, bait_used))
         await db.commit()
-        bait_text = " (🪱 고급 미끼 사용됨!)"
-    else:
-        bait_text = ""
+        bait_text = f" ({bait_used} 사용됨!)"
 
-    # 2. 🌟 버프 확인 로직
+    # 2. 버프 확인 로직
     now_str = datetime.datetime.now(kst).strftime('%Y-%m-%d %H:%M:%S')
     async with db.execute("SELECT buff_type FROM active_buffs WHERE user_id=? AND end_time > ?", (interaction.user.id, now_str)) as cursor:
         active_buffs = [row[0] for row in await cursor.fetchall()]
 
-    # 3. 확률 주사위 굴리기
-    roll = random.uniform(0, 75) / (1 + (rod_tier - 1) * 0.2) 
-    if has_bait: roll = roll * 0.5 
-    if "deep_sea_boost" in active_buffs: roll = roll * 0.6 
+    # 3. 새로운 가중치 기반 확률 시스템
+    candidates = []
+    weights = []
     
-    # 👇 [버그 수정됨] 공평한 물고기 추첨 로직 👇
-    eligible_fish = []
-    
-    # 주사위 값(roll)보다 크거나 같은 확률(prob)을 가진 물고기들 필터링
     for fish, data in FISH_DATA.items():
-        if data["prob"] >= roll:
-            eligible_fish.append((fish, data["prob"]))
+        base_prob = data["prob"]
+        grade = data["grade"]
+        
+        # [자석 미끼] 기믹: 고철, 보물 등 생물이 아닌 것만 낚임
+        if bait_used == "자석 미끼 🧲":
+            if fish not in ["낡은 장화 🥾", "낡은 고철 ⚙️", "해적의 금화 🪙", "가라앉은 보물상자 🧰"]:
+                continue
+            base_prob *= 2.0 # 보물류 등장 확률 2배
             
-    target_fish = "낡은 장화 🥾"
-    if eligible_fish:
-        # 조건을 만족하는 물고기 중 가장 희귀한(prob가 가장 낮은) 수치 찾기
-        min_prob = min(f[1] for f in eligible_fish)
-        # 해당 희귀도를 가진 물고기들만 모아서 그 중 하나를 랜덤으로 뽑기!
-        final_candidates = [f[0] for f in eligible_fish if f[1] == min_prob]
-        target_fish = random.choice(final_candidates)
-    # 👆 수정 끝 👆
+        # [고급 미끼] 기믹: 일반 등급 등장 확률 대폭 감소
+        elif bait_used == "고급 미끼 🪱":
+            if grade == "일반":
+                base_prob *= 0.1
+            elif grade in ["희귀", "초희귀"]:
+                base_prob *= 1.5
+
+        # [버프 & 낚싯대] 기믹
+        if "deep_sea_boost" in active_buffs and data["element"] == "심해":
+            base_prob *= 2.0
+            
+        # 낚싯대 티어에 따른 희귀도 보정
+        if grade in ["에픽", "레전드", "신화"]:
+            base_prob *= (1 + (rod_tier * 0.1))
+
+        candidates.append(fish)
+        weights.append(base_prob)
+        
+    # 만약 후보가 없으면 무조건 장화
+    if not candidates:
+        target_fish = "낡은 장화 🥾"
+    else:
+        # 가중치 기반 랜덤 뽑기 (장화 파티 완벽 해결)
+        target_fish = random.choices(candidates, weights=weights, k=1)[0]
 
     # 4. 환경 (날씨/시간) 기믹 적용
     now_hour = datetime.datetime.now(kst).hour
@@ -592,7 +621,7 @@ async def 낚시(interaction: discord.Interaction):
     view = FishingView(interaction.user, target_fish, rod_tier)
     await interaction.response.send_message(f"🌊 찌를 던졌습니다... 조용히 기다리세요.{bait_text}\n(내 낚싯대: Lv.{rod_tier})", view=view)
     
-    # 5. 🌟 버프 적용: 대기 시간 감소
+    # 5. 대기 시간 및 챔질 (기존과 동일)
     wait_min, wait_max = (1, 3) if "cooldown_reduction" in active_buffs else (2, 6)
     wait_time = random.uniform(wait_min, wait_max)
     await asyncio.sleep(wait_time)
@@ -710,23 +739,30 @@ async def 출석(interaction: discord.Interaction):
     
     await interaction.response.send_message(f"✅ 출석 완료! 보상으로 `{reward} C`를 받았습니다. (잔액 확인: `/인벤토리`)")
 
+# ==========================================
+# 상점 & 구매 명령어 업데이트 (자석 미끼 추가)
+# ==========================================
 @bot.tree.command(name="상점", description="유용한 아이템을 구경할 수 있는 상점입니다.")
 async def 상점(interaction: discord.Interaction):
     embed = discord.Embed(title="🏪 수산시장 아이템 상점", color=0xf1c40f)
     embed.add_field(name="고급 미끼 🪱 (가격: 500 C)", 
-                    value="다음 낚시 때 희귀 물고기 등장 확률을 대폭 올려줍니다.\n명령어: `/구매 아이템:고급 미끼 🪱 수량:1`", inline=False)
+                    value="다음 낚시 때 일반 어종을 피하고 희귀 어종 등장 확률을 올려줍니다.", inline=False)
+    embed.add_field(name="자석 미끼 🧲 (가격: 800 C)", 
+                    value="물고기는 낚이지 않지만, 바다 밑에 가라앉은 고철이나 보물을 확정적으로 건져냅니다.", inline=False)
     await interaction.response.send_message(embed=embed)
 
 @bot.tree.command(name="구매", description="상점에서 아이템을 구매합니다.")
 @app_commands.choices(아이템=[
-    app_commands.Choice(name="고급 미끼 🪱", value="고급 미끼 🪱")
+    app_commands.Choice(name="고급 미끼 🪱", value="고급 미끼 🪱"),
+    app_commands.Choice(name="자석 미끼 🧲", value="자석 미끼 🧲")
 ])
+
 async def 구매(interaction: discord.Interaction, 아이템: app_commands.Choice[str], 수량: int = 1):
     if 수량 <= 0: 
         return await interaction.response.send_message("❌ 수량은 1개 이상이어야 합니다.", ephemeral=True)
         
     coins, _, _ = await get_user_data(interaction.user.id)
-    price = 500 * 수량
+    price = 500 * 수량 if 아이템.value == "고급 미끼 🪱" else 800 * 수량
     
     if coins < price:
         return await interaction.response.send_message(f"❌ 코인이 부족합니다! (필요: {price} C / 현재: {coins} C)", ephemeral=True)
