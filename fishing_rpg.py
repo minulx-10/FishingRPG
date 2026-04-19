@@ -723,22 +723,32 @@ async def 시세(interaction: discord.Interaction, 검색어: str = None):
     view = MarketPaginationView(MARKET_PRICES)
     await interaction.response.send_message(embed=view.make_embed(), view=view)
 
-@bot.tree.command(name="판매", description="인벤토리에 있는 물고기를 일괄 판매합니다. (고철, 미끼, 보물상자는 보호됨)")
-async def 판매(interaction: discord.Interaction):
+@bot.tree.command(name="판매", description="인벤토리에 있는 물고기를 일괄 판매합니다. (특정 물고기를 판매에서 제외할 수 있습니다)")
+@app_commands.describe(제외1="판매하지 않고 보호할 아이템 1", 제외2="판매하지 않고 보호할 아이템 2", 제외3="판매하지 않고 보호할 아이템 3")
+@app_commands.autocomplete(제외1=inv_autocomplete, 제외2=inv_autocomplete, 제외3=inv_autocomplete)
+async def 판매(interaction: discord.Interaction, 제외1: str = None, 제외2: str = None, 제외3: str = None):
     async with db.execute("SELECT item_name, amount FROM inventory WHERE user_id=? AND amount > 0", (interaction.user.id,)) as cursor:
         items = await cursor.fetchall()
     
-    # 🌟 보호할 아이템 목록 (일괄 판매 시 제외됨)
-    # 해적의 금화 🪙 는 순수 돈벌이용이라 팔리게 놔둡니다.
+    # 🌟 1. 기본적으로 보호되는 중요 아이템들 (고정)
     protected_items = ["낡은 고철 ⚙️", "가라앉은 보물상자 🧰", "고급 미끼 🪱", "자석 미끼 🧲"]
     
+    # 🌟 2. 유저가 명령어를 칠 때 직접 선택한 제외 아이템들 추가
+    user_excludes = [x for x in [제외1, 제외2, 제외3] if x is not None]
+    protected_items.extend(user_excludes)
+    
+    # 보호 목록에 없는 아이템만 판매 목록에 담기
     sellable_items = [(name, amt) for name, amt in items if name not in protected_items]
     
     if not sellable_items:
-        return await interaction.response.send_message("❌ 판매할 수 있는 물고기가 없습니다!\n(고철, 보물상자, 미끼 등 중요 자원은 보호되어 일괄 판매되지 않습니다.)", ephemeral=True)
+        return await interaction.response.send_message("❌ 판매할 수 있는 물고기가 없습니다!\n(모두 보호 처리되었거나 가방이 텅 비어있습니다.)", ephemeral=True)
         
     total_earned = 0
     msg = "**[💰 수산시장 일괄 판매 영수증]**\n"
+    
+    # 유저가 직접 제외한 항목이 있다면 영수증에 표시해줌
+    if user_excludes:
+        msg += f"*(🛡️ 선택 보호됨: {', '.join(user_excludes)})*\n\n"
     
     for name, amt in sellable_items:
         price_per_item = MARKET_PRICES.get(name, FISH_DATA[name]["price"])
@@ -746,7 +756,7 @@ async def 판매(interaction: discord.Interaction):
         total_earned += earned
         msg += f"• {name} x{amt}: `{earned:,} C` (개당 {price_per_item}C)\n"
         
-        # 팔린 아이템만 개별적으로 DB에서 삭제 (기존의 위험한 전체 삭제 코드 수정)
+        # 팔린 아이템만 개별적으로 DB에서 삭제
         await db.execute("DELETE FROM inventory WHERE user_id = ? AND item_name = ?", (interaction.user.id, name))
         
     await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (total_earned, interaction.user.id))
