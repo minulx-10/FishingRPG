@@ -742,7 +742,7 @@ async def 선박개조(interaction: discord.Interaction):
     # 티어별 업그레이드 비용 
     upgrade_costs = {
         1: {"coins": 10000, "scrap": 0, "next": "어선 🚤", "unlock": "/요리, /의뢰, /상점, /구매"},
-        2: {"coins": 50000, "scrap": 15, "next": "쇄빙선 🛳️", "unlock": "/수족관, /전시, /바다, /배틀"},
+        2: {"coins": 50000, "scrap": 15, "next": "쇄빙선 🛳️", "unlock": "/전시, /배틀"},
         3: {"coins": 150000, "scrap": 30, "next": "잠수함 ⛴️", "unlock": "/수산대전(PvP), 신화 어종 포획 가능"}
     }
 
