@@ -25,6 +25,28 @@ def is_developer():
     return app_commands.check(lambda i: i.user.id == SUPER_ADMIN_ID)
 
 # ==========================================
+# 선박 등급 제한 확인 (해금 시스템)
+# ==========================================
+def check_boat_tier(min_tier: int):
+    async def predicate(interaction: discord.Interaction):
+        await db.execute("INSERT OR IGNORE INTO user_data (user_id) VALUES (?)", (interaction.user.id,))
+        async with db.execute("SELECT boat_tier FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+            res = await cursor.fetchone()
+        
+        tier = res[0] if res else 1
+        if tier < min_tier:
+            tier_names = {1: "나룻배 🛶", 2: "어선 🚤", 3: "쇄빙선 🛳️", 4: "잠수함 ⛴️"}
+            req_name = tier_names.get(min_tier, f"Lv.{min_tier}")
+            current_name = tier_names.get(tier, f"Lv.{tier}")
+            
+            embed = discord.Embed(title="🚫 탑승 권한 부족!", description=f"이 명령어를 사용하려면 **[{req_name}]** 이상이 필요합니다.\n(현재 선박: **{current_name}**)", color=0xe74c3c)
+            embed.set_footer(text="💡 '/선박개조' 명령어를 통해 배를 업그레이드하세요!")
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return False
+        return True
+    return app_commands.check(predicate)
+
+# ==========================================
 # 2. 데이터베이스 비동기 초기화 및 함수
 # ==========================================
 async def init_db():
@@ -86,6 +108,12 @@ async def init_db():
         await db.execute("ALTER TABLE user_data ADD COLUMN last_daily TEXT DEFAULT ''")
     except aiosqlite.OperationalError:
         pass # 이미 컬럼이 존재함
+
+    # 👇 여기에 보트 티어 컬럼 추가! 👇
+    try:
+        await db.execute("ALTER TABLE user_data ADD COLUMN boat_tier INTEGER DEFAULT 1")
+    except aiosqlite.OperationalError:
+        pass
 
     try:
         await db.execute("ALTER TABLE user_data ADD COLUMN quest_date TEXT DEFAULT ''")
@@ -698,7 +726,57 @@ async def 강화(interaction: discord.Interaction):
     await db.commit()
     await interaction.response.send_message(f"✨ 캉! 캉! 캉! ... 낚싯대가 **Lv.{rod_tier + 1}** 로 강화되었습니다!\n(낚시 판정 시간이 늘어나고, 희귀 물고기 획득률이 상승합니다!)")
 
+@bot.tree.command(name="선박개조", description="코인과 고철을 모아 배를 다음 티어로 업그레이드하고 새로운 기능을 해금합니다!")
+async def 선박개조(interaction: discord.Interaction):
+    coins, rod_tier, rating = await get_user_data(interaction.user.id)
+    
+    async with db.execute("SELECT boat_tier FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+        res = await cursor.fetchone()
+    current_tier = res[0] if res else 1
+
+    # 가방에 있는 고철 갯수 확인
+    async with db.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name='낡은 고철 ⚙️'", (interaction.user.id,)) as cursor:
+        scrap_res = await cursor.fetchone()
+    scrap_amount = scrap_res[0] if scrap_res else 0
+
+    # 티어별 업그레이드 비용 
+    upgrade_costs = {
+        1: {"coins": 10000, "scrap": 0, "next": "어선 🚤", "unlock": "/요리, /의뢰, /상점, /구매"},
+        2: {"coins": 50000, "scrap": 15, "next": "쇄빙선 🛳️", "unlock": "/수족관, /전시, /바다, /배틀"},
+        3: {"coins": 150000, "scrap": 30, "next": "잠수함 ⛴️", "unlock": "/수산대전(PvP), 신화 어종 포획 가능"}
+    }
+
+    if current_tier >= 4:
+        return await interaction.response.send_message("✨ 이미 최고의 선박인 **[잠수함 ⛴️]**을 보유하고 있습니다!", ephemeral=True)
+
+    req = upgrade_costs[current_tier]
+    
+    if coins < req["coins"] or scrap_amount < req["scrap"]:
+        embed = discord.Embed(title="❌ 재료 부족", description="선박을 개조하기 위한 자원이 부족합니다.", color=0xe74c3c)
+        embed.add_field(name="필요 코인", value=f"`{req['coins']:,} C` (보유: `{coins:,} C`)", inline=True)
+        if req["scrap"] > 0:
+            embed.add_field(name="필요 고철 ⚙️", value=f"`{req['scrap']}개` (보유: `{scrap_amount}개`)", inline=True)
+            embed.set_footer(text="💡 상점에서 자석 미끼를 구매해 바다에서 고철을 건져올리세요!")
+        else:
+            embed.set_footer(text="💡 열심히 낚시를 해서 코인을 모아보세요!")
+        return await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    # 재화 차감 및 승급
+    await db.execute("UPDATE user_data SET coins = coins - ?, boat_tier = boat_tier + 1 WHERE user_id = ?", (req["coins"], interaction.user.id))
+    if req["scrap"] > 0:
+        await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name='낡은 고철 ⚙️'", (req["scrap"], interaction.user.id))
+    await db.commit()
+
+    embed = discord.Embed(title="🎉 선박 개조 완료!", description=f"뚝딱뚝딱... 쾅!\n배가 **[{req['next']}]**(으)로 업그레이드 되었습니다!", color=0x2ecc71)
+    embed.add_field(name="🔓 새로운 기능 해금!", value=f"`{req['unlock']}` 명령어를 이제 사용할 수 있습니다.", inline=False)
+    await interaction.response.send_message(embed=embed)
+
+    embed = discord.Embed(title="🎉 선박 개조 완료!", description=f"뚝딱뚝딱... 쾅!\n배가 **[{req['next']}]**(으)로 업그레이드 되었습니다!", color=0x2ecc71)
+    embed.add_field(name="🔓 새로운 기능 해금!", value=f"`{req['unlock']}` 명령어를 이제 사용할 수 있습니다.", inline=False)
+    await interaction.response.send_message(embed=embed)
+
 @bot.tree.command(name="배틀", description="나의 가장 강한 물고기로 야생의 NPC 물고기와 턴제 배틀을 진행합니다!")
+@check_boat_tier(3)
 async def 배틀(interaction: discord.Interaction):
     await get_user_data(interaction.user.id) 
     
@@ -743,6 +821,7 @@ async def 출석(interaction: discord.Interaction):
 # 상점 & 구매 명령어 업데이트 (자석 미끼 추가)
 # ==========================================
 @bot.tree.command(name="상점", description="유용한 아이템을 구경할 수 있는 상점입니다.")
+@check_boat_tier(2)
 async def 상점(interaction: discord.Interaction):
     embed = discord.Embed(title="🏪 수산시장 아이템 상점", color=0xf1c40f)
     embed.add_field(name="고급 미끼 🪱 (가격: 500 C)", 
@@ -756,6 +835,7 @@ async def 상점(interaction: discord.Interaction):
     app_commands.Choice(name="고급 미끼 🪱", value="고급 미끼 🪱"),
     app_commands.Choice(name="자석 미끼 🧲", value="자석 미끼 🧲")
 ])
+@check_boat_tier(2)
 
 async def 구매(interaction: discord.Interaction, 아이템: app_commands.Choice[str], 수량: int = 1):
     if 수량 <= 0: 
@@ -874,6 +954,7 @@ async def recipe_autocomplete(interaction: discord.Interaction, current: str) ->
 
 @bot.tree.command(name="요리", description="잡은 물고기로 요리를 만들어 버프를 얻거나 비싸게 팝니다.")
 @app_commands.autocomplete(선택=recipe_autocomplete)
+@check_boat_tier(2)
 async def 요리(interaction: discord.Interaction, 선택: str):
     recipe = RECIPES.get(선택)
     if not recipe:
@@ -947,6 +1028,7 @@ class QuestDeliveryView(View):
 
 # 의뢰 확인 명령어
 @bot.tree.command(name="의뢰", description="항구 게시판에서 오늘의 특별한 낚시 의뢰를 확인합니다.")
+@check_boat_tier(2)
 async def 의뢰(interaction: discord.Interaction):
     await get_user_data(interaction.user.id) # 유저 데이터 보장
     today = datetime.datetime.now(kst).strftime('%Y-%m-%d')
@@ -1008,6 +1090,7 @@ async def aqua_autocomplete(interaction: discord.Interaction, current: str) -> l
 
 @bot.tree.command(name="전시", description="가방에 있는 물고기를 수족관에 전시합니다. (최대 5마리)")
 @app_commands.autocomplete(물고기=inv_autocomplete)
+@check_boat_tier(3)
 async def 전시(interaction: discord.Interaction, 물고기: str):
     # 1. 5마리 제한 확인
     async with db.execute("SELECT COUNT(*) FROM aquarium WHERE user_id=?", (interaction.user.id,)) as cursor:
@@ -1068,6 +1151,7 @@ async def 수족관(interaction: discord.Interaction, 유저: discord.Member = N
     await interaction.response.send_message(embed=embed)
 
 @bot.tree.command(name="수산대전", description="다른 유저를 지목하여 마라맛 PvP 배틀(약탈)을 겁니다!")
+@check_boat_tier(4)
 async def 수산대전(interaction: discord.Interaction, 상대: discord.Member):
     if interaction.user == 상대:
         return await interaction.response.send_message("❌ 자기 자신과는 싸울 수 없습니다!", ephemeral=True)
