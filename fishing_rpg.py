@@ -578,6 +578,13 @@ async def bait_autocomplete(interaction: discord.Interaction, current: str) -> l
             choices.append(app_commands.Choice(name=row[0], value=row[0]))
     return choices[:25]
 
+async def fish_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    choices = [
+        app_commands.Choice(name=fish, value=fish)
+        for fish in FISH_DATA.keys() if current.lower() in fish.lower()
+    ]
+    return choices[:25]
+
 @bot.tree.command(name="낚시", description="찌를 던져 물고기(또는 보물)를 낚습니다! (타이밍 미니게임)")
 @app_commands.autocomplete(사용할미끼=bait_autocomplete) # 👈 고정 초이스 대신 자동완성 적용
 async def 낚시(interaction: discord.Interaction, 사용할미끼: str = "none"):
@@ -887,13 +894,6 @@ async def 통(interaction: discord.Interaction):
     else:
         embed.add_field(name="텅 비었습니다...", value="낚시 성공 후 '통에 보관'을 눌러주세요.", inline=False)
     await interaction.response.send_message(embed=embed)
-
-async def fish_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-    choices = [
-        app_commands.Choice(name=fish, value=fish)
-        for fish in FISH_DATA.keys() if current.lower() in fish.lower()
-    ]
-    return choices[:25]
 
 @bot.tree.command(name="개별판매", description="가방에 있는 특정 물고기/아이템을 원하는 수량만큼 판매합니다.")
 @app_commands.autocomplete(물고기=inv_autocomplete) # 🌟 fish_autocomplete 대신 inv_autocomplete 적용
