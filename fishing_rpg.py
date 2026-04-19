@@ -585,6 +585,18 @@ async def fish_autocomplete(interaction: discord.Interaction, current: str) -> l
     ]
     return choices[:25]
 
+# 수족관 전용 자동완성 (내 가방에 있는 것만 보여줌)
+async def inv_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    async with db.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0", (interaction.user.id,)) as cursor:
+        items = await cursor.fetchall()
+    return [app_commands.Choice(name=row[0], value=row[0]) for row in items if current.lower() in row[0].lower()][:25]
+
+# 수족관 전용 자동완성 (내 수족관에 있는 것만 보여줌)
+async def aqua_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    async with db.execute("SELECT item_name FROM aquarium WHERE user_id=?", (interaction.user.id,)) as cursor:
+        items = await cursor.fetchall()
+    return [app_commands.Choice(name=row[0], value=row[0]) for row in items if current.lower() in row[0].lower()][:25]
+
 @bot.tree.command(name="낚시", description="찌를 던져 물고기(또는 보물)를 낚습니다! (타이밍 미니게임)")
 @app_commands.autocomplete(사용할미끼=bait_autocomplete) # 👈 고정 초이스 대신 자동완성 적용
 async def 낚시(interaction: discord.Interaction, 사용할미끼: str = "none"):
@@ -1097,18 +1109,6 @@ async def 의뢰(interaction: discord.Interaction):
 # ==========================================
 # 🌟 나만의 수족관 (플렉스/자랑하기) 기능
 # ==========================================
-
-# 수족관 전용 자동완성 (내 가방에 있는 것만 보여줌)
-async def inv_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-    async with db.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0", (interaction.user.id,)) as cursor:
-        items = await cursor.fetchall()
-    return [app_commands.Choice(name=row[0], value=row[0]) for row in items if current.lower() in row[0].lower()][:25]
-
-# 수족관 전용 자동완성 (내 수족관에 있는 것만 보여줌)
-async def aqua_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-    async with db.execute("SELECT item_name FROM aquarium WHERE user_id=?", (interaction.user.id,)) as cursor:
-        items = await cursor.fetchall()
-    return [app_commands.Choice(name=row[0], value=row[0]) for row in items if current.lower() in row[0].lower()][:25]
 
 @bot.tree.command(name="전시", description="가방에 있는 물고기를 수족관에 전시합니다. (최대 5마리)")
 @app_commands.autocomplete(물고기=inv_autocomplete)
