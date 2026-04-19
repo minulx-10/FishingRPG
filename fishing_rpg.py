@@ -638,7 +638,7 @@ async def 낚시(interaction: discord.Interaction, 사용할미끼: str = "none"
         await db.commit()
         bait_text = f" ({bait_used} 사용됨!)"
 
-    지금_str = datetime.datetime.now(kst).strftime('%Y-%m-%d %H:%M:%S')
+    now_str = datetime.datetime.now(kst).strftime('%Y-%m-%d %H:%M:%S')
     async with db.execute("SELECT buff_type FROM active_buffs WHERE user_id=? AND end_time > ?", (interaction.user.id, now_str)) as cursor:
         active_buffs = [row[0] for row in await cursor.fetchall()]
 
@@ -675,7 +675,7 @@ async def 낚시(interaction: discord.Interaction, 사용할미끼: str = "none"
     else:
         target_fish = random.choices(candidates, weights=weights, k=1)[0]
 
-    지금_hour = datetime.datetime.now(kst).hour
+    now_hour = datetime.datetime.now(kst).hour
     if target_fish == "바다의 원혼, 우미보즈 🌑" and not (0 <= now_hour < 4):
         target_fish = "낡은 장화 🥾"
         bait_text += "\n*(으스스한 기운이 맴돌았지만, 날이 밝아 흩어졌습니다...)*"
