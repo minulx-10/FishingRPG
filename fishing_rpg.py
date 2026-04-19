@@ -127,7 +127,7 @@ async def init_db():
     except aiosqlite.OperationalError:
         pass
 
-    await db.커밋()
+    await db.commit()
 
 async def get_user_data(user_id):
     async with db.execute("SELECT coins, rod_tier, rating FROM user_data WHERE user_id=?", (user_id,)) as cursor:
@@ -136,7 +136,7 @@ async def get_user_data(user_id):
     # 유저 정보가 없으면 그때만 생성하고 커밋
     if not res:
         await db.execute("INSERT INTO user_data (user_id) VALUES (?)", (user_id,))
-        await db.커밋()
+        await db.commit()
         return (0, 1, 1000) # 기본값 반환
         
     return res
