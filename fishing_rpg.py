@@ -103,6 +103,9 @@ async def init_db():
             PRIMARY KEY (user_id, item_name)
         )
     ''')
+
+    # 시간 비교 조회가 잦은 버프 테이블에 인덱스 생성
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_active_buffs_end_time ON active_buffs (user_id, end_time)')
     
     try:
         await db.execute("ALTER TABLE user_data ADD COLUMN last_daily TEXT DEFAULT ''")
@@ -126,12 +129,16 @@ async def init_db():
 
     await db.commit()
 
-# 🌟 모든 DB 접근 함수에 async/await 추가
 async def get_user_data(user_id):
-    await db.execute("INSERT OR IGNORE INTO user_data (user_id) VALUES (?)", (user_id,))
     async with db.execute("SELECT coins, rod_tier, rating FROM user_data WHERE user_id=?", (user_id,)) as cursor:
         res = await cursor.fetchone()
-    await db.commit()
+    
+    # 유저 정보가 없으면 그때만 생성하고 커밋
+    if not res:
+        await db.execute("INSERT INTO user_data (user_id) VALUES (?)", (user_id,))
+        await db.commit()
+        return (0, 1, 1000) # 기본값 반환
+        
     return res
 
 # ==========================================
@@ -568,8 +575,9 @@ class MarketPaginationView(View):
 # 🌟 미끼 자동완성 함수 (내가 보유한 미끼만 표시)
 # ==========================================
 async def bait_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-    # 인벤토리에서 '미끼'라는 단어가 포함된 아이템 중 1개 이상 가진 것만 검색
-    async with db.execute("SELECT item_name FROM inventory WHERE user_id=? AND item_name LIKE '%미끼%' AND amount > 0", (interaction.user.id,)) as cursor:
+    baits = ["고급 미끼 🪱", "자석 미끼 🧲"]
+    query = f"SELECT item_name FROM inventory WHERE user_id=? AND item_name IN ({','.join(['?']*len(baits))}) AND amount > 0"
+    async with db.execute(query, [interaction.user.id] + baits) as cursor:
         items = await cursor.fetchall()
     
     choices = [app_commands.Choice(name="미끼 없음 (기본)", value="none")]
@@ -750,14 +758,11 @@ async def 판매(interaction: discord.Interaction, 제외1: str = None, 제외2:
     if user_excludes:
         msg += f"*(🛡️ 선택 보호됨: {', '.join(user_excludes)})*\n\n"
     
-    for name, amt in sellable_items:
-        price_per_item = MARKET_PRICES.get(name, FISH_DATA[name]["price"])
-        earned = price_per_item * amt
-        total_earned += earned
-        msg += f"• {name} x{amt}: `{earned:,} C` (개당 {price_per_item}C)\n"
-        
-        # 팔린 아이템만 개별적으로 DB에서 삭제
-        await db.execute("DELETE FROM inventory WHERE user_id = ? AND item_name = ?", (interaction.user.id, name))
+    # 팔아야 할 아이템 리스트 생성
+    delete_targets = [(interaction.user.id, name) for name, amt in sellable_items]
+
+    # executemany로 한 번에 삭제 처리
+    await db.executemany("DELETE FROM inventory WHERE user_id = ? AND item_name = ?", delete_targets)
         
     await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (total_earned, interaction.user.id))
     await db.commit()
