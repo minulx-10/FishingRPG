@@ -132,4 +132,8 @@
   "이름 없는 심해의 고대신 (크툴루) 👁️": {"grade": "신화", "prob": 0.001, "base_window": 0.4, "price": 1000000, "power": 5000, "element": "심해"},
 
   "💎 GSM 황금 키보드": {"grade": "히든", "prob": 0.001, "base_window": 0.5, "price": 500000, "power": 9999, "element": "무속성"}
+
+  "낡은 고철 ⚙️": {"grade": "일반", "prob": 100, "base_window": 3.0, "price": 10, "power": 0, "element": "무속성"},
+  "해적의 금화 🪙": {"grade": "희귀", "prob": 20, "base_window": 2.0, "price": 1000, "power": 0, "element": "무속성"},
+  "가라앉은 보물상자 🧰": {"grade": "에픽", "prob": 3, "base_window": 1.5, "price": 10000, "power": 0, "element": "무속성"}
 }
