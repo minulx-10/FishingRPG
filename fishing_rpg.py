@@ -565,18 +565,25 @@ class MarketPaginationView(View):
 # 5. 슬래시 명령어 (Slash Commands)
 # ==========================================
 # ==========================================
-# 낚시 로직 전면 개편 (가중치 기반 & 자석 미끼 로직)
+# 🌟 미끼 자동완성 함수 (내가 보유한 미끼만 표시)
 # ==========================================
+async def bait_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    # 인벤토리에서 '미끼'라는 단어가 포함된 아이템 중 1개 이상 가진 것만 검색
+    async with db.execute("SELECT item_name FROM inventory WHERE user_id=? AND item_name LIKE '%미끼%' AND amount > 0", (interaction.user.id,)) as cursor:
+        items = await cursor.fetchall()
+    
+    choices = [app_commands.Choice(name="미끼 없음 (기본)", value="none")]
+    for row in items:
+        if current.lower() in row[0].lower():
+            choices.append(app_commands.Choice(name=row[0], value=row[0]))
+    return choices[:25]
+
 @bot.tree.command(name="낚시", description="찌를 던져 물고기(또는 보물)를 낚습니다! (타이밍 미니게임)")
-@app_commands.choices(사용할미끼=[
-    app_commands.Choice(name="미끼 없음 (기본)", value="none"),
-    app_commands.Choice(name="고급 미끼 🪱", value="고급 미끼 🪱"),
-    app_commands.Choice(name="자석 미끼 🧲", value="자석 미끼 🧲")
-])
-async def 낚시(interaction: discord.Interaction, 사용할미끼: app_commands.Choice[str]):
+@app_commands.autocomplete(사용할미끼=bait_autocomplete) # 👈 고정 초이스 대신 자동완성 적용
+async def 낚시(interaction: discord.Interaction, 사용할미끼: str = "none"):
     coins, rod_tier, rating = await get_user_data(interaction.user.id)
     
-    bait_used = 사용할미끼.value
+    bait_used = 사용할미끼
     bait_text = ""
     
     # 1. 미끼 인벤토리 확인
@@ -587,17 +594,14 @@ async def 낚시(interaction: discord.Interaction, 사용할미끼: app_commands
         if not bait_res or bait_res[0] <= 0:
             return await interaction.response.send_message(f"❌ 가방에 **{bait_used}**가 없습니다! 상점에서 먼저 구매해주세요.", ephemeral=True)
             
-        # 미끼 차감
         await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (interaction.user.id, bait_used))
         await db.commit()
         bait_text = f" ({bait_used} 사용됨!)"
 
-    # 2. 버프 확인 로직
     now_str = datetime.datetime.now(kst).strftime('%Y-%m-%d %H:%M:%S')
     async with db.execute("SELECT buff_type FROM active_buffs WHERE user_id=? AND end_time > ?", (interaction.user.id, now_str)) as cursor:
         active_buffs = [row[0] for row in await cursor.fetchall()]
 
-    # 3. 새로운 가중치 기반 확률 시스템
     candidates = []
     weights = []
     
@@ -605,38 +609,32 @@ async def 낚시(interaction: discord.Interaction, 사용할미끼: app_commands
         base_prob = data["prob"]
         grade = data["grade"]
         
-        # [자석 미끼] 기믹: 고철, 보물 등 생물이 아닌 것만 낚임
+        # 🌟 [자석 미끼] 기믹: 장화 제거! 순수 고철과 보물만 낚임
         if bait_used == "자석 미끼 🧲":
-            if fish not in ["낡은 장화 🥾", "낡은 고철 ⚙️", "해적의 금화 🪙", "가라앉은 보물상자 🧰"]:
+            if fish not in ["낡은 고철 ⚙️", "해적의 금화 🪙", "가라앉은 보물상자 🧰"]:
                 continue
-            base_prob *= 2.0 # 보물류 등장 확률 2배
+            base_prob *= 2.0 
             
-        # [고급 미끼] 기믹: 일반 등급 등장 확률 대폭 감소
         elif bait_used == "고급 미끼 🪱":
             if grade == "일반":
                 base_prob *= 0.1
             elif grade in ["희귀", "초희귀"]:
                 base_prob *= 1.5
 
-        # [버프 & 낚싯대] 기믹
         if "deep_sea_boost" in active_buffs and data["element"] == "심해":
             base_prob *= 2.0
             
-        # 낚싯대 티어에 따른 희귀도 보정
         if grade in ["에픽", "레전드", "신화"]:
             base_prob *= (1 + (rod_tier * 0.1))
 
         candidates.append(fish)
         weights.append(base_prob)
         
-    # 만약 후보가 없으면 무조건 장화
     if not candidates:
         target_fish = "낡은 장화 🥾"
     else:
-        # 가중치 기반 랜덤 뽑기 (장화 파티 완벽 해결)
         target_fish = random.choices(candidates, weights=weights, k=1)[0]
 
-    # 4. 환경 (날씨/시간) 기믹 적용
     now_hour = datetime.datetime.now(kst).hour
     if target_fish == "바다의 원혼, 우미보즈 🌑" and not (0 <= now_hour < 4):
         target_fish = "낡은 장화 🥾"
@@ -649,7 +647,6 @@ async def 낚시(interaction: discord.Interaction, 사용할미끼: app_commands
     view = FishingView(interaction.user, target_fish, rod_tier)
     await interaction.response.send_message(f"🌊 찌를 던졌습니다... 조용히 기다리세요.{bait_text}\n(내 낚싯대: Lv.{rod_tier})", view=view)
     
-    # 5. 대기 시간 및 챔질 (기존과 동일)
     wait_min, wait_max = (1, 3) if "cooldown_reduction" in active_buffs else (2, 6)
     wait_time = random.uniform(wait_min, wait_max)
     await asyncio.sleep(wait_time)
@@ -685,30 +682,55 @@ async def 인벤토리(interaction: discord.Interaction):
         embed.add_field(name="🐟 물고기 도감", value="텅 비었습니다...", inline=False)
     await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="시세", description="현재 수산시장의 글로벌 시세를 확인합니다. (페이지별 확인 가능)")
-async def 시세(interaction: discord.Interaction):
+@bot.tree.command(name="시세", description="현재 수산시장의 글로벌 시세를 확인합니다. (물고기 이름을 검색할 수도 있습니다)")
+@app_commands.autocomplete(검색어=fish_autocomplete) # 🌟 모든 물고기 이름 자동완성
+async def 시세(interaction: discord.Interaction, 검색어: str = None):
+    # 검색어를 입력한 경우 (단일 물고기 시세 조회)
+    if 검색어:
+        if 검색어 not in MARKET_PRICES:
+            return await interaction.response.send_message(f"❌ '{검색어}'에 대한 정보가 수산시장에 없습니다.", ephemeral=True)
+            
+        base = FISH_DATA[검색어]["price"]
+        current_price = MARKET_PRICES[검색어]
+        ratio = current_price / base
+        status = "📈 떡상" if ratio > 1.2 else ("📉 떡락" if ratio < 0.8 else "➖ 평범")
+        
+        embed = discord.Embed(title=f"📊 {검색어} 시세 정보", color=0xf1c40f)
+        embed.add_field(name="현재 시장가", value=f"**{current_price} C**", inline=True)
+        embed.add_field(name="시세 상태", value=status, inline=True)
+        return await interaction.response.send_message(embed=embed)
+        
+    # 검색어를 입력하지 않은 경우 (기존 전체 페이지 조회)
     view = MarketPaginationView(MARKET_PRICES)
     await interaction.response.send_message(embed=view.make_embed(), view=view)
 
-@bot.tree.command(name="판매", description="인벤토리에 있는 모든 물고기를 현재 시세로 일괄 판매합니다.")
+@bot.tree.command(name="판매", description="인벤토리에 있는 물고기를 일괄 판매합니다. (고철, 미끼, 보물상자는 보호됨)")
 async def 판매(interaction: discord.Interaction):
     async with db.execute("SELECT item_name, amount FROM inventory WHERE user_id=? AND amount > 0", (interaction.user.id,)) as cursor:
         items = await cursor.fetchall()
     
-    if not items:
-        return await interaction.response.send_message("❌ 판매할 물고기가 없습니다!", ephemeral=True)
+    # 🌟 보호할 아이템 목록 (일괄 판매 시 제외됨)
+    # 해적의 금화 🪙 는 순수 돈벌이용이라 팔리게 놔둡니다.
+    protected_items = ["낡은 고철 ⚙️", "가라앉은 보물상자 🧰", "고급 미끼 🪱", "자석 미끼 🧲"]
+    
+    sellable_items = [(name, amt) for name, amt in items if name not in protected_items]
+    
+    if not sellable_items:
+        return await interaction.response.send_message("❌ 판매할 수 있는 물고기가 없습니다!\n(고철, 보물상자, 미끼 등 중요 자원은 보호되어 일괄 판매되지 않습니다.)", ephemeral=True)
         
     total_earned = 0
-    msg = "**[💰 수산시장 판매 영수증]**\n"
+    msg = "**[💰 수산시장 일괄 판매 영수증]**\n"
     
-    for name, amt in items:
+    for name, amt in sellable_items:
         price_per_item = MARKET_PRICES.get(name, FISH_DATA[name]["price"])
         earned = price_per_item * amt
         total_earned += earned
         msg += f"• {name} x{amt}: `{earned:,} C` (개당 {price_per_item}C)\n"
         
+        # 팔린 아이템만 개별적으로 DB에서 삭제 (기존의 위험한 전체 삭제 코드 수정)
+        await db.execute("DELETE FROM inventory WHERE user_id = ? AND item_name = ?", (interaction.user.id, name))
+        
     await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (total_earned, interaction.user.id))
-    await db.execute("DELETE FROM inventory WHERE user_id = ?", (interaction.user.id,))
     await db.commit()
     
     msg += f"\n**총 수익: +{total_earned:,} C**"
@@ -873,8 +895,8 @@ async def fish_autocomplete(interaction: discord.Interaction, current: str) -> l
     ]
     return choices[:25]
 
-@bot.tree.command(name="개별판매", description="가방에 있는 특정 물고기를 원하는 수량만큼 판매합니다.")
-@app_commands.autocomplete(물고기=fish_autocomplete)
+@bot.tree.command(name="개별판매", description="가방에 있는 특정 물고기/아이템을 원하는 수량만큼 판매합니다.")
+@app_commands.autocomplete(물고기=inv_autocomplete) # 🌟 fish_autocomplete 대신 inv_autocomplete 적용
 async def 개별판매(interaction: discord.Interaction, 물고기: str, 수량: int):
     target_fish = 물고기
     
