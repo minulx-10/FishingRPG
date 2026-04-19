@@ -238,13 +238,28 @@ class FishingView(View):
         self.user = user
         self.target_fish = target_fish
         self.rod_tier = rod_tier # 낚싯대 파괴 기믹을 위해 저장
+        self.is_bite = False  
+        self.start_time = 0
+        self.message = None # 메시지 객체를 저장할 변수 추가
+
+    # 👇 여기에 on_timeout 함수를 추가하세요! 👇
+    async def on_timeout(self):
+        # 뷰 안에 있는 모든 버튼을 비활성화(disabled = True) 상태로 만듭니다.
+        for child in self.children:
+            child.disabled = True
+            
+        # 버튼이 비활성화된 상태로 메시지를 업데이트합니다.
+        if self.message:
+            try:
+                await self.message.edit(content="⏰ 낚시 시간이 초과되어 낚싯대를 거두었습니다.", view=self)
+            except:
+                pass
         
         base_window = FISH_DATA[target_fish]["base_window"]
         bonus_time = (rod_tier - 1) * 0.2 
         self.limit_time = max(1.0, base_window + bonus_time) 
         
-        self.is_bite = False  
-        self.start_time = 0
+
 
     @discord.ui.button(label="대기 중...", style=discord.ButtonStyle.secondary, emoji="🎣", custom_id="fish_btn")
     async def fish_button(self, interaction: discord.Interaction, button: Button):
