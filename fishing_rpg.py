@@ -186,10 +186,10 @@ async def weather_update_loop():
     CURRENT_WEATHER = random.choices(WEATHER_TYPES, weights=[40, 25, 20, 5, 10], k=1)[0]
 
 def get_element_multiplier(atk_elem, def_elem):
-    if atk_elem == "무속성" 또는 def_elem == "무속성": return 1.0
-    if atk_elem == "표층" 및 def_elem == "심해": return 1.5
-    if atk_elem == "심해" 및 def_elem == "암초": return 1.5
-    if atk_elem == "암초" 및 def_elem == "표층": return 1.5
+    if atk_elem == "무속성" or def_elem == "무속성": return 1.0
+    if atk_elem == "표층" and def_elem == "심해": return 1.5
+    if atk_elem == "심해" and def_elem == "암초": return 1.5
+    if atk_elem == "암초" and def_elem == "표층": return 1.5
     if atk_elem == def_elem: return 1.0
     return 0.8 
 
