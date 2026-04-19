@@ -170,7 +170,7 @@ async def market_update_loop():
     for fish, data in FISH_DATA.items():
         fluctuation = random.uniform(0.5, 2.0)
         MARKET_PRICES[fish] = int(data["price"] * fluctuation)
-    print(f"[{datetime.datetime.지금(kst).strftime('%H:%M')}] 📈 수산시장 시세가 변동되었습니다!")
+    print(f"[{datetime.datetime.now(kst).strftime('%H:%M')}] 📈 수산시장 시세가 변동되었습니다!")
 
 # ==========================================
 # 🌟 [신규] 날씨 환경 시스템
