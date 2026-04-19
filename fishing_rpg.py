@@ -13,7 +13,7 @@ import json
 # ==========================================
 # 1. 봇 기본 설정 및 준비
 # ==========================================
-intents = discord.Intents.기본()
+intents = discord.Intents.default()
 bot = commands.Bot(command_prefix='!', intents=intents)
 bot.remove_command('help')
 
