@@ -13,7 +13,7 @@ import json
 # ==========================================
 # 1. 봇 기본 설정 및 준비
 # ==========================================
-intents = discord.Intents.default()
+intents = discord.Intents.기본()
 bot = commands.Bot(command_prefix='!', intents=intents)
 bot.remove_command('help')
 
@@ -127,7 +127,7 @@ async def init_db():
     except aiosqlite.OperationalError:
         pass
 
-    await db.commit()
+    await db.커밋()
 
 async def get_user_data(user_id):
     async with db.execute("SELECT coins, rod_tier, rating FROM user_data WHERE user_id=?", (user_id,)) as cursor:
@@ -136,7 +136,7 @@ async def get_user_data(user_id):
     # 유저 정보가 없으면 그때만 생성하고 커밋
     if not res:
         await db.execute("INSERT INTO user_data (user_id) VALUES (?)", (user_id,))
-        await db.commit()
+        await db.커밋()
         return (0, 1, 1000) # 기본값 반환
         
     return res
@@ -170,7 +170,7 @@ async def market_update_loop():
     for fish, data in FISH_DATA.items():
         fluctuation = random.uniform(0.5, 2.0)
         MARKET_PRICES[fish] = int(data["price"] * fluctuation)
-    print(f"[{datetime.datetime.now(kst).strftime('%H:%M')}] 📈 수산시장 시세가 변동되었습니다!")
+    print(f"[{datetime.datetime.지금(kst).strftime('%H:%M')}] 📈 수산시장 시세가 변동되었습니다!")
 
 # ==========================================
 # 🌟 [신규] 날씨 환경 시스템
@@ -186,10 +186,10 @@ async def weather_update_loop():
     CURRENT_WEATHER = random.choices(WEATHER_TYPES, weights=[40, 25, 20, 5, 10], k=1)[0]
 
 def get_element_multiplier(atk_elem, def_elem):
-    if atk_elem == "무속성" or def_elem == "무속성": return 1.0
-    if atk_elem == "표층" and def_elem == "심해": return 1.5
-    if atk_elem == "심해" and def_elem == "암초": return 1.5
-    if atk_elem == "암초" and def_elem == "표층": return 1.5
+    if atk_elem == "무속성" 또는 def_elem == "무속성": return 1.0
+    if atk_elem == "표층" 및 def_elem == "심해": return 1.5
+    if atk_elem == "심해" 및 def_elem == "암초": return 1.5
+    if atk_elem == "암초" 및 def_elem == "표층": return 1.5
     if atk_elem == def_elem: return 1.0
     return 0.8 
 
@@ -210,7 +210,7 @@ class FishActionView(View):
         
         await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (self.user.id, self.target_fish))
         await db.commit()
-        await interaction.response.edit_message(content=f"🎒 **{self.target_fish}**을(를) 가방에 안전하게 넣었습니다!", view=None)
+        await interaction.response.edit_message(content=f"🎒 **{self.target_fish}**를 가방에 안전하게 넣었습니다!", view=None)
 
     @discord.ui.button(label="통에 보관 (배틀용)", style=discord.ButtonStyle.success, emoji="🪣")
     async def btn_bucket(self, interaction: discord.Interaction, button: Button):
@@ -219,7 +219,7 @@ class FishActionView(View):
         
         await db.execute("INSERT INTO bucket (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (self.user.id, self.target_fish))
         await db.commit()
-        await interaction.response.edit_message(content=f"🪣 **{self.target_fish}**을(를) 통에 담았습니다! 이제 배틀에 출전할 수 있습니다.", view=None)
+        await interaction.response.edit_message(content=f"🪣 **{self.target_fish}**를 통에 담았습니다! 이제 배틀에 출전할 수 있습니다.", view=None)
 
     @discord.ui.button(label="바로 판매", style=discord.ButtonStyle.danger, emoji="💰")
     async def btn_sell(self, interaction: discord.Interaction, button: Button):
@@ -229,7 +229,7 @@ class FishActionView(View):
         price = MARKET_PRICES.get(self.target_fish, FISH_DATA[self.target_fish]["price"])
         await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (price, self.user.id))
         await db.commit()
-        await interaction.response.edit_message(content=f"💰 **{self.target_fish}**을(를) 시장에 바로 넘겨서 `{price} C`를 벌었습니다!", view=None)
+        await interaction.response.edit_message(content=f"💰 **{self.target_fish}**를 시장에 바로 넘겨서 `{price} C`를 벌었습니다!", view=None)
 
 # [1] 낚시 미니게임 UI (신화급 기믹 추가 버전)
 class FishingView(View):
@@ -241,6 +241,10 @@ class FishingView(View):
         self.is_bite = False  
         self.start_time = 0
         self.message = None # 메시지 객체를 저장할 변수 추가
+
+        base_window = FISH_DATA[self.target_fish]["base_window"]
+        bonus_time = (self.rod_tier - 1) * 0.2 
+        self.limit_time = max(1.0, base_window + bonus_time)
 
     # 👇 여기에 on_timeout 함수를 추가하세요! 👇
     async def on_timeout(self):
@@ -254,12 +258,6 @@ class FishingView(View):
                 await self.message.edit(content="⏰ 낚시 시간이 초과되어 낚싯대를 거두었습니다.", view=self)
             except:
                 pass
-        
-        base_window = FISH_DATA[target_fish]["base_window"]
-        bonus_time = (rod_tier - 1) * 0.2 
-        self.limit_time = max(1.0, base_window + bonus_time) 
-        
-
 
     @discord.ui.button(label="대기 중...", style=discord.ButtonStyle.secondary, emoji="🎣", custom_id="fish_btn")
     async def fish_button(self, interaction: discord.Interaction, button: Button):
@@ -281,7 +279,7 @@ class FishingView(View):
             await db.execute("INSERT OR IGNORE INTO fish_dex (user_id, item_name) VALUES (?, ?)", (self.user.id, self.target_fish))
             await db.commit()
             
-            embed = discord.Embed(title=f"🎉 낚시 성공! [{grade}]", description=f"**{self.target_fish}**을(를) 낚았습니다!", color=0x00ff00)
+            embed = discord.Embed(title=f"🎉 낚시 성공! [{grade}]", description=f"**{self.target_fish}**를 낚았습니다!", color=0x00ff00)
             embed.add_field(name="반응 속도", value=f"`{elapsed:.3f}초` (판정 한도: {self.limit_time:.2f}초)")
             
             action_view = FishActionView(self.user, self.target_fish)
@@ -291,7 +289,7 @@ class FishingView(View):
             if grade == "신화":
                 alert_embed = discord.Embed(
                     title="🚨 [경고] 심해의 거대한 진동이 감지되었습니다...", 
-                    description=f"**{self.user.mention}**님이 방금 전설 속의 마수,\n**{self.target_fish}**을(를) 심연에서 끌어올렸습니다!!!",
+                    description=f"**{self.user.mention}**님이 방금 전설 속의 마수,\n**{self.target_fish}**를 심연에서 끌어올렸습니다!!!",
                     color=0xff0000
                 )
                 alert_embed.set_footer(text="바다가 요동치기 시작합니다...")
@@ -640,7 +638,7 @@ async def 낚시(interaction: discord.Interaction, 사용할미끼: str = "none"
         await db.commit()
         bait_text = f" ({bait_used} 사용됨!)"
 
-    now_str = datetime.datetime.now(kst).strftime('%Y-%m-%d %H:%M:%S')
+    지금_str = datetime.datetime.now(kst).strftime('%Y-%m-%d %H:%M:%S')
     async with db.execute("SELECT buff_type FROM active_buffs WHERE user_id=? AND end_time > ?", (interaction.user.id, now_str)) as cursor:
         active_buffs = [row[0] for row in await cursor.fetchall()]
 
@@ -677,7 +675,7 @@ async def 낚시(interaction: discord.Interaction, 사용할미끼: str = "none"
     else:
         target_fish = random.choices(candidates, weights=weights, k=1)[0]
 
-    now_hour = datetime.datetime.now(kst).hour
+    지금_hour = datetime.datetime.now(kst).hour
     if target_fish == "바다의 원혼, 우미보즈 🌑" and not (0 <= now_hour < 4):
         target_fish = "낡은 장화 🥾"
         bait_text += "\n*(으스스한 기운이 맴돌았지만, 날이 밝아 흩어졌습니다...)*"
@@ -702,7 +700,9 @@ async def 낚시(interaction: discord.Interaction, 사용할미끼: str = "none"
         item.emoji = "‼️"
     
     try:
-        await interaction.edit_original_response(content="❗ **찌가 격렬하게 흔들립니다! 지금 누르세요!!!**", view=view)
+        # 응답 메세지 객체를 변수(msg)에 담고, 그것을 view.message에 저장해 줍니다.
+        msg = await interaction.edit_original_response(content="❗ **찌가 격렬하게 흔들립니다! 지금 누르세요!!!**", view=view)
+        view.message = msg 
     except: 
         pass
 
