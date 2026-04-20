@@ -122,7 +122,7 @@
   "네스호의 그림자, 네시 🦕": {"grade": "레전드", "prob": 0.1, "base_window": 0.9, "price": 50000, "power": 800, "element": "무속성"},
   "심연의 울음소리, 더 블룹 🔊": {"grade": "레전드", "prob": 0.1, "base_window": 0.9, "price": 60000, "power": 850, "element": "심해"},
   "남극의 인간형 거수, 닝겐 👻": {"grade": "레전드", "prob": 0.1, "base_window": 0.9, "price": 55000, "power": 820, "element": "표층"},
-  "용왕 👑": {"grade": "레전드", "prob": 0.05, "base_window": 0.8, "price": 100000, "power": 999, "element": "무속성"},
+  "용왕 👑": {"grade": "해신(海神)", "prob": 0.05, "base_window": 0.8, "price": 100000, "power": 999, "element": "무속성"},
 
   "심연의 지배자, 레비아탄 🌋": {"grade": "신화", "prob": 0.01, "base_window": 0.7, "price": 300000, "power": 2000, "element": "심해"},
   "심해의 파멸, 크라켄 🦑": {"grade": "신화", "prob": 0.01, "base_window": 0.7, "price": 280000, "power": 1800, "element": "심해"},
