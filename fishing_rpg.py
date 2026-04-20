@@ -9,6 +9,7 @@ from discord.ui import View, Button
 import os
 from dotenv import load_dotenv
 import json
+import aiohttp
 
 # ==========================================
 # 1. 봇 기본 설정 및 준비
@@ -1042,6 +1043,49 @@ async def 바다(interaction: discord.Interaction):
 
 async def recipe_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
     return [app_commands.Choice(name=r, value=r) for r in RECIPES.keys() if current.lower() in r.lower()][:25]
+
+@bot.tree.command(name="한강물", description="현재 한강 수온을 확인합니다. (낚시 가기 전 확인 필수!)")
+async def 한강물(interaction: discord.Interaction):
+    # API 응답 대기를 위해 봇이 생각 중임을 표시 (3초 이상 걸릴 수 있으므로 필수)
+    await interaction.response.defer() 
+    
+    try:
+        # 서울 열린데이터 광장의 수질 측정 API (sample 키 사용)
+        url = "http://openapi.seoul.go.kr:8088/sample/json/WPOSInformationTime/1/5/"
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    # 가장 최근 측정 데이터(보통 인덱스 0) 가져오기
+                    row = data['WPOSInformationTime']['row'][0]
+                    temp = row['W_TEMP'] # 수온
+                    site = row['SITE_ID'] # 측정소 위치 (예: 노량진, 중랑천 등)
+                    measure_time = f"{row['MSR_DATE'][4:6]}월 {row['MSR_DATE'][6:8]}일 {row['MSR_TIME']}" # 측정 시간 포맷팅
+                    
+                    # 🌟 낚시 RPG 컨셉에 맞춘 수온별 상태 메시지
+                    try:
+                        temp_float = float(temp)
+                        if temp_float < 10.0:
+                            status_msg = "🥶 앗 차가워! 물고기들의 활동이 저조할 수 있습니다."
+                        elif temp_float > 25.0:
+                            status_msg = "🥵 수온이 꽤 높습니다. 낚시하기에 덥겠네요!"
+                        else:
+                            status_msg = "🎣 물 온도가 적당합니다. 낚시하기 딱 좋은 날씨!"
+                    except ValueError:
+                        status_msg = "상태를 파악할 수 없습니다."
+                        
+                    embed = discord.Embed(title="🌊 현재 한강 수온 정보", description=status_msg, color=0x3498db)
+                    embed.add_field(name="🌡️ 온도", value=f"**{temp}°C**", inline=True)
+                    embed.add_field(name="📍 측정 위치", value=f"**{site}**", inline=True)
+                    embed.set_footer(text=f"측정 시간: {measure_time} | 데이터 제공: 서울특별시")
+                    
+                    await interaction.followup.send(embed=embed)
+                else:
+                    await interaction.followup.send("❌ 한강 수온 데이터를 불러오는 데 실패했습니다. (API 서버 응답 없음)")
+    except Exception as e:
+        await interaction.followup.send(f"❌ 데이터를 가져오는 중 오류가 발생했습니다: `{e}`")
 
 @bot.tree.command(name="요리", description="잡은 물고기로 요리를 만들어 버프를 얻거나 비싸게 팝니다.")
 @app_commands.autocomplete(선택=recipe_autocomplete)
