@@ -750,13 +750,16 @@ async def 시세(interaction: discord.Interaction, 검색어: str = None):
 @app_commands.describe(제외1="판매하지 않고 보호할 아이템 1", 제외2="판매하지 않고 보호할 아이템 2", 제외3="판매하지 않고 보호할 아이템 3")
 @app_commands.autocomplete(제외1=inv_autocomplete, 제외2=inv_autocomplete, 제외3=inv_autocomplete)
 async def 판매(interaction: discord.Interaction, 제외1: str = None, 제외2: str = None, 제외3: str = None):
+    # 🌟 1. 타임아웃 방지 (필수!)
+    await interaction.response.defer()
+
     async with db.execute("SELECT item_name, amount FROM inventory WHERE user_id=? AND amount > 0", (interaction.user.id,)) as cursor:
         items = await cursor.fetchall()
     
-    # 🌟 1. 기본적으로 보호되는 중요 아이템들 (고정)
+    # 기본적으로 보호되는 중요 아이템들 (고정)
     protected_items = ["낡은 고철 ⚙️", "가라앉은 보물상자 🧰", "고급 미끼 🪱", "자석 미끼 🧲"]
     
-    # 🌟 2. 유저가 명령어를 칠 때 직접 선택한 제외 아이템들 추가
+    # 유저가 명령어를 칠 때 직접 선택한 제외 아이템들 추가
     user_excludes = [x for x in [제외1, 제외2, 제외3] if x is not None]
     protected_items.extend(user_excludes)
     
@@ -764,7 +767,7 @@ async def 판매(interaction: discord.Interaction, 제외1: str = None, 제외2:
     sellable_items = [(name, amt) for name, amt in items if name not in protected_items]
     
     if not sellable_items:
-        return await interaction.response.send_message("❌ 판매할 수 있는 물고기가 없습니다!\n(모두 보호 처리되었거나 가방이 텅 비어있습니다.)", ephemeral=True)
+        return await interaction.followup.send("❌ 판매할 수 있는 물고기가 없습니다!\n(모두 보호 처리되었거나 가방이 텅 비어있습니다.)", ephemeral=True)
         
     total_earned = 0
     msg = "**[💰 수산시장 일괄 판매 영수증]**\n"
@@ -773,6 +776,7 @@ async def 판매(interaction: discord.Interaction, 제외1: str = None, 제외2:
     if user_excludes:
         msg += f"*(🛡️ 선택 보호됨: {', '.join(user_excludes)})*\n\n"
 
+    # 🌟 2. 영수증 내역 작성하기!
     for name, amt in sellable_items:
         # 시장 시세 변동가(MARKET_PRICES)를 먼저 확인하고, 없으면 기본가(FISH_DATA) 확인
         if name in MARKET_PRICES:
@@ -784,7 +788,11 @@ async def 판매(interaction: discord.Interaction, 제외1: str = None, 제외2:
         else:
             price = 0 # 데이터에 없는 이상한 아이템은 0원 처리
             
-        total_earned += price * amt
+        item_total = price * amt
+        total_earned += item_total
+        
+        # 품목, 수량, 합계, 개당 가격을 영수증(msg)에 한 줄씩 추가합니다.
+        msg += f"• {name} {amt}마리 : `{item_total:,} C` (개당 {price:,}C)\n"
     
     # 팔아야 할 아이템 리스트 생성
     delete_targets = [(interaction.user.id, name) for name, amt in sellable_items]
@@ -796,7 +804,13 @@ async def 판매(interaction: discord.Interaction, 제외1: str = None, 제외2:
     await db.commit()
     
     msg += f"\n**총 수익: +{total_earned:,} C**"
-    await interaction.response.send_message(msg)
+    
+    # 🌟 3. 물고기 종류가 너무 많아서 디스코드 메시지 제한(2000자)을 넘길 경우 방어
+    if len(msg) > 1900:
+        msg = msg[:1900] + "\n... (목록이 너무 길어 생략됨) ...\n" + f"\n**총 수익: +{total_earned:,} C**"
+
+    # 🌟 4. defer를 썼으므로 send_message 대신 followup.send 사용
+    await interaction.followup.send(msg)
 
 @bot.tree.command(name="강화", description="코인을 지불하여 낚싯대를 업그레이드합니다. (타이밍 판정 및 확률 증가)")
 async def 강화(interaction: discord.Interaction):
