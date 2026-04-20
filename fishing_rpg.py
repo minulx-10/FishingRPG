@@ -1044,55 +1044,42 @@ async def 바다(interaction: discord.Interaction):
 async def recipe_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
     return [app_commands.Choice(name=r, value=r) for r in RECIPES.keys() if current.lower() in r.lower()][:25]
 
-@bot.tree.command(name="한강물", description="현재 한강 수온을 확인합니다. (데이터 출처: 서울열린데이터광장)")
+@bot.tree.command(name="한강물", description="현재 한강 수온을 확인합니다. (프록시 서버 사용)")
 async def 한강물(interaction: discord.Interaction):
     await interaction.response.defer() 
     
     try:
-        # .env에서 API 키를 불러옵니다.
         api_key = os.getenv('SEOUL_API_KEY', 'sample')
-        # 명세서에 나온 대로 서비스명(WPOSInformationTime)과 요청 타입(json)을 설정합니다.
-        url = f"http://openapi.seoul.go.kr:8088/{api_key}/json/WPOSInformationTime/1/5/"
+        # 🌟 1. 직접 주소 대신 Cloudflare Worker 주소로 변경합니다.
+        # :8088 포트 번호를 삭제하고 내 워커 주소를 넣습니다.
+        proxy_url = "https://seoul-proxy.자신의아이디.workers.dev" # 발급받은 주소로 수정
+        url = f"{proxy_url}/{api_key}/json/WPOSInformationTime/1/5/"
         
-        timeout = aiohttp.ClientTimeout(total=10) # 서버 상태를 고려해 10초까지 대기
+        timeout = aiohttp.ClientTimeout(total=15)
         
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(url) as response:
                 if response.status == 200:
                     data = await response.json()
                     
+                    # 이후 데이터 처리 로직은 동일합니다.
                     if 'WPOSInformationTime' not in data:
-                        return await interaction.followup.send("❌ 현재 데이터를 불러올 수 없습니다. API 키가 유효한지 확인해주세요.")
+                        return await interaction.followup.send("❌ 데이터를 불러올 수 없습니다. 프록시 설정을 확인하세요.")
 
-                    # 명세서 기준: [0]번째가 가장 최신 데이터인 경우가 많습니다.
                     row = data['WPOSInformationTime']['row'][0]
+                    temp = row['WATT']
+                    site = row['MSRSTN_NM']
                     
-                    # 명세서에 적힌 출력값 이름(Key)으로 수정
-                    temp = row['WATT']        # 수온
-                    site = row['MSRSTN_NM']   # 측정소명
-                    date = row['YMD']         # 날짜
-                    hour = row['HR']          # 시간
-                    
-                    status_msg = "🎣 낚시하기 딱 좋은 온도네요!"
-                    try:
-                        t = float(temp)
-                        if t < 10: status_msg = "🥶 물이 너무 차가워요. 물고기들도 떨고 있을걸요?"
-                        elif t > 25: status_msg = "🥵 수온이 너무 높습니다. 물고기들이 깊은 곳으로 숨었겠네요."
-                    except: pass
-                        
-                    embed = discord.Embed(title="🌊 한강 실시간 수온 보고서", description=status_msg, color=0x00a8ff)
+                    embed = discord.Embed(title="🌊 한강 실시간 수온 (우회 접속)", color=0x00a8ff)
                     embed.add_field(name="📍 측정소", value=f"**{site}**", inline=True)
                     embed.add_field(name="🌡️ 수온", value=f"**{temp}°C**", inline=True)
-                    embed.set_footer(text=f"측정 일시: {date[:4]}-{date[4:6]}-{date[6:8]} {hour}시 기준")
                     
                     await interaction.followup.send(embed=embed)
                 else:
-                    await interaction.followup.send(f"❌ 서버 응답 오류 (상태 코드: {response.status})")
+                    await interaction.followup.send(f"❌ 프록시 서버 응답 오류: {response.status}")
                     
-    except asyncio.TimeoutError:
-        await interaction.followup.send("⏳ 서울시 서버 응답이 너무 늦습니다. 잠시 후 다시 시도해주세요.")
     except Exception as e:
-        await interaction.followup.send(f"❌ 오류 발생: `{e}`")
+        await interaction.followup.send(f"❌ 연결 실패: 학교 서버의 포트 제한으로 인해 접속할 수 없습니다. 프록시를 확인해주세요. (`{e}`)")
 
 @bot.tree.command(name="요리", description="잡은 물고기로 요리를 만들어 버프를 얻거나 비싸게 팝니다.")
 @app_commands.autocomplete(선택=recipe_autocomplete)
