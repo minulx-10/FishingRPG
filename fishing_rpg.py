@@ -19,11 +19,18 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 bot.remove_command('help')
 
 kst = datetime.timezone(datetime.timedelta(hours=9))
-SUPER_ADMIN_ID = 771274777443696650
+# 관리자들의 디스코드 고유 ID를 리스트 안에 쉼표(,)로 구분하여 넣습니다.
+SUPER_ADMIN_IDS = [
+    771274777443696650,  # 기존 관리자 (나)
+    861106310439632896,  # 추가할 관리자 A의 디스코드 ID
+    1478295213389774920   # 추가할 관리자 B의 디스코드 ID
+]
+
 db = None # 🌟 전역 데이터베이스 객체
 
 def is_developer():
-    return app_commands.check(lambda i: i.user.id == SUPER_ADMIN_ID)
+    # 'in' 연산자를 사용하여 명령어를 친 유저의 ID가 관리자 리스트에 포함되어 있는지 확인합니다.
+    return app_commands.check(lambda i: i.user.id in SUPER_ADMIN_IDS)
 
 # ==========================================
 # 선박 등급 제한 확인 (해금 시스템)
