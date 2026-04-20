@@ -193,6 +193,28 @@ async def weather_update_loop():
     # 맑음(40%), 흐림(25%), 비(20%), 폭풍우(5%), 안개(10%) 확률
     CURRENT_WEATHER = random.choices(WEATHER_TYPES, weights=[40, 25, 20, 5, 10], k=1)[0]
 
+# 기존 코드 (찾을 부분)
+@tasks.loop(minutes=60)
+async def weather_update_loop():
+    global CURRENT_WEATHER
+    # 맑음(40%), 흐림(25%), 비(20%), 폭풍우(5%), 안개(10%) 확률
+    CURRENT_WEATHER = random.choices(WEATHER_TYPES, weights=[40, 25, 20, 5, 10], k=1)[0]
+
+midnight_kst = datetime.time(hour=0, minute=0, tzinfo=kst)
+
+@tasks.loop(time=midnight_kst)
+async def daily_midnight_task():
+    # 요르문간드 코인 5% 복사 (가방에 가지고 있는 유저 대상)
+    await db.execute("""
+        UPDATE user_data 
+        SET coins = CAST(coins * 1.05 AS INTEGER) 
+        WHERE user_id IN (
+            SELECT user_id FROM inventory WHERE item_name = '세계를 감싼 뱀, 요르문간드 🐍' AND amount > 0
+        )
+    """)
+    await db.commit()
+    print(f"[{datetime.datetime.now(kst).strftime('%Y-%m-%d %H:%M:%S')}] 🐍 요르문간드의 축복으로 보유자들의 코인이 5% 증가했습니다.")
+
 def get_element_multiplier(atk_elem, def_elem):
     if atk_elem == "무속성" or def_elem == "무속성": return 1.0
     if atk_elem == "표층" and def_elem == "심해": return 1.5
@@ -289,6 +311,18 @@ class FishingView(View):
             
             embed = discord.Embed(title=f"🎉 낚시 성공! [{grade}]", description=f"**{self.target_fish}**를 낚았습니다!", color=0x00ff00)
             embed.add_field(name="반응 속도", value=f"`{elapsed:.3f}초` (판정 한도: {self.limit_time:.2f}초)")
+            
+            if self.target_fish == "심해의 파멸, 크라켄 🦑":
+                # 무작위 다른 유저 한 명의 금고(코인이 1000 이상인 사람)를 타겟팅
+                async with db.execute("SELECT user_id, coins FROM user_data WHERE user_id != ? AND coins > 1000 ORDER BY RANDOM() LIMIT 1", (self.user.id,)) as cursor:
+                    target = await cursor.fetchone()
+                
+                if target:
+                    stolen_amount = int(target[1] * 0.1) # 타겟 유저 자산의 10% 약탈
+                    await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id = ?", (stolen_amount, target[0]))
+                    await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (stolen_amount, self.user.id))
+                    await db.commit()
+                    embed.add_field(name="🦑 크라켄의 촉수 발동!", value=f"심연에서 뻗어 나온 거대한 촉수가 누군가의 금고를 부수고 `{stolen_amount:,} C`를 훔쳐 당신에게 가져왔습니다!!", inline=False)
             
             action_view = FishActionView(self.user, self.target_fish)
             await interaction.response.edit_message(content="🎊 앗, 낚았습니다! 이 물고기를 어떻게 할까요?", embed=embed, view=action_view)
@@ -1347,6 +1381,55 @@ async def 수산대전(interaction: discord.Interaction, 상대: discord.Member)
     )
 
 # ==========================================
+# 🌟 [신규] 보물 감정 시스템 (초대박 가챠)
+# ==========================================
+@bot.tree.command(name="감정", description="코인을 지불하고 '가라앉은 보물상자 🧰'를 열어 대박을 노립니다!")
+async def 감정(interaction: discord.Interaction):
+    fee = 2000 # 감정 비용
+    coins, _, _ = await get_user_data(interaction.user.id)
+
+    # 1. 가방에 보물상자가 있는지 확인
+    async with db.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name='가라앉은 보물상자 🧰'", (interaction.user.id,)) as cursor:
+        res = await cursor.fetchone()
+    
+    if not res or res[0] <= 0:
+        return await interaction.response.send_message("❌ 가방에 '가라앉은 보물상자 🧰'가 없습니다. (상점에서 자석 미끼를 사서 낚아보세요!)", ephemeral=True)
+        
+    if coins < fee:
+        return await interaction.response.send_message(f"❌ 감정 비용이 부족합니다. 열쇠공을 부르려면 `{fee} C`가 필요합니다.", ephemeral=True)
+
+    # 2. 재화 및 상자 차감
+    await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name='가라앉은 보물상자 🧰'", (interaction.user.id,))
+    await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id=?", (fee, interaction.user.id))
+    
+    # 3. 보상 풀 (하이 리스크 하이 리턴으로 대폭 상향!)
+    rand = random.random()
+    if rand < 0.4: # 40% 확률: 꽝 (상자를 팔았을 때의 기회비용을 날림)
+        reward_msg = "아뿔싸... 텅 빈 상자였습니다. 바닥에 굴러다니는 **낡은 고철 ⚙️** (5개)만 주웠습니다."
+        await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 5) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 5", (interaction.user.id, "낡은 고철 ⚙️"))
+        
+    elif rand < 0.75: # 35% 확률: 상자 시세(1만~2만) 이상의 코인 환수
+        reward_coin = random.randint(20000, 40000) 
+        reward_msg = f"✨ 번쩍이는 금은보화가 가득합니다! 귀금속을 팔아 **`{reward_coin:,} C`**를 얻었습니다."
+        await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id=?", (reward_coin, interaction.user.id))
+        
+    elif rand < 0.98: # 23% 확률: 대박 (금화 무더기)
+        reward_item = "해적의 금화 🪙"
+        reward_amt = random.randint(15, 30) # 금화 15~30개 획득 (약 1.5만 ~ 3만 코인 이상의 가치)
+        reward_msg = f"🎉 잭팟!! 고대 해적의 유물인 **{reward_item}** {reward_amt}개를 무더기로 발견했습니다!"
+        await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, ?) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?", (interaction.user.id, reward_item, reward_amt, reward_amt))
+        
+    else: # 2% 확률: 초극악 히든 아이템 + 10만 코인
+        reward_item = "💎 GSM 황금 키보드"
+        reward_coin = 100000
+        reward_msg = f"🚨 **[기적]** 상자 밑바닥에서 엄청난 빛이 뿜어져 나옵니다!!!\n**`{reward_coin:,} C`**와 함께 전설의 **{reward_item}**를 얻었습니다!"
+        await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id=?", (reward_coin, interaction.user.id))
+        await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id, reward_item))
+        
+    await db.commit()
+    await interaction.response.send_message(f"🧰 덜컹... 자물쇠를 부수고 상자를 열었습니다.\n\n{reward_msg}")
+
+# ==========================================
 # 6. 관리자 전용 직권 명령어 (어뷰징 관리, 이벤트용)
 # ==========================================
 @bot.tree.command(name="코인지급", description="[관리자 전용] 특정 유저에게 코인을 강제로 지급합니다.")
@@ -1393,6 +1476,9 @@ async def on_ready():
     # 👇 봇이 켜질 때 날씨 루프도 함께 시작되도록 추가! 👇
     if not weather_update_loop.is_running():
         weather_update_loop.start()
+
+    if not daily_midnight_task.is_running():
+        daily_midnight_task.start()
 
 if __name__ == "__main__":
     load_dotenv() 
