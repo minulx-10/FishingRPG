@@ -772,6 +772,19 @@ async def 판매(interaction: discord.Interaction, 제외1: str = None, 제외2:
     # 유저가 직접 제외한 항목이 있다면 영수증에 표시해줌
     if user_excludes:
         msg += f"*(🛡️ 선택 보호됨: {', '.join(user_excludes)})*\n\n"
+
+    for name, amt in sellable_items:
+        # 시장 시세 변동가(MARKET_PRICES)를 먼저 확인하고, 없으면 기본가(FISH_DATA) 확인
+        if name in MARKET_PRICES:
+            price = MARKET_PRICES[name]
+        elif name in FISH_DATA:
+            price = FISH_DATA[name]["price"]
+        elif name in RECIPES and "price" in RECIPES[name]: # 특급 참치 초밥(비싸게 팔리는 요리)인 경우
+            price = RECIPES[name]["price"]
+        else:
+            price = 0 # 데이터에 없는 이상한 아이템은 0원 처리
+            
+        total_earned += price * amt
     
     # 팔아야 할 아이템 리스트 생성
     delete_targets = [(interaction.user.id, name) for name, amt in sellable_items]
