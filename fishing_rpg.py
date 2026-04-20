@@ -1351,6 +1351,23 @@ async def 코인지급(interaction: discord.Interaction, target: discord.Member,
     await interaction.response.send_message(f"💰 관리자 권한으로 **{target.name}**님에게 `{amount:,} C`를 지급했습니다!")
 
 # ==========================================
+# 🌟 [신규] 관리자 전용: 데이터 실시간 새로고침
+# ==========================================
+# 이 명령어를 쓰면 봇을 재시작하지 않아도 추가한 물고기 데이터가 바로 반영됩니다!
+@bot.tree.command(name="데이터새로고침", description="[관리자 전용] 봇 재시작 없이 JSON 데이터를 다시 불러옵니다.")
+@is_developer()
+async def 데이터새로고침(interaction: discord.Interaction):
+    global FISH_DATA, MARKET_PRICES, RECIPES
+    
+    try:
+        FISH_DATA = load_fish_data()
+        MARKET_PRICES = {fish: data["price"] for fish, data in FISH_DATA.items()}
+        RECIPES = load_recipes()
+        await interaction.response.send_message("✅ `fish_data.json` 및 `recipes.json`을 성공적으로 다시 불러왔습니다!", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ 데이터 로드 중 오류가 발생했습니다: {e}", ephemeral=True)
+
+# ==========================================
 # 7. 봇 이벤트 
 # ==========================================
 @bot.event
