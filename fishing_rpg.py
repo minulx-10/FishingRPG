@@ -1044,48 +1044,55 @@ async def 바다(interaction: discord.Interaction):
 async def recipe_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
     return [app_commands.Choice(name=r, value=r) for r in RECIPES.keys() if current.lower() in r.lower()][:25]
 
-@bot.tree.command(name="한강물", description="현재 한강 수온을 확인합니다. (낚시 가기 전 확인 필수!)")
+@bot.tree.command(name="한강물", description="현재 한강 수온을 확인합니다. (데이터 출처: 서울열린데이터광장)")
 async def 한강물(interaction: discord.Interaction):
-    # API 응답 대기를 위해 봇이 생각 중임을 표시 (3초 이상 걸릴 수 있으므로 필수)
     await interaction.response.defer() 
     
     try:
-        # 서울 열린데이터 광장의 수질 측정 API (sample 키 사용)
-        url = "http://openapi.seoul.go.kr:8088/sample/json/WPOSInformationTime/1/5/"
+        # .env에서 API 키를 불러옵니다.
+        api_key = os.getenv('SEOUL_API_KEY', 'sample')
+        # 명세서에 나온 대로 서비스명(WPOSInformationTime)과 요청 타입(json)을 설정합니다.
+        url = f"http://openapi.seoul.go.kr:8088/{api_key}/json/WPOSInformationTime/1/5/"
         
-        async with aiohttp.ClientSession() as session:
+        timeout = aiohttp.ClientTimeout(total=10) # 서버 상태를 고려해 10초까지 대기
+        
+        async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(url) as response:
                 if response.status == 200:
                     data = await response.json()
                     
-                    # 가장 최근 측정 데이터(보통 인덱스 0) 가져오기
+                    if 'WPOSInformationTime' not in data:
+                        return await interaction.followup.send("❌ 현재 데이터를 불러올 수 없습니다. API 키가 유효한지 확인해주세요.")
+
+                    # 명세서 기준: [0]번째가 가장 최신 데이터인 경우가 많습니다.
                     row = data['WPOSInformationTime']['row'][0]
-                    temp = row['W_TEMP'] # 수온
-                    site = row['SITE_ID'] # 측정소 위치 (예: 노량진, 중랑천 등)
-                    measure_time = f"{row['MSR_DATE'][4:6]}월 {row['MSR_DATE'][6:8]}일 {row['MSR_TIME']}" # 측정 시간 포맷팅
                     
-                    # 🌟 낚시 RPG 컨셉에 맞춘 수온별 상태 메시지
+                    # 명세서에 적힌 출력값 이름(Key)으로 수정
+                    temp = row['WATT']        # 수온
+                    site = row['MSRSTN_NM']   # 측정소명
+                    date = row['YMD']         # 날짜
+                    hour = row['HR']          # 시간
+                    
+                    status_msg = "🎣 낚시하기 딱 좋은 온도네요!"
                     try:
-                        temp_float = float(temp)
-                        if temp_float < 10.0:
-                            status_msg = "🥶 앗 차가워! 물고기들의 활동이 저조할 수 있습니다."
-                        elif temp_float > 25.0:
-                            status_msg = "🥵 수온이 꽤 높습니다. 낚시하기에 덥겠네요!"
-                        else:
-                            status_msg = "🎣 물 온도가 적당합니다. 낚시하기 딱 좋은 날씨!"
-                    except ValueError:
-                        status_msg = "상태를 파악할 수 없습니다."
+                        t = float(temp)
+                        if t < 10: status_msg = "🥶 물이 너무 차가워요. 물고기들도 떨고 있을걸요?"
+                        elif t > 25: status_msg = "🥵 수온이 너무 높습니다. 물고기들이 깊은 곳으로 숨었겠네요."
+                    except: pass
                         
-                    embed = discord.Embed(title="🌊 현재 한강 수온 정보", description=status_msg, color=0x3498db)
-                    embed.add_field(name="🌡️ 온도", value=f"**{temp}°C**", inline=True)
-                    embed.add_field(name="📍 측정 위치", value=f"**{site}**", inline=True)
-                    embed.set_footer(text=f"측정 시간: {measure_time} | 데이터 제공: 서울특별시")
+                    embed = discord.Embed(title="🌊 한강 실시간 수온 보고서", description=status_msg, color=0x00a8ff)
+                    embed.add_field(name="📍 측정소", value=f"**{site}**", inline=True)
+                    embed.add_field(name="🌡️ 수온", value=f"**{temp}°C**", inline=True)
+                    embed.set_footer(text=f"측정 일시: {date[:4]}-{date[4:6]}-{date[6:8]} {hour}시 기준")
                     
                     await interaction.followup.send(embed=embed)
                 else:
-                    await interaction.followup.send("❌ 한강 수온 데이터를 불러오는 데 실패했습니다. (API 서버 응답 없음)")
+                    await interaction.followup.send(f"❌ 서버 응답 오류 (상태 코드: {response.status})")
+                    
+    except asyncio.TimeoutError:
+        await interaction.followup.send("⏳ 서울시 서버 응답이 너무 늦습니다. 잠시 후 다시 시도해주세요.")
     except Exception as e:
-        await interaction.followup.send(f"❌ 데이터를 가져오는 중 오류가 발생했습니다: `{e}`")
+        await interaction.followup.send(f"❌ 오류 발생: `{e}`")
 
 @bot.tree.command(name="요리", description="잡은 물고기로 요리를 만들어 버프를 얻거나 비싸게 팝니다.")
 @app_commands.autocomplete(선택=recipe_autocomplete)
