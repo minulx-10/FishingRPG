@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main 
+    paths-ignore:
+      - '**.json' # 🌟 JSON 파일만 수정될 때는 배포(재시작) 생략!
 
 jobs:
   deploy:
@@ -17,9 +19,6 @@ jobs:
           password: ${{ secrets.PASSWORD }}
           port: 24111
           script: |
-            # 🌟 서버에 있는 봇 폴더 경로로 이동
             cd /home/ubuntu/discord_bot
-            
-            # 배포 스크립트 실행 권한 주고 실행
             chmod +x deploy.sh
             ./deploy.sh
