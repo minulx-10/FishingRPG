@@ -1044,16 +1044,15 @@ async def 바다(interaction: discord.Interaction):
 async def recipe_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
     return [app_commands.Choice(name=r, value=r) for r in RECIPES.keys() if current.lower() in r.lower()][:25]
 
-@bot.tree.command(name="한강물", description="현재 한강 수온을 확인합니다. (프록시 서버 사용)")
+@bot.tree.command(name="한강물", description="모든 측정소의 한강 수온을 확인합니다. (우회 접속)")
 async def 한강물(interaction: discord.Interaction):
     await interaction.response.defer() 
     
     try:
         api_key = os.getenv('SEOUL_API_KEY', 'sample')
-        # 🌟 1. 직접 주소 대신 Cloudflare Worker 주소로 변경합니다.
-        # :8088 포트 번호를 삭제하고 내 워커 주소를 넣습니다.
-        proxy_url = "https://seoul-proxy.mingm7115.workers.dev" # 발급받은 주소로 수정
-        url = f"{proxy_url}/{api_key}/json/WPOSInformationTime/1/5/"
+        proxy_url = "https://seoul-proxy.mingm7115.workers.dev" # 설정하신 진짜 주소로 유지하세요!
+        # 여러 지점의 데이터를 충분히 가져오기 위해 1/10으로 범위를 넓힙니다.
+        url = f"{proxy_url}/{api_key}/json/WPOSInformationTime/1/10/"
         
         timeout = aiohttp.ClientTimeout(total=15)
         
@@ -1062,25 +1061,52 @@ async def 한강물(interaction: discord.Interaction):
                 if response.status == 200:
                     data = await response.json()
                     
-                    # 이후 데이터 처리 로직은 동일합니다.
                     if 'WPOSInformationTime' not in data:
-                        return await interaction.followup.send("❌ 데이터를 불러올 수 없습니다. 프록시 설정을 확인하세요.")
+                        return await interaction.followup.send("❌ 데이터를 불러올 수 없습니다. API 키를 확인해주세요.")
 
-                    row = data['WPOSInformationTime']['row'][0]
-                    temp = row['WATT']
-                    site = row['MSRSTN_NM']
+                    rows = data['WPOSInformationTime']['row']
                     
-                    embed = discord.Embed(title="🌊 한강 실시간 수온 (우회 접속)", color=0x00a8ff)
-                    embed.add_field(name="📍 측정소", value=f"**{site}**", inline=True)
-                    embed.add_field(name="🌡️ 수온", value=f"**{temp}°C**", inline=True)
+                    # 지점별로 중복되지 않게 최신 데이터만 담을 딕셔너리
+                    latest_data = {}
+                    for item in rows:
+                        site = item['MSRSTN_NM']
+                        # 이미 담긴 지점이 아니라면 (가장 위가 최신이므로) 추가
+                        if site not in latest_data:
+                            latest_data[site] = item
+                    
+                    embed = discord.Embed(title="🌊 한강 주요 지점 실시간 수온", color=0x00a8ff)
+                    
+                    operational_sites = 0
+                    for site, info in latest_data.items():
+                        temp = info['WATT']
+                        date = info['YMD']
+                        hour = info['HR']
+                        
+                        if temp == "점검중":
+                            temp_text = "🛠️ 점검 중"
+                        else:
+                            temp_text = f"**{temp}°C**"
+                            operational_sites += 1
+                        
+                        embed.add_field(name=f"📍 {site}", value=temp_text, inline=True)
+                    
+                    if operational_sites == 0:
+                        embed.description = "⚠️ 현재 모든 측정소가 점검 중입니다."
+                    else:
+                        embed.description = f"현재 {operational_sites}개 측정소가 정상 작동 중입니다. 🎣"
+                    
+                    # 가장 첫 번째 데이터의 시간으로 푸터 설정
+                    first_date = rows[0]['YMD']
+                    first_hour = rows[0]['HR']
+                    embed.set_footer(text=f"측정 일시: {first_date[:4]}-{first_date[4:6]}-{first_date[6:8]} {first_hour}시 기준")
                     
                     await interaction.followup.send(embed=embed)
                 else:
-                    await interaction.followup.send(f"❌ 프록시 서버 응답 오류: {response.status}")
+                    await interaction.followup.send(f"❌ 서버 응답 오류: {response.status}")
                     
     except Exception as e:
-        await interaction.followup.send(f"❌ 연결 실패: 학교 서버의 포트 제한으로 인해 접속할 수 없습니다. 프록시를 확인해주세요. (`{e}`)")
-
+        await interaction.followup.send(f"❌ 연결 실패: 프록시 서버 또는 네트워크를 확인해주세요. (`{e}`)")
+    
 @bot.tree.command(name="요리", description="잡은 물고기로 요리를 만들어 버프를 얻거나 비싸게 팝니다.")
 @app_commands.autocomplete(선택=recipe_autocomplete)
 @check_boat_tier(2)
