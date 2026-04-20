@@ -1052,7 +1052,7 @@ async def 한강물(interaction: discord.Interaction):
         api_key = os.getenv('SEOUL_API_KEY', 'sample')
         # 🌟 1. 직접 주소 대신 Cloudflare Worker 주소로 변경합니다.
         # :8088 포트 번호를 삭제하고 내 워커 주소를 넣습니다.
-        proxy_url = "https://seoul-proxy.자신의아이디.workers.dev" # 발급받은 주소로 수정
+        proxy_url = "https://seoul-proxy.mingm7115.workers.dev" # 발급받은 주소로 수정
         url = f"{proxy_url}/{api_key}/json/WPOSInformationTime/1/5/"
         
         timeout = aiohttp.ClientTimeout(total=15)
