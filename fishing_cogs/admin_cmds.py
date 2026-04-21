@@ -85,15 +85,16 @@ class AdminCog(commands.Cog):
             if hasattr(self.bot, 'tunnel_proc') and self.bot.tunnel_proc and self.bot.tunnel_proc.returncode is None:
                 self.bot.tunnel_proc.terminate()
                 
-            # cloudflared 프로세스를 비동기로 실행하여 URL 추출
+            # 학교 방화벽이 cloudflared 아웃바운드를 차단하므로 순수 SSH 터널링인 localhost.run 사용
+            # ssh -R 80:localhost:8888 nokey@localhost.run -o StrictHostKeyChecking=no
             process = await asyncio.create_subprocess_exec(
-                'cloudflared', 'tunnel', '--url', f'http://localhost:{port}', '--no-autoupdate',
+                'ssh', '-R', f'80:localhost:{port}', 'nokey@localhost.run', '-o', 'StrictHostKeyChecking=no',
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT
             )
             self.bot.tunnel_proc = process
             
-            # 출력 로그에서 trycloudflare.com 도메인을 찾음
+            # 출력 로그에서 lhr.life 도메인을 찾음
             tunnel_url = None
             is_ready = False
             
@@ -104,15 +105,15 @@ class AdminCog(commands.Cog):
                         line = await process.stdout.readline()
                         if not line: break
                         line = line.decode('utf-8').strip()
-                        print(f"[Cloudflared] {line}") # 디버그용 출력
+                        print(f"[SSH Tunnel] {line}") # 디버그용 출력
                         
                         if not tunnel_url:
-                            match = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", line)
+                            # localhost.run은 접속 시 https://xxxx.lhr.life 형태의 주소를 뱉음
+                            match = re.search(r"https://[a-zA-Z0-9-]+\.lhr\.(life|dev|net)", line)
                             if match:
                                 tunnel_url = match.group(0)
+                                is_ready = True
                                 
-                        if "Registered tunnel connection" in line:
-                            is_ready = True
                     except:
                         break
 
@@ -125,12 +126,10 @@ class AdminCog(commands.Cog):
                 await asyncio.sleep(1.0)
             
             if tunnel_url:
-                await interaction.followup.send(f"🌐 **임시 대시보드 터널 생성 완료!**\n동료 관리자에게 아래 링크를 공유하세요. (새로 생성 시 기존 주소는 폭파됩니다)\n👉 **{tunnel_url}**\n*(접속 시 봇에 설정된 비밀번호가 필요합니다)*\n\n⚠️ *참고: 링크를 클릭해도 안 열린다면 전세계 DNS 전파 중이므로 **5~10초 후** 다시 새로고침하세요!*", ephemeral=True)
+                await interaction.followup.send(f"🌐 **임시 대시보드 터널 생성 완료!**\n동료 관리자에게 아래 링크를 공유하세요. (새로 생성 시 기존 주소는 폭파됩니다)\n👉 **{tunnel_url}**\n*(접속 시 봇에 설정된 비밀번호가 필요합니다)*\n\n⚠️ *참고: 학교 방화벽을 우회하는 SSH 기반의 고속 터널링 기술로 교체되었습니다!*", ephemeral=True)
             else:
-                await interaction.followup.send("❌ 터널을 생성했지만 원격 연결을 보장할 수 없습니다. (학교 방화벽이 터널을 차단했거나 연결 속도가 너무 느림)", ephemeral=True)
+                await interaction.followup.send("❌ 터널을 생성했지만 원격 연결을 보장할 수 없습니다. (포트 차단 등 장애 발생)", ephemeral=True)
                 
-        except FileNotFoundError:
-            await interaction.followup.send("❌ 서버에 `cloudflared`가 설치되어 있지 않아 터널링을 열 수 없습니다.", ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"❌ 오류 발생: {str(e)}", ephemeral=True)
 
