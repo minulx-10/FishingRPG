@@ -87,7 +87,7 @@ class AdminCog(commands.Cog):
                 
             # cloudflared 프로세스를 비동기로 실행하여 URL 추출
             process = await asyncio.create_subprocess_exec(
-                'cloudflared', 'tunnel', '--url', f'http://localhost:{port}',
+                'cloudflared', 'tunnel', '--url', f'http://localhost:{port}', '--no-autoupdate',
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT
             )
@@ -95,33 +95,39 @@ class AdminCog(commands.Cog):
             
             # 출력 로그에서 trycloudflare.com 도메인을 찾음
             tunnel_url = None
+            is_ready = False
             
             async def read_stdout():
-                nonlocal tunnel_url
+                nonlocal tunnel_url, is_ready
                 while True:
                     try:
                         line = await process.stdout.readline()
                         if not line: break
                         line = line.decode('utf-8').strip()
+                        print(f"[Cloudflared] {line}") # 디버그용 출력
+                        
                         if not tunnel_url:
                             match = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", line)
                             if match:
                                 tunnel_url = match.group(0)
+                                
+                        if "Registered tunnel connection" in line:
+                            is_ready = True
                     except:
                         break
 
             # 백그라운드에서 로그를 계속 읽어 파이프가 막히지 않게 함
             asyncio.create_task(read_stdout())
             
-            # URL이 찾아질 때까지 대기
-            for _ in range(30):
-                if tunnel_url: break
+            # URL과 연결 준비 완료 대기 (최대 15초)
+            for _ in range(15):
+                if tunnel_url and is_ready: break
                 await asyncio.sleep(1.0)
             
             if tunnel_url:
-                await interaction.followup.send(f"🌐 **임시 대시보드 터널 생성 완료!**\n동료 관리자에게 아래 링크를 공유하세요. (새로 생성 시 기존 주소는 폭파됩니다)\n👉 **{tunnel_url}**\n*(접속 시 봇에 설정된 비밀번호가 필요합니다)*", ephemeral=True)
+                await interaction.followup.send(f"🌐 **임시 대시보드 터널 생성 완료!**\n동료 관리자에게 아래 링크를 공유하세요. (새로 생성 시 기존 주소는 폭파됩니다)\n👉 **{tunnel_url}**\n*(접속 시 봇에 설정된 비밀번호가 필요합니다)*\n\n⚠️ *참고: 링크를 클릭해도 안 열린다면 전세계 DNS 전파 중이므로 **5~10초 후** 다시 새로고침하세요!*", ephemeral=True)
             else:
-                await interaction.followup.send("❌ 터널을 생성했지만 URL을 파싱하지 못했습니다. 서버 상태를 확인하세요.", ephemeral=True)
+                await interaction.followup.send("❌ 터널을 생성했지만 원격 연결을 보장할 수 없습니다. (학교 방화벽이 터널을 차단했거나 연결 속도가 너무 느림)", ephemeral=True)
                 
         except FileNotFoundError:
             await interaction.followup.send("❌ 서버에 `cloudflared`가 설치되어 있지 않아 터널링을 열 수 없습니다.", ephemeral=True)
