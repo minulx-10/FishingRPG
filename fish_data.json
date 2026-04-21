@@ -1,4 +1,5 @@
-{
+{   
+    "낡은 장화 🥾": {"grade": "일반", "prob": 100, "base_window": 3.5, "price": 5, "power": 1, "element": "무속성"},
     "전어 🐟": {"grade": "일반", "prob": 60, "base_window": 3.0, "price": 30, "power": 3, "element": "표층"},
     "멸치 🐟": {"grade": "일반", "prob": 60, "base_window": 3.0, "price": 20, "power": 2, "element": "표층"},
     "정어리 🐟": {"grade": "일반", "prob": 60, "base_window": 3.0, "price": 25, "power": 3, "element": "표층"},
