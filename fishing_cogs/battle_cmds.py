@@ -104,10 +104,15 @@ class BattleCog(commands.Cog):
         p1_fish_name = p1_deck[0][0]
         p2_fish_name = p2_deck[0][0]
 
+        async with db.conn.execute("SELECT title FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+            res = await cursor.fetchone()
+        title1 = res[0] if res else ""
+        display_name1 = f"{title1} {interaction.user.name}" if title1 else interaction.user.name
+
         view = PvPBattleView(interaction.user, 상대, p1_fish_name, p2_fish_name)
         
         await interaction.response.send_message(
-            f"⚔️ {상대.mention}! **{interaction.user.name}**님이 수산대전을 걸어왔습니다!\n(방어하지 못하면 코인과 RP를 약탈당합니다!)", 
+            f"⚔️ {상대.mention}! **{display_name1}**님이 수산대전을 걸어왔습니다!\n(방어하지 못하면 코인과 RP를 약탈당합니다!)", 
             embed=view.generate_embed(), 
             view=view
         )

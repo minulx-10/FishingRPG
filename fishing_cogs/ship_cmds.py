@@ -11,7 +11,9 @@ class ShipCog(commands.Cog):
     @app_commands.command(name="강화", description="코인을 지불하여 낚싯대를 업그레이드합니다. (타이밍 판정 및 확률 증가)")
     async def 강화(self, interaction: discord.Interaction):
         coins, rod_tier, rating = await db.get_user_data(interaction.user.id)
-        cost = rod_tier * 2000 
+        
+        # 레벨이 오를수록 기하급수적으로 증가 (기본가 5000, 계수 1.3배수 방식)
+        cost = int(5000 * (1.3 ** (rod_tier - 1)))
         
         if coins < cost:
             return await interaction.response.send_message(f"❌ 코인이 부족합니다. (필요: `{cost:,} C` / 현재: `{coins:,} C`)", ephemeral=True)
@@ -35,11 +37,12 @@ class ShipCog(commands.Cog):
         upgrade_costs = {
             1: {"coins": 10000, "scrap": 0, "next": "어선 🚤", "unlock": "/요리, /의뢰, /상점, /구매"},
             2: {"coins": 50000, "scrap": 15, "next": "쇄빙선 🛳️", "unlock": "/전시, /배틀"},
-            3: {"coins": 150000, "scrap": 30, "next": "잠수함 ⛴️", "unlock": "/수산대전(PvP), 신화 어종 포획 가능"}
+            3: {"coins": 150000, "scrap": 30, "next": "잠수함 ⛴️", "unlock": "/수산대전(PvP), 신화 어종 포획 가능"},
+            4: {"coins": 2000000, "scrap": 150, "next": "차원함선 🛸", "unlock": "이계/차원 어종 포획 및 극후반 심연의 바다 접근 가능"}
         }
 
-        if current_tier >= 4:
-            return await interaction.response.send_message("✨ 이미 최고의 선박인 **[잠수함 ⛴️]**을 보유하고 있습니다!", ephemeral=True)
+        if current_tier >= 5:
+            return await interaction.response.send_message("✨ 이미 최고의 선박인 **[차원함선 🛸]**을 보유하고 있습니다!", ephemeral=True)
 
         req = upgrade_costs[current_tier]
         

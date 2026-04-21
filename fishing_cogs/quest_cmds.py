@@ -199,14 +199,19 @@ class QuestCog(commands.Cog):
         view = QuestDeliveryView(interaction.user, q_item, q_amount, q_reward)
         await interaction.response.send_message(embed=embed, view=view)
 
-    @app_commands.command(name="전시", description="가방에 있는 물고기를 수족관에 전시합니다. (최대 5마리)")
+    @app_commands.command(name="전시", description="가방에 있는 물고기를 수족관에 전시합니다. (슬롯 확장 가능)")
     @app_commands.autocomplete(물고기=inv_autocomplete)
     @check_boat_tier(3)
     async def 전시(self, interaction: discord.Interaction, 물고기: str):
+        async with db.conn.execute("SELECT aquarium_slots FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+            res = await cursor.fetchone()
+        max_slots = res[0] if res else 5
+            
         async with db.conn.execute("SELECT COUNT(*) FROM aquarium WHERE user_id=?", (interaction.user.id,)) as cursor:
             count = (await cursor.fetchone())[0]
-        if count >= 5:
-            return await interaction.response.send_message("❌ 수족관이 꽉 찼습니다! (최대 5마리). `/전시해제`를 먼저 해주세요.", ephemeral=True)
+            
+        if count >= max_slots:
+            return await interaction.response.send_message(f"❌ 수족관이 꽉 찼습니다! (최대 {max_slots}마리). `/전시해제`를 하거나 `/수족관확장`을 이용하세요.", ephemeral=True)
             
         async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기)) as cursor:
             res = await cursor.fetchone()
@@ -252,9 +257,62 @@ class QuestCog(commands.Cog):
                 desc += f"{emoji} **{name}** `[{grade}]`\n\n"
                 
             embed.description = desc
-            embed.set_footer(text="남들에게 자랑할 만한 희귀한 물고기를 수집해 보세요!")
+            embed.set_footer(text=f"수족관 공간: {len(items)} / (확장 가능)")
             
         await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="수족관확장", description="코인을 지불하여 수족관 전시 슬롯을 하나 추가합니다.")
+    async def 수족관확장(self, interaction: discord.Interaction):
+        coins, _, _ = await db.get_user_data(interaction.user.id)
+        
+        async with db.conn.execute("SELECT aquarium_slots FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+            res = await cursor.fetchone()
+        current_slots = res[0] if res else 5
+        
+        if current_slots >= 20:
+            return await interaction.response.send_message("❌ 수족관은 이미 최대 크기(20슬롯)로 확장되었습니다!", ephemeral=True)
+            
+        cost = 300000 * (current_slots - 4) # 5슬롯->6슬롯 갈때 30만, 그 이후 60만...
+        
+        if coins < cost:
+            return await interaction.response.send_message(f"❌ 코인이 부족합니다. 다음 슬롯 확장에 `{cost:,} C`가 필요합니다.", ephemeral=True)
+            
+        await db.execute("UPDATE user_data SET coins = coins - ?, aquarium_slots = aquarium_slots + 1 WHERE user_id=?", (cost, interaction.user.id))
+        await db.commit()
+        
+        await interaction.response.send_message(f"🏗️ `{cost:,} C`를 지불하여 수족관을 한 칸 확장했습니다! (현재 최대 슬롯: **{current_slots + 1}칸**)")
+
+    @app_commands.command(name="칭호장착", description="자신의 업적에 맞는 칭호를 장착하여 닉네임 앞에 표시합니다.")
+    @app_commands.choices(선택=[
+        app_commands.Choice(name="해제 (칭호 없애기)", value=""),
+        app_commands.Choice(name="🌱 초보 낚시꾼 (기본)", value="[초보]"),
+        app_commands.Choice(name="🎣 베테랑 어부 (낚싯대 Lv.20+)", value="[베테랑]"),
+        app_commands.Choice(name="👑 전설의 강태공 (낚싯대 Lv.50+)", value="[전설]"),
+        app_commands.Choice(name="🐉 해신의 선택받은 자 (용왕 포획자)", value="[해신]"),
+        app_commands.Choice(name="💰 수산시장 참치 (코인 500만+)", value="[만수르]"),
+    ])
+    async def 칭호장착(self, interaction: discord.Interaction, 선택: app_commands.Choice[str]):
+        coins, rod_tier, rating = await db.get_user_data(interaction.user.id)
+        title = 선택.value
+        
+        # 권한 체크
+        if title == "[베테랑]" and rod_tier < 20: 
+            return await interaction.response.send_message("❌ 낚싯대를 20레벨 이상으로 강화해야 장착할 수 있습니다.", ephemeral=True)
+        if title == "[전설]" and rod_tier < 50:
+            return await interaction.response.send_message("❌ 낚싯대를 50레벨 이상으로 강화해야 장착할 수 있습니다.", ephemeral=True)
+        if title == "[해신]":
+            async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name='용왕 👑'", (interaction.user.id,)) as cursor:
+                res = await cursor.fetchone()
+            if not res or res[0] <= 0:
+                return await interaction.response.send_message("❌ '용왕 👑'을 낚아야만 얻을 수 있는 신성한 칭호입니다.", ephemeral=True)
+        if title == "[만수르]" and coins < 5000000:
+            return await interaction.response.send_message("❌ 5,000,000 코인 이상 보유한 진정한 부자만 장착할 수 있습니다.", ephemeral=True)
+            
+        await db.execute("UPDATE user_data SET title=? WHERE user_id=?", (title, interaction.user.id))
+        await db.commit()
+        
+        display = title if title else "없음"
+        await interaction.response.send_message(f"📛 칭호가 **{display}**(으)로 변경되었습니다! 이제 커맨드 사용 시 새로운 이름이 나타납니다.")
 
     @app_commands.command(name="감정", description="코인을 지불하고 '가라앉은 보물상자 🧰'를 열어 대박을 노립니다!")
     async def 감정(self, interaction: discord.Interaction):

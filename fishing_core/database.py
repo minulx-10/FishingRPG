@@ -97,6 +97,12 @@ class DBManager:
         except aiosqlite.OperationalError:
             pass
 
+        try:
+            await self.conn.execute("ALTER TABLE user_data ADD COLUMN title TEXT DEFAULT ''")
+            await self.conn.execute("ALTER TABLE user_data ADD COLUMN aquarium_slots INTEGER DEFAULT 5")
+        except aiosqlite.OperationalError:
+            pass
+
         # 통 (bucket) 마이그레이션 로직
         try:
             # bucket 테이블이 존재하는지 확인
