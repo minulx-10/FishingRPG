@@ -335,15 +335,186 @@ class FishingView(View):
             action_view = FishActionView(self.user, self.target_fish)
             await interaction.response.edit_message(content="🎊 앗, 낚았습니다! 이 물고기를 어떻게 할까요?", embed=embed, view=action_view)
             
-            # 🌟 [신화급 기믹] 서버 전체 알림!
-            if grade == "신화":
-                alert_embed = discord.Embed(
-                    title="🚨 [경고] 심해의 거대한 진동이 감지되었습니다...", 
-                    description=f"**{self.user.mention}**님이 방금 전설 속의 마수,\n**{self.target_fish}**를 심연에서 끌어올렸습니다!!!",
-                    color=0xff0000
-                )
-                alert_embed.set_footer(text="바다가 요동치기 시작합니다...")
-                await interaction.channel.send(content="@here", embed=alert_embed)
+            # 태고, 환상, 미스터리, 신화 등급 알림 코드입니다. (용왕, 황금 키보드, 가디언 제외)
+
+            if grade in ["태고", "환상", "미스터리", "신화"]:
+                alert_embed = None
+    
+                # ================= [ 태고 등급 ] =================
+                if self.target_fish == "메갈로돈 🦈":
+                    alert_embed = discord.Embed(
+                        title="🦖 [경고] 바다가 공포에 질려 침묵합니다...", 
+                        description=f"**{self.user.mention}**님이 낚싯대를 부러뜨릴 듯한 괴력을 이겨내고,\n역사상 가장 거대한 포식자 **{self.target_fish}**를 현세에 끌어올렸습니다!!!",
+                        color=0x8b4513
+                    )
+                    alert_embed.set_footer(text="거대한 등지느러미가 해수면을 가릅니다...")
+
+                elif self.target_fish == "둔클레오스테우스 🦖":
+                    alert_embed = discord.Embed(
+                        title="🦖 [경고] 태고의 바다가 갈라집니다!", 
+                        description=f"**{self.user.mention}**님이 강철 턱을 가진 고생대의 포식자,\n**{self.target_fish}**를 낚아 올렸습니다!!!",
+                        color=0x8b4513
+                    )
+                    alert_embed.set_footer(text="무언가 으스러지는 끔찍한 소리가 들려옵니다...")
+    
+                elif self.target_fish == "모사사우루스 🦖":
+                    alert_embed = discord.Embed(
+                        title="🦖 [경고] 해수면이 거칠게 요동칩니다!", 
+                        description=f"**{self.user.mention}**님이 백악기 바다의 절대 지배자,\n**{self.target_fish}**의 눈을 뜨게 만들었습니다!!!",
+                        color=0x8b4513
+                    )
+                    alert_embed.set_footer(text="포효 소리에 모든 물고기들이 숨어버립니다...")
+
+                # ================= [ 환상 등급 ] =================
+                elif self.target_fish == "바다의 파괴자, 루스카 🐙":
+                    alert_embed = discord.Embed(
+                        title="🌪️ [위험] 블루홀의 저주가 시작됩니다...", 
+                        description=f"**{self.user.mention}**님이 상어와 문어의 끔찍한 혼종,\n**{self.target_fish}**를 수면 밖으로 건져냈습니다!!!",
+                        color=0x9932cc
+                    )
+                    alert_embed.set_footer(text="바닷물이 검은 먹물로 물들기 시작합니다...")
+
+                elif self.target_fish == "움직이는 섬, 자라탄 🐢":
+                    alert_embed = discord.Embed(
+                        title="🏝️ [경고] 거대한 대지가 움직이기 시작합니다!", 
+                        description=f"**{self.user.mention}**님이 낚은 것은 단순한 물고기가 아닙니다!\n지도에 없던 섬, **{self.target_fish}**가 바다 한가운데서 솟아올랐습니다!!!",
+                        color=0x9932cc
+                    )
+                    alert_embed.set_footer(text="섬의 숲과 흙이 바다로 무너져 내립니다...")
+
+                elif self.target_fish == "여섯 개의 머리, 스킬라 🐉":
+                    alert_embed = discord.Embed(
+                        title="🐉 [위험] 비명소리가 바다를 뒤덮습니다...", 
+                        description=f"**{self.user.mention}**님이 해협에 숨겨진 재앙,\n**{self.target_fish}**의 굶주린 턱 여섯 개를 한 번에 낚아 올렸습니다!!!",
+                        color=0x9932cc
+                    )
+                    alert_embed.set_footer(text="수많은 눈동자들이 당신을 주시합니다...")
+
+                # ================= [ 미스터리 등급 ] =================
+                elif self.target_fish == "네스호의 그림자, 네시 🦕":
+                    alert_embed = discord.Embed(
+                        title="🌫️ [미스터리] 안개가 짙게 깔리기 시작합니다...", 
+                        description=f"**{self.user.mention}**님의 낚싯대 끝에서 미확인 수장룡,\n**{self.target_fish}**의 거대한 실루엣이 모습을 드러냈습니다!!!",
+                        color=0x2f4f4f
+                    )
+                    alert_embed.set_footer(text="카메라 셔터 소리만 정적을 채웁니다...")
+
+                elif self.target_fish == "심연의 울음소리, 더 블룹 🔊":
+                    alert_embed = discord.Embed(
+                        title="🔊 [미스터리] 원인 불명의 거대 음파가 감지되었습니다!", 
+                        description=f"**{self.user.mention}**님이 지구상에 존재할 수 없는 크기의 무언가,\n**{self.target_fish}**의 결정체를 심연에서 끌어올렸습니다!!!",
+                        color=0x2f4f4f
+                    )
+                    alert_embed.set_footer(text="기괴하고 거대한 울음소리가 서버를 뒤흔듭니다...")
+
+                elif self.target_fish == "남극의 인간형 거수, 닝겐 👻":
+                    alert_embed = discord.Embed(
+                        title="👻 [미스터리] 얼어붙은 바다 아래서 끔찍한 시선이 느껴집니다...", 
+                        description=f"**{self.user.mention}**님이 새하얀 기형의 괴생명체,\n**{self.target_fish}**와 정면으로 눈이 마주쳤습니다!!!",
+                        color=0x2f4f4f
+                    )
+                    alert_embed.set_footer(text="물결 아래에서 기괴하게 웃고 있는 형상이 보입니다...")
+
+                # ================= [ 신화 등급 ] =================
+                elif self.target_fish == "심연의 지배자, 레비아탄 🌋":
+                    alert_embed = discord.Embed(
+                        title="🌋 [재앙 경고] 바닷물이 끓어오르고 붉게 물듭니다!!!", 
+                        description=f"**{self.user.mention}**님이 성서 속의 재앙 그 자체,\n**{self.target_fish}**를 깨워 세상에 종말을 선고했습니다!!!",
+                        color=0xff0000
+                    )
+                    alert_embed.set_footer(text="압도적인 열기가 모든 것을 태워버릴 듯합니다...")
+
+                elif self.target_fish == "심해의 파멸, 크라켄 🦑":
+                    alert_embed = discord.Embed(
+                        title="🦑 [재앙 경고] 거대한 촉수들이 해수면을 산산조각 냅니다!!!", 
+                        description=f"**{self.user.mention}**님이 수백 척의 배를 가라앉힌 북유럽의 악몽,\n**{self.target_fish}**를 심연에서 건져 올렸습니다!!!",
+                        color=0xff0000
+                    )
+                    alert_embed.set_footer(text="바다가 검게 물들고, 하늘마저 촉수로 뒤덮입니다...")
+
+                elif self.target_fish == "세계를 감싼 뱀, 요르문간드 🐍":
+                    alert_embed = discord.Embed(
+                        title="🐍 [재앙 경고] 전 세계의 해수면이 동시에 상승합니다!!!", 
+                        description=f"**{self.user.mention}**님이 낚싯줄을 당기자, 자신의 꼬리를 물고 있던 재앙의 뱀\n**{self.target_fish}**가 똬리를 풀고 지구를 흔듭니다!!!",
+                        color=0xff0000
+                    )
+                    alert_embed.set_footer(text="거대한 비늘이 대지를 부수며 솟아오릅니다...")
+    
+                elif self.target_fish == "대소용돌이의 재앙, 카리브디스 🌀":
+                    alert_embed = discord.Embed(
+                        title="🌀 [재앙 경고] 바다 한가운데 끝없는 구멍이 열렸습니다!!!", 
+                        description=f"**{self.user.mention}**님이 모든 것을 집어삼키는 죽음의 소용돌이,\n**{self.target_fish}**를 강제로 멈춰 세웠습니다!!!",
+                        color=0xff0000
+                    )
+                    alert_embed.set_footer(text="물살이 주변의 모든 빛과 소리를 빨아들입니다...")
+
+                elif self.target_fish == "바다의 원혼, 우미보즈 🌑":
+                    alert_embed = discord.Embed(
+                        title="🌑 [재앙 경고] 달빛마저 가려진 칠흑 같은 어둠이 강림합니다...", 
+                        description=f"**{self.user.mention}**님이 낚싯대로 끌어올린 것은 물고기가 아닙니다!\n밤바다의 거대한 원혼, **{self.target_fish}**가 배를 짓누릅니다!!!",
+                        color=0xff0000
+                    )
+                    alert_embed.set_footer(text="검은 그림자가 두 눈을 번뜩이며 내려다봅니다...")
+
+                elif self.target_fish == "이름 없는 심해의 고대신 (크툴루) 👁️":
+                    alert_embed = discord.Embed(
+                        title="👁️ [재앙 경고] 정신이 산산조각 날 것 같은 환청이 들려옵니다!!!", 
+                        description=f"**{self.user.mention}**님이 결코 깨워선 안 될 우주의 공포,\n**{self.target_fish}**를 심연에서 건져 올렸습니다!!!",
+                        color=0xff0000
+                    )
+                    alert_embed.set_footer(text="Ph'nglui mglw'nafh... 이성이 붕괴되기 시작합니다...")
+
+                elif self.target_fish == "죽음의 선율, 세이렌의 군주 🧜‍♀️":
+                    alert_embed = discord.Embed(
+                        title="🎵 [재앙 경고] 아름다운 노랫소리가 들립니다...", 
+                        description=f"**{self.user.mention}**님이 선원들을 홀리는 죽음의 선율,\n**{self.target_fish}**를 마주했습니다!!!",
+                        color=0xff0000
+                    )
+                    alert_embed.set_footer(text="노래를 듣는 순간 바다로 뛰어들고 싶은 충동이 듭니다...")
+
+                elif self.target_fish == "강철 지느러미, 아스피도켈론 🐢":
+                    alert_embed = discord.Embed(
+                        title="🛡️ [재앙 경고] 거대한 지형의 변화가 감지되었습니다!!!", 
+                        description=f"**{self.user.mention}**님이 등에 숲을 짊어진 불괴의 요새,\n**{self.target_fish}**를 낚아 바다의 지형을 바꿨습니다!!!",
+                        color=0xff0000
+                    )
+                    alert_embed.set_footer(text="절대 뚫리지 않는 강철의 파도가 일어납니다...")
+
+                elif self.target_fish == "차원의 포식자, 보이드 샤크 🌌":
+                    alert_embed = discord.Embed(
+                        title="🌌 [재앙 경고] 공간이 일그러지며 차원의 균열이 발생했습니다!!!", 
+                        description=f"**{self.user.mention}**님이 현실을 찢고 나온 공허의 상어,\n**{self.target_fish}**를 이 세계로 낚아챘습니다!!!",
+                        color=0xff0000
+                    )
+                    alert_embed.set_footer(text="괴수 주변의 시간과 공간이 빨려 들어갑니다...")
+
+                elif self.target_fish == "벼락의 신수, 이쿠치 ⚡":
+                    alert_embed = discord.Embed(
+                        title="⚡ [재앙 경고] 수천 개의 번개가 바다를 내리칩니다!!!", 
+                        description=f"**{self.user.mention}**님이 전설의 뇌전 뱀,\n**{self.target_fish}**를 구름 위로 낚아 올렸습니다!!!",
+                        color=0xff0000
+                    )
+                    alert_embed.set_footer(text="숨 막히는 전압이 공기를 태워버립니다...")
+
+                elif self.target_fish == "황금의 눈먼 왕, 엘도라도 리바이어던 👑":
+                    alert_embed = discord.Embed(
+                        title="👑 [재앙 경고] 심해에서 찬란한 황금빛이 폭발합니다!!!", 
+                        description=f"**{self.user.mention}**님이 황금 제국의 수호룡,\n**{self.target_fish}**를 빛의 기둥과 함께 소환했습니다!!!",
+                        color=0xffd700
+                    )
+                    alert_embed.set_footer(text="순금의 비늘이 바다 전체를 황금빛으로 물들입니다...")
+
+                elif self.target_fish == "얼어붙은 분노, 이미르의 눈물 ❄️":
+                    alert_embed = discord.Embed(
+                        title="❄️ [재앙 경고] 주변의 바다가 순식간에 얼어붙습니다!!!", 
+                        description=f"**{self.user.mention}**님이 빙하의 괴수,\n**{self.target_fish}**를 깨워 빙하기를 선고했습니다!!!",
+                        color=0xff0000
+                    )
+                    alert_embed.set_footer(text="내쉬는 숨결 하나에 온 세상이 얼어붙습니다...")
+
+                # Embed가 정상적으로 생성되었을 경우 @here 핑과 함께 전송
+                if alert_embed is not None:
+                    await interaction.channel.send(content="@here", embed=alert_embed)
 
         # ==========================================
         # 🔴 낚시 실패 처리
