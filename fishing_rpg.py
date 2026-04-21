@@ -262,28 +262,27 @@ class FishActionView(View):
         await db.commit()
         await interaction.response.edit_message(content=f"💰 **{self.target_fish}**를 시장에 바로 넘겨서 `{price} C`를 벌었습니다!", view=None)
 
-# [1] 낚시 미니게임 UI (신화급 기믹 추가 버전)
+# [1] 낚시 미니게임 UI (신화급 기믹 & 지도 조각 드랍 추가 버전)
 class FishingView(View):
     def __init__(self, user, target_fish, rod_tier):
         super().__init__(timeout=15) 
         self.user = user
         self.target_fish = target_fish
-        self.rod_tier = rod_tier # 낚싯대 파괴 기믹을 위해 저장
+        self.rod_tier = rod_tier 
         self.is_bite = False  
         self.start_time = 0
-        self.message = None # 메시지 객체를 저장할 변수 추가
+        self.message = None 
 
-        base_window = FISH_DATA[self.target_fish]["base_window"]
+        # 만약 FISH_DATA에 없는 특수 아이템이 뽑혀도 에러가 나지 않도록 예외 처리
+        fish_info = FISH_DATA.get(self.target_fish, {"base_window": 2.0, "grade": "일반"})
+        base_window = fish_info["base_window"]
         bonus_time = (self.rod_tier - 1) * 0.2 
         self.limit_time = max(1.0, base_window + bonus_time)
 
-    # 👇 여기에 on_timeout 함수를 추가하세요! 👇
     async def on_timeout(self):
-        # 뷰 안에 있는 모든 버튼을 비활성화(disabled = True) 상태로 만듭니다.
         for child in self.children:
             child.disabled = True
             
-        # 버튼이 비활성화된 상태로 메시지를 업데이트합니다.
         if self.message:
             try:
                 await self.message.edit(content="⏰ 낚시 시간이 초과되어 낚싯대를 거두었습니다.", view=self)
@@ -301,7 +300,8 @@ class FishingView(View):
             return await interaction.response.edit_message(content="🎣 앗! 너무 일찍 챘습니다. 물고기가 도망갔어요! 💨", view=None)
             
         elapsed = datetime.datetime.now().timestamp() - self.start_time
-        grade = FISH_DATA[self.target_fish]["grade"]
+        fish_info = FISH_DATA.get(self.target_fish, {"grade": "보물"})
+        grade = fish_info["grade"]
         
         # ==========================================
         # 🟢 낚시 성공 처리
@@ -313,6 +313,13 @@ class FishingView(View):
             embed = discord.Embed(title=f"🎉 낚시 성공! [{grade}]", description=f"**{self.target_fish}**를 낚았습니다!", color=0x00ff00)
             embed.add_field(name="반응 속도", value=f"`{elapsed:.3f}초` (판정 한도: {self.limit_time:.2f}초)")
             
+            # 🌟 [지도 조각 드랍 기믹] 5% 확률로 찢어진 지도 조각 획득!
+            if random.random() < 0.05:
+                piece = random.choice(["찢어진 지도 조각 A 🧩", "찢어진 지도 조각 B 🧩", "찢어진 지도 조각 C 🧩", "찢어진 지도 조각 D 🧩"])
+                await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (self.user.id, piece))
+                await db.commit()
+                embed.add_field(name="🗺️ 바다의 파편 발견!", value=f"물고기와 함께 **{piece}**가 딸려왔습니다! (4부위를 모아 합성하세요)", inline=False)
+
             if self.target_fish == "심해의 파멸, 크라켄 🦑":
                 # 무작위 다른 유저 한 명의 금고(코인이 1000 이상인 사람)를 타겟팅
                 async with db.execute("SELECT user_id, coins FROM user_data WHERE user_id != ? AND coins > 1000 ORDER BY RANDOM() LIMIT 1", (self.user.id,)) as cursor:
@@ -336,7 +343,6 @@ class FishingView(View):
                     color=0xff0000
                 )
                 alert_embed.set_footer(text="바다가 요동치기 시작합니다...")
-                # interaction.channel을 통해 해당 낚시가 진행된 채널에 알림 전송
                 await interaction.channel.send(content="@here", embed=alert_embed)
 
         # ==========================================
@@ -704,7 +710,7 @@ async def aqua_autocomplete(interaction: discord.Interaction, current: str) -> l
     return [app_commands.Choice(name=row[0], value=row[0]) for row in items if current.lower() in row[0].lower()][:25]
 
 @bot.tree.command(name="낚시", description="찌를 던져 물고기(또는 보물)를 낚습니다! (타이밍 미니게임)")
-@app_commands.autocomplete(사용할미끼=bait_autocomplete) # 👈 고정 초이스 대신 자동완성 적용
+@app_commands.autocomplete(사용할미끼=bait_autocomplete)
 async def 낚시(interaction: discord.Interaction, 사용할미끼: str = "none"):
     coins, rod_tier, rating = await get_user_data(interaction.user.id)
     
@@ -730,30 +736,43 @@ async def 낚시(interaction: discord.Interaction, 사용할미끼: str = "none"
     candidates = []
     weights = []
     
-    for fish, data in FISH_DATA.items():
-        base_prob = data["prob"]
-        grade = data["grade"]
+    # 🌟 [망자의 해역] 기믹: 지도를 사용한 유저는 1시간 동안 이곳에서만 낚시함
+    if "ghost_sea_open" in active_buffs:
+        ghost_items = {
+            "해적의 금화 🪙": 60, 
+            "가라앉은 보물상자 🧰": 25, 
+            "낡은 고철 ⚙️": 15
+        }
+        for item, prob in ghost_items.items():
+            candidates.append(item)
+            weights.append(prob)
+        bait_text += "\n*(☠️ 망자의 해역: 주변에 물고기의 기척이 전혀 없습니다...)*"
         
-        # 🌟 [자석 미끼] 기믹: 장화 제거! 순수 고철과 보물만 낚임
-        if bait_used == "자석 미끼 🧲":
-            if fish not in ["낡은 고철 ⚙️", "해적의 금화 🪙", "가라앉은 보물상자 🧰"]:
-                continue
-            base_prob *= 2.0 
+    else:
+        # 기존 일반 낚시 로직
+        for fish, data in FISH_DATA.items():
+            base_prob = data["prob"]
+            grade = data["grade"]
             
-        elif bait_used == "고급 미끼 🪱":
-            if grade == "일반":
-                base_prob *= 0.1
-            elif grade in ["희귀", "초희귀"]:
-                base_prob *= 1.5
+            if bait_used == "자석 미끼 🧲":
+                if fish not in ["낡은 고철 ⚙️", "해적의 금화 🪙", "가라앉은 보물상자 🧰"]:
+                    continue
+                base_prob *= 2.0 
+                
+            elif bait_used == "고급 미끼 🪱":
+                if grade == "일반":
+                    base_prob *= 0.1
+                elif grade in ["희귀", "초희귀"]:
+                    base_prob *= 1.5
 
-        if "deep_sea_boost" in active_buffs and data["element"] == "심해":
-            base_prob *= 2.0
-            
-        if grade in ["에픽", "레전드", "신화"]:
-            base_prob *= (1 + (rod_tier * 0.1))
+            if "deep_sea_boost" in active_buffs and data["element"] == "심해":
+                base_prob *= 2.0
+                
+            if grade in ["에픽", "레전드", "신화"]:
+                base_prob *= (1 + (rod_tier * 0.1))
 
-        candidates.append(fish)
-        weights.append(base_prob)
+            candidates.append(fish)
+            weights.append(base_prob)
         
     if not candidates:
         target_fish = "낡은 장화 🥾"
@@ -785,7 +804,6 @@ async def 낚시(interaction: discord.Interaction, 사용할미끼: str = "none"
         item.emoji = "‼️"
     
     try:
-        # 응답 메세지 객체를 변수(msg)에 담고, 그것을 view.message에 저장해 줍니다.
         msg = await interaction.edit_original_response(content="❗ **찌가 격렬하게 흔들립니다! 지금 누르세요!!!**", view=view)
         view.message = msg 
     except: 
@@ -1518,6 +1536,55 @@ async def 기도(interaction: discord.Interaction):
 async def 기도_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     if isinstance(error, app_commands.CommandOnCooldown):
         await interaction.response.send_message(f"🙏 기도는 정성이 중요합니다. `{error.retry_after:.0f}초` 후에 다시 기도를 올려주세요.", ephemeral=True)
+
+# ==========================================
+# 🌟 [신규] 보물지도 조각 모음 & 망자의 해역 시스템
+# ==========================================
+@bot.tree.command(name="지도합성", description="가방에 있는 찢어진 지도 조각(A, B, C, D)을 모아 '고대 해적의 보물지도'를 완성합니다.")
+async def 지도합성(interaction: discord.Interaction):
+    pieces = ["찢어진 지도 조각 A 🧩", "찢어진 지도 조각 B 🧩", "찢어진 지도 조각 C 🧩", "찢어진 지도 조각 D 🧩"]
+    
+    # 유저가 4부위를 모두 1개 이상 가졌는지 확인
+    async with db.execute("SELECT item_name, amount FROM inventory WHERE user_id=? AND amount > 0", (interaction.user.id,)) as cursor:
+        inv_items = {row[0]: row[1] for row in await cursor.fetchall()}
+        
+    for p in pieces:
+        if inv_items.get(p, 0) < 1:
+            return await interaction.response.send_message(f"❌ 조각이 부족합니다!\n(부족한 부위: **{p}**)\n낚시를 통해 4부위를 모두 모아보세요.", ephemeral=True)
+
+    # 조각 4개 차감
+    for p in pieces:
+        await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (interaction.user.id, p))
+    
+    # 보물지도 지급
+    await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id, "고대 해적의 보물지도 🗺️"))
+    await db.commit()
+    
+    embed = discord.Embed(title="🗺️ 보물지도 합성 성공!", description="4개의 조각을 이어 붙여 **고대 해적의 보물지도 🗺️**를 완성했습니다!\n`/지도사용` 명령어를 통해 망자의 해역으로 떠나보세요.", color=0xf1c40f)
+    await interaction.response.send_message(embed=embed)
+
+
+@bot.tree.command(name="지도사용", description="'고대 해적의 보물지도'를 사용하여 1시간 동안 금화만 낚이는 [망자의 해역]을 개방합니다.")
+async def 지도사용(interaction: discord.Interaction):
+    # 지도 보유 확인
+    async with db.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name='고대 해적의 보물지도 🗺️'", (interaction.user.id,)) as cursor:
+        res = await cursor.fetchone()
+        
+    if not res or res[0] < 1:
+        return await interaction.response.send_message("❌ 가방에 **고대 해적의 보물지도 🗺️**가 없습니다!", ephemeral=True)
+
+    # 지도 차감
+    await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name='고대 해적의 보물지도 🗺️'", (interaction.user.id,))
+    
+    # 1시간 동안 망자의 해역 버프 부여
+    end_time = datetime.datetime.now(kst) + datetime.timedelta(hours=1)
+    end_time_str = end_time.strftime('%Y-%m-%d %H:%M:%S')
+    
+    await db.execute("INSERT OR REPLACE INTO active_buffs (user_id, buff_type, end_time) VALUES (?, ?, ?)", (interaction.user.id, "ghost_sea_open", end_time_str))
+    await db.commit()
+    
+    embed = discord.Embed(title="☠️ 망자의 해역 개방...", description="지도의 낡은 좌표를 따라 안개가 자욱한 해역에 도착했습니다.\n\n앞으로 **1시간 동안**, 당신의 낚싯대에는 물고기 대신 **금화와 보물상자**만 걸려 올라올 것입니다!", color=0x2c3e50)
+    await interaction.response.send_message(embed=embed)
 
 # ==========================================
 # 6. 관리자 전용 직권 명령어 (어뷰징 관리, 이벤트용)
