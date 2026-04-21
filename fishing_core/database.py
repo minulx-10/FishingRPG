@@ -53,6 +53,12 @@ class DBManager:
                 PRIMARY KEY (user_id, item_name)
             )
         ''')
+        await self.conn.execute('''
+            CREATE TABLE IF NOT EXISTS market_sales (
+                item_name TEXT PRIMARY KEY,
+                amount_sold INTEGER DEFAULT 0
+            )
+        ''')
 
         await self.conn.execute('CREATE INDEX IF NOT EXISTS idx_active_buffs_end_time ON active_buffs (user_id, end_time)')
         
@@ -83,6 +89,11 @@ class DBManager:
         try:
             await self.conn.execute("ALTER TABLE user_data ADD COLUMN stamina INTEGER DEFAULT 100")
             await self.conn.execute("ALTER TABLE user_data ADD COLUMN max_stamina INTEGER DEFAULT 100")
+        except aiosqlite.OperationalError:
+            pass
+
+        try:
+            await self.conn.execute("ALTER TABLE user_data ADD COLUMN peace_mode INTEGER DEFAULT 0")
         except aiosqlite.OperationalError:
             pass
 

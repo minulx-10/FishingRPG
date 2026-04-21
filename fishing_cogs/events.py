@@ -21,10 +21,46 @@ class EventCog(commands.Cog):
     async def market_update_loop(self):
         import random
         from fishing_core.shared import MARKET_PRICES
+        
+        async with db.conn.execute("SELECT item_name, amount_sold FROM market_sales") as cursor:
+            sales_data = await cursor.fetchall()
+            
+        sales_dict = {row[0]: row[1] for row in sales_data}
+        
         for fish, data in FISH_DATA.items():
-            fluctuation = random.uniform(0.5, 2.0)
-            MARKET_PRICES[fish] = int(data["price"] * fluctuation)
-        print(f"[{datetime.datetime.now(kst).strftime('%H:%M')}] 📈 수산시장 시세가 변동되었습니다!")
+            base_price = data["price"]
+            sold = sales_dict.get(fish, 0)
+            
+            # 수요와 공급 기반 알고리즘
+            if sold == 0:
+                current_ratio = MARKET_PRICES.get(fish, base_price) / base_price
+                now_hour = datetime.datetime.now(kst).hour
+                # 심야/새벽 시간대(0시 ~ 8시) 처리: 유저 활동이 적으므로 인플레이션 방지를 위해 매우 미세하게 상승(1%)
+                if 0 <= now_hour < 8:
+                    increase_rate = 0.01
+                else:
+                    increase_rate = 0.03 # 낮 시간대에는 3% 상승
+                    
+                base_fluctuation = min(2.5, current_ratio + increase_rate)
+            elif sold < 5:
+                base_fluctuation = 1.0
+            elif sold < 20:
+                base_fluctuation = 0.8
+            elif sold < 50:
+                base_fluctuation = 0.5
+            else:
+                base_fluctuation = 0.2
+                
+            jitter = random.uniform(0.98, 1.02) # 2% 랜덤 노이즈 (안정성 강화)
+            final_ratio = base_fluctuation * jitter
+            
+            new_price = int(base_price * final_ratio)
+            MARKET_PRICES[fish] = max(int(base_price * 0.1), new_price)
+            
+        await db.execute("UPDATE market_sales SET amount_sold = 0")
+        await db.commit()
+        
+        print(f"[{datetime.datetime.now(kst).strftime('%H:%M')}] 📈 수산시장 시세가 실제 거래량(실물 경제) 기반으로 갱신되었습니다!")
 
     @market_update_loop.before_loop
     async def before_market(self):

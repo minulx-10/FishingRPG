@@ -70,8 +70,10 @@ class MarketCog(commands.Cog):
             msg += f"• {name} {amt}마리 : `{item_total:,} C` (개당 {price:,}C)\n"
         
         delete_targets = [(interaction.user.id, name) for name, amt in sellable_items]
+        sales_logs = [(name, amt, amt) for name, amt in sellable_items]
 
         await db.executemany("DELETE FROM inventory WHERE user_id = ? AND item_name = ?", delete_targets)
+        await db.executemany("INSERT INTO market_sales (item_name, amount_sold) VALUES (?, ?) ON CONFLICT(item_name) DO UPDATE SET amount_sold = amount_sold + ?", sales_logs)
         await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (total_earned, interaction.user.id))
         await db.commit()
         
@@ -104,6 +106,7 @@ class MarketCog(commands.Cog):
         total_earned = price_per_item * 수량
         
         await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name=?", (수량, interaction.user.id, target_fish))
+        await db.execute("INSERT INTO market_sales (item_name, amount_sold) VALUES (?, ?) ON CONFLICT(item_name) DO UPDATE SET amount_sold = amount_sold + ?", (target_fish, 수량, 수량))
         await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id=?", (total_earned, interaction.user.id))
         await db.commit()
         

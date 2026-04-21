@@ -385,5 +385,32 @@ class QuestCog(commands.Cog):
         if isinstance(error, app_commands.CommandOnCooldown):
             await interaction.response.send_message(f"🙏 기도는 정성이 중요합니다. `{error.retry_after:.0f}초` 후에 다시 기도를 올려주세요.", ephemeral=True)
 
+    @app_commands.command(name="조각교환", description="같은 지도 조각 3개를 다른 무작위 조각 1개로 교환합니다.")
+    @app_commands.choices(조각=[
+        app_commands.Choice(name="찢어진 지도 조각 A 🧩", value="찢어진 지도 조각 A 🧩"),
+        app_commands.Choice(name="찢어진 지도 조각 B 🧩", value="찢어진 지도 조각 B 🧩"),
+        app_commands.Choice(name="찢어진 지도 조각 C 🧩", value="찢어진 지도 조각 C 🧩"),
+        app_commands.Choice(name="찢어진 지도 조각 D 🧩", value="찢어진 지도 조각 D 🧩")
+    ])
+    async def 조각교환(self, interaction: discord.Interaction, 조각: app_commands.Choice[str]):
+        target_piece = 조각.value
+        all_pieces = ["찢어진 지도 조각 A 🧩", "찢어진 지도 조각 B 🧩", "찢어진 지도 조각 C 🧩", "찢어진 지도 조각 D 🧩"]
+        
+        async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, target_piece)) as cursor:
+            res = await cursor.fetchone()
+        
+        current = res[0] if res else 0
+        if current < 3:
+            return await interaction.response.send_message(f"❌ **{target_piece}**가 3개 이상 필요합니다. (보유: {current}개)", ephemeral=True)
+            
+        reward_pieces = [p for p in all_pieces if p != target_piece]
+        reward_piece = random.choice(reward_pieces)
+        
+        await db.execute("UPDATE inventory SET amount = amount - 3 WHERE user_id=? AND item_name=?", (interaction.user.id, target_piece))
+        await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id, reward_piece))
+        await db.commit()
+        
+        await interaction.response.send_message(f"♻️ 교환 성공! 낡은 교환원이 **{target_piece}** 3개를 받고 **{reward_piece}** 1개를 주었습니다!")
+
 async def setup(bot):
     await bot.add_cog(QuestCog(bot))

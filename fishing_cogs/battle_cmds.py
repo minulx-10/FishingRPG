@@ -68,6 +68,11 @@ class BattleCog(commands.Cog):
 
         await db.get_user_data(interaction.user.id)
         await db.get_user_data(상대.id)
+        
+        async with db.conn.execute("SELECT peace_mode FROM user_data WHERE user_id=?", (상대.id,)) as cursor:
+            res = await cursor.fetchone()
+        if res and res[0] == 1:
+            return await interaction.response.send_message(f"❌ '{상대.name}'님은 현재 **평화 모드** 🕊️ 상태입니다. (약탈 불가)", ephemeral=True)
 
         async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (interaction.user.id,)) as cursor:
             items1 = await cursor.fetchall()
@@ -79,29 +84,47 @@ class BattleCog(commands.Cog):
         if not items2:
             return await interaction.response.send_message(f"❌ 상대방({상대.name})의 잠금 목록이 비어있어 약탈할 수 없습니다!", ephemeral=True)
 
-        def get_best_fish(items):
-            best = None
-            max_p = -1
+        def get_top3_fish(items):
+            fish_list = []
             for (name,) in items:
                 p = 99999 if name == "용왕 👑" else FISH_DATA.get(name, {}).get("power", -1)
-                if p > max_p:
-                    max_p = p
-                    best = name
-            return best, max_p
+                if p > 0:
+                    fish_list.append((name, p))
+            fish_list.sort(key=lambda x: x[1], reverse=True)
+            return fish_list[:3]
 
-        p1_fish, p1_p = get_best_fish(items1)
-        p2_fish, p2_p = get_best_fish(items2)
+        p1_deck = get_top3_fish(items1)
+        p2_deck = get_top3_fish(items2)
         
-        if p1_p == -1: return await interaction.response.send_message("❌ 내 잠금 목록에 출전 가능한 유효한 물고기가 없습니다!", ephemeral=True)
-        if p2_p == -1: return await interaction.response.send_message(f"❌ 상대방({상대.name})에게 유효한 배틀 물고기가 없어 약탈할 수 없습니다!", ephemeral=True)
+        if not p1_deck: return await interaction.response.send_message("❌ 내 잠금 목록에 출전 가능한 유효한 물고기가 없습니다!", ephemeral=True)
+        if not p2_deck: return await interaction.response.send_message(f"❌ 상대방({상대.name})에게 유효한 배틀 물고기가 없어 약탈할 수 없습니다!", ephemeral=True)
 
-        view = PvPBattleView(interaction.user, 상대, p1_fish, p2_fish)
+        # 현재 뷰(View)가 단일 개체 출전(p1_fish, p2_fish)만 지원하므로,
+        # 향후 뷰를 3v3 용으로 개편하기 전까지는 각 덱의 첫 번째(에이스)로 출전시킵니다.
+        p1_fish_name = p1_deck[0][0]
+        p2_fish_name = p2_deck[0][0]
+
+        view = PvPBattleView(interaction.user, 상대, p1_fish_name, p2_fish_name)
         
         await interaction.response.send_message(
             f"⚔️ {상대.mention}! **{interaction.user.name}**님이 수산대전을 걸어왔습니다!\n(방어하지 못하면 코인과 RP를 약탈당합니다!)", 
             embed=view.generate_embed(), 
             view=view
         )
+
+    @app_commands.command(name="평화모드", description="수산대전(PvP) 약탈을 거부하는 평화 모드를 켜거나 끕니다.")
+    async def 평화모드(self, interaction: discord.Interaction):
+        async with db.conn.execute("SELECT peace_mode FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+            res = await cursor.fetchone()
+        
+        current_mode = res[0] if res else 0
+        new_mode = 1 if current_mode == 0 else 0
+        status_text = "켜졌습니다 🕊️ (이제 다른 유저가 나를 약탈할 수 없습니다)" if new_mode == 1 else "꺼졌습니다 ⚔️ (이제 다른 유저와 PvP 전투가 가능합니다)"
+        
+        await db.execute("UPDATE user_data SET peace_mode=? WHERE user_id=?", (new_mode, interaction.user.id))
+        await db.commit()
+        
+        await interaction.response.send_message(f"✅ 평화 모드가 **{status_text}**")
 
 async def setup(bot):
     await bot.add_cog(BattleCog(bot))
