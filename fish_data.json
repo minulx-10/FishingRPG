@@ -1,5 +1,4 @@
 FISH_DATA = {
-    # ================= [ 일반 ~ 에픽 등급 (표층) ] =================
     "낡은 장화 🥾": {"grade": "일반", "prob": 100, "base_window": 3.5, "price": 5, "power": 1, "element": "무속성"},
     "전어 🐟": {"grade": "일반", "prob": 60, "base_window": 3.0, "price": 30, "power": 3, "element": "표층"},
     "멸치 🐟": {"grade": "일반", "prob": 60, "base_window": 3.0, "price": 20, "power": 2, "element": "표층"},
@@ -34,7 +33,6 @@ FISH_DATA = {
     "귀상어 🦈": {"grade": "에픽", "prob": 3, "base_window": 1.4, "price": 3100, "power": 105, "element": "표층"},
     "쥐상어 🦈": {"grade": "에픽", "prob": 4, "base_window": 1.5, "price": 2800, "power": 95, "element": "표층"},
 
-    # ================= [ 일반 ~ 에픽 등급 (암초) ] =================
     "쥐노래미 🐠": {"grade": "일반", "prob": 55, "base_window": 2.8, "price": 45, "power": 5, "element": "암초"},
     "쏨뱅이 🐠": {"grade": "일반", "prob": 55, "base_window": 2.8, "price": 40, "power": 4, "element": "암초"},
     "볼락 🐠": {"grade": "일반", "prob": 50, "base_window": 2.8, "price": 50, "power": 6, "element": "암초"},
@@ -72,7 +70,6 @@ FISH_DATA = {
     "혹돔 🐠": {"grade": "에픽", "prob": 4, "base_window": 1.5, "price": 3000, "power": 100, "element": "암초"},
     "돌가자미 🐠": {"grade": "에픽", "prob": 5, "base_window": 1.6, "price": 2500, "power": 90, "element": "암초"},
 
-    # ================= [ 일반 ~ 에픽 등급 (심해) ] =================
     "초롱아귀 🐟": {"grade": "희귀", "prob": 20, "base_window": 2.3, "price": 400, "power": 35, "element": "심해"},
     "은상어 🦈": {"grade": "희귀", "prob": 18, "base_window": 2.2, "price": 450, "power": 40, "element": "심해"},
     "랜턴피쉬 🐟": {"grade": "희귀", "prob": 22, "base_window": 2.4, "price": 300, "power": 25, "element": "심해"},
@@ -95,7 +92,6 @@ FISH_DATA = {
     "꼼치 🐟": {"grade": "에픽", "prob": 5, "base_window": 1.6, "price": 2800, "power": 80, "element": "심해"},
     "메가마우스상어 🦈": {"grade": "에픽", "prob": 3, "base_window": 1.4, "price": 4200, "power": 135, "element": "심해"},
 
-    # ================= [ 일반 ~ 에픽 등급 (무속성) ] =================
     "잉어 🐟": {"grade": "일반", "prob": 50, "base_window": 2.8, "price": 30, "power": 5, "element": "무속성"},
     "붕어 🐟": {"grade": "일반", "prob": 55, "base_window": 2.8, "price": 25, "power": 4, "element": "무속성"},
     "떡붕어 🐟": {"grade": "일반", "prob": 55, "base_window": 2.8, "price": 25, "power": 4, "element": "무속성"},
@@ -113,11 +109,9 @@ FISH_DATA = {
     "철갑상어 🦈": {"grade": "초희귀", "prob": 5, "base_window": 1.6, "price": 2000, "power": 90, "element": "무속성"},
     "민물장어 (뱀장어) 🐍": {"grade": "초희귀", "prob": 10, "base_window": 1.9, "price": 1000, "power": 50, "element": "무속성"},
 
-    # ================= [ 레전드 및 특수 하위 등급 ] =================
     "내가 참치로 보이니? (멸치) 🐟": {"grade": "레전드", "prob": 5, "base_window": 1.5, "price": 1, "power": 1, "element": "무속성"},
     "심해의 용궁 가디언 🐉": {"grade": "레전드", "prob": 0.5, "base_window": 1.3, "price": 15000, "power": 400, "element": "심해"},
     
-   # ================= [ 태고 등급 ] =================
     "메갈로돈 🦈": {
         "grade": "태고", "prob": 0.2, "base_window": 1.1, "price": 30000, "power": 600, "element": "무속성",
         "description": "길이 20m, 이빨 하나가 사람 손바닥만 한 역사상 가장 거대한 상어.",
@@ -134,7 +128,6 @@ FISH_DATA = {
         "skill": "[정점의 위협] 도감에 등록되면, 이후 다른 유저의 배틀 도전을 일정 확률로 알아서 튕겨내는(위협) 패시브 효과를 줍니다."
     },
 
-    # ================= [ 환상 등급 ] =================
     "바다의 파괴자, 루스카 🐙": {
         "grade": "환상", "prob": 0.1, "base_window": 1.0, "price": 35000, "power": 650, "element": "심해",
         "description": "카리브해 블루홀에 산다는 반은 상어, 반은 거대 문어인 끔찍한 키메라.",
@@ -151,7 +144,7 @@ FISH_DATA = {
         "skill": "[무자비한 포식] 배틀에 출전시키면 6번 연속 공격을 가하는 사기적인 다단 히트 스킬을 가집니다."
     },
 
-    # ================= [ 미스터리 등급 ] =================
+
     "네스호의 그림자, 네시 🦕": {
         "grade": "미스터리", "prob": 0.05, "base_window": 0.9, "price": 50000, "power": 800, "element": "무속성",
         "description": "안개 낀 호수에서 목격되는 긴 목을 가진 미확인 수장룡.",
@@ -168,14 +161,14 @@ FISH_DATA = {
         "skill": "[불쾌한 골짜기] 낚시 성공 메시지에 물고기 사진 대신 기괴하게 웃는 이모티콘만 텍스트로 출력되어 유저들을 소름 돋게 만듭니다."
     },
 
-    # ================= [ 해신 등급 ] =================
+   
     "용왕 🐉👑": {
         "grade": "해신(海神)", "prob": 0.001, "base_window": 0.4, "price": 10000000, "power": 99999, "element": "무속성",
         "description": "바다의 모든 생물을 다스리는 수중 궁전의 지배자.",
         "skill": "[해신의 권능] 낚은 유저는 [서버의 바다 날씨를 바꿀 권한] 또는 [다른 유저들의 낚시 성공 확률을 1시간 동안 올려주는 버프 발동 권한] 등 게임 마스터(GM)에 준하는 특권을 일회성으로 얻게 됩니다."
     },
 
-    # ================= [ 신화 등급 ] =================
+    
     "심연의 지배자, 레비아탄 🌋": {
         "grade": "신화", "prob": 0.01, "base_window": 0.7, "price": 300000, "power": 2000, "element": "심해",
         "description": "바다 그 자체를 상징하는 성서 속의 거대 괴수. 입에서 불을 뿜고 바다를 끓어오르게 합니다.",
@@ -236,7 +229,7 @@ FISH_DATA = {
         "description": "북해 가장 깊은 곳에 잠든 거대 빙하 괴수. 숨을 내뱉을 때마다 주변 바다를 얼려버리며, 그가 깨어나는 날은 세상에 빙하기가 찾아옵니다.",
         "skill": "[절대 영도] 배틀 시작과 동시에 상대방의 스피드와 특수 스킬을 완전히 봉인하여 무력화시킵니다."
     }
-    # ================= [ 히든 및 기타 잡동사니 ] =================
+    
     "💎 GSM 황금 키보드": {"grade": "히든", "prob": 0.001, "base_window": 0.5, "price": 500000, "power": 9999, "element": "무속성"},
     "낡은 고철 ⚙️": {"grade": "일반", "prob": 100, "base_window": 3.0, "price": 10, "power": 0, "element": "무속성"},
     "해적의 금화 🪙": {"grade": "희귀", "prob": 20, "base_window": 2.0, "price": 1000, "power": 0, "element": "무속성"},
