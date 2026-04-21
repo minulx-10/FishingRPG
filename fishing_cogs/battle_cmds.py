@@ -26,12 +26,15 @@ class BattleCog(commands.Cog):
         my_best_fish = None
         max_power = -1
         for (name,) in items:
-            power = FISH_DATA[name]["power"]
+            power = 99999 if name == "용왕 👑" else FISH_DATA.get(name, {}).get("power", -1)
             if power > max_power:
                 max_power = power
                 my_best_fish = name
                 
-        npc_pool = [name for name, data in FISH_DATA.items() if data["grade"] != "히든"]
+        if max_power == -1 or not my_best_fish:
+            return await interaction.response.send_message("❌ 배틀에 출전할 유효한 물고기가 없습니다! (통에 일반 아이템만 존재합니다)", ephemeral=True)
+                
+        npc_pool = [name for name, data in FISH_DATA.items() if data.get("grade") != "히든"]
         npc_fish = random.choice(npc_pool)
         
         view = BattleView(interaction.user, my_best_fish, npc_fish)
@@ -45,7 +48,10 @@ class BattleCog(commands.Cog):
         
         embed = discord.Embed(title=f"🪣 {target.name}의 통 (배틀 대기조)", color=0x2ecc71)
         if items:
-            item_list = "\n".join([f"• {name}: {amt}마리 (전투력: {FISH_DATA[name]['power']}⚡)" for name, amt in items])
+            item_list = ""
+            for name, amt in items:
+                power = 99999 if name == "용왕 👑" else FISH_DATA.get(name, {}).get("power", 0)
+                item_list += f"• {name}: {amt}마리 (전투력: {power}⚡)\n"
             embed.add_field(name="출전 가능한 물고기", value=item_list, inline=False)
         else:
             embed.add_field(name="텅 비었습니다...", value="낚시 성공 후 '통에 보관'을 누르거나 `/통보관`을 사용하세요.", inline=False)
@@ -55,6 +61,8 @@ class BattleCog(commands.Cog):
     @app_commands.autocomplete(물고기=inv_autocomplete)
     async def 통보관(self, interaction: discord.Interaction, 물고기: str, 수량: int = 1):
         if 수량 <= 0: return await interaction.response.send_message("❌ 수량은 1 이상이어야 합니다.", ephemeral=True)
+        if 물고기 not in FISH_DATA and 물고기 != "용왕 👑":
+            return await interaction.response.send_message(f"❌ **{물고기}**는 배틀에 출전할 수 없는 아이템입니다!", ephemeral=True)
         
         async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기)) as cursor:
             res = await cursor.fetchone()
@@ -105,14 +113,17 @@ class BattleCog(commands.Cog):
             best = None
             max_p = -1
             for (name,) in items:
-                p = FISH_DATA[name]["power"]
+                p = 99999 if name == "용왕 👑" else FISH_DATA.get(name, {}).get("power", -1)
                 if p > max_p:
                     max_p = p
                     best = name
-            return best
+            return best, max_p
 
-        p1_fish = get_best_fish(items1)
-        p2_fish = get_best_fish(items2)
+        p1_fish, p1_p = get_best_fish(items1)
+        p2_fish, p2_p = get_best_fish(items2)
+        
+        if p1_p == -1: return await interaction.response.send_message("❌ 내 통에 출전 가능한 유효한 물고기가 없습니다!", ephemeral=True)
+        if p2_p == -1: return await interaction.response.send_message(f"❌ 상대방({상대.name})의 통에 유효한 물고기가 없어 약탈할 수 없습니다!", ephemeral=True)
 
         view = PvPBattleView(interaction.user, 상대, p1_fish, p2_fish)
         
