@@ -60,15 +60,18 @@ class EventCog(commands.Cog):
         await db.execute("UPDATE market_sales SET amount_sold = 0")
         
         # 행동력(체력) 10분마다 자연 회복 (최대치 초과 방지)
+        now_hour = datetime.datetime.now(kst).hour
+        stamina_regen = 5 if 0 <= now_hour < 8 else 15  # 밤/새벽 시간대는 자연 회복률 1/3 토막
+        
         try:
-            await db.execute("UPDATE user_data SET stamina = stamina + 15 WHERE stamina < max_stamina")
+            await db.execute(f"UPDATE user_data SET stamina = stamina + {stamina_regen} WHERE stamina < max_stamina")
             await db.execute("UPDATE user_data SET stamina = max_stamina WHERE stamina > max_stamina")
         except:
             pass
             
         await db.commit()
         
-        print(f"[{datetime.datetime.now(kst).strftime('%H:%M')}] 📈 시세 변경 및 전 유저 체력 15⚡ 회복 완료.")
+        print(f"[{datetime.datetime.now(kst).strftime('%H:%M')}] 📈 시세 변경 및 전 유저 체력 {stamina_regen}⚡ 회복 완료.")
 
     @market_update_loop.before_loop
     async def before_market(self):

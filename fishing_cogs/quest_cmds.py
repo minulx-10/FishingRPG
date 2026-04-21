@@ -146,8 +146,15 @@ class QuestCog(commands.Cog):
             end_time_str = end_time.strftime('%Y-%m-%d %H:%M:%S')
             
             if 선택 == "복어 지리탕 🍲" and random.random() < 0.1:
-                await db.execute("UPDATE user_data SET coins = MAX(0, coins - 5000) WHERE user_id=?", (interaction.user.id,))
-                msg = "🤢 **아야!** 복어 독에 당했습니다... 해독비로 `5,000C`를 썼지만, 버프는 적용되었습니다."
+                async with db.conn.execute("SELECT coins FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+                    c_coins = (await cursor.fetchone())[0]
+                
+                if c_coins < 5000:
+                    await db.execute("UPDATE user_data SET stamina = 0 WHERE user_id=?", (interaction.user.id,))
+                    msg = "🤢 **독극물 중독!!** 복어 독에 쓰러졌습니다... 병원비조차 없어 바닥에 쓰러져 기절합니다! (체력 0 초기화)\n*버프는 적용되었습니다.*"
+                else:
+                    await db.execute("UPDATE user_data SET coins = coins - 5000 WHERE user_id=?", (interaction.user.id,))
+                    msg = "🤢 **아야!** 복어 독에 당했습니다... 해독비로 `5,000C`를 썼지만, 버프는 적용되었습니다."
             else:
                 msg = f"😋 **{선택}**을(를) 맛있게 먹었습니다!\n**효과:** {recipe['description']}"
             
@@ -330,6 +337,12 @@ class QuestCog(commands.Cog):
 
         await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name='가라앉은 보물상자 🧰'", (interaction.user.id,))
         await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id=?", (fee, interaction.user.id))
+        await db.commit()
+
+        await interaction.response.send_message("🧰 녹슨 상자의 자물쇠에 열쇠를 꽂고 강하게 비틀고 있습니다...")
+        await asyncio.sleep(2.0)
+        await interaction.edit_original_response(content="🧰 *덜컹...* 굳게 닫혀있던 자물쇠가 풀리며 먼지가 일어납니다!")
+        await asyncio.sleep(1.5)
         
         rand = random.random()
         if rand < 0.4: 
@@ -344,37 +357,40 @@ class QuestCog(commands.Cog):
         elif rand < 0.98: 
             reward_item = "해적의 금화 🪙"
             reward_amt = random.randint(15, 30) 
-            reward_msg = f"🎉 잭팟!! 고대 해적의 유물인 **{reward_item}** {reward_amt}개를 무더기로 발견했습니다!"
+            reward_msg = f"🎉 **잭팟!!** 고대 해적의 유물인 **{reward_item}** {reward_amt}개를 무더기로 발견했습니다!"
             await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, ?) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?", (interaction.user.id, reward_item, reward_amt, reward_amt))
             
         else: 
             reward_item = "💎 GSM 황금 키보드"
             reward_coin = 100000
-            reward_msg = f"🚨 **[기적]** 상자 밑바닥에서 엄청난 빛이 뿜어져 나옵니다!!!\n**`{reward_coin:,} C`**와 함께 전설의 **{reward_item}**를 얻었습니다!"
+            reward_msg = f"🚨 **[기적] 상자 밑바닥에서 엄청난 빛이 뿜어져 나옵니다!!!**\n**`{reward_coin:,} C`**와 함께 전설의 아이템 **{reward_item}**를 손에 넣었습니다!"
             await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id=?", (reward_coin, interaction.user.id))
             await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id, reward_item))
             
         await db.commit()
-        await interaction.response.send_message(f"🧰 덜컹... 자물쇠를 부수고 상자를 열었습니다.\n\n{reward_msg}")
+        await interaction.edit_original_response(content=f"🧰 **녹슨 상자가 마침내 열렸습니다!**\n\n{reward_msg}")
 
     @app_commands.command(name="지도합성", description="가방에 있는 찢어진 지도 조각(A, B, C, D)을 모아 '고대 해적의 보물지도'를 완성합니다.")
-    async def 지도합성(self, interaction: discord.Interaction):
+    async def 지도합성(self, interaction: discord.Interaction, 수량: int = 1):
+        if 수량 < 1:
+            return await interaction.response.send_message("❌ 최소 1개 이상 합성해야 합니다.", ephemeral=True)
+            
         pieces = ["찢어진 지도 조각 A 🧩", "찢어진 지도 조각 B 🧩", "찢어진 지도 조각 C 🧩", "찢어진 지도 조각 D 🧩"]
         
         async with db.conn.execute("SELECT item_name, amount FROM inventory WHERE user_id=? AND amount > 0", (interaction.user.id,)) as cursor:
             inv_items = {row[0]: row[1] for row in await cursor.fetchall()}
             
         for p in pieces:
-            if inv_items.get(p, 0) < 1:
-                return await interaction.response.send_message(f"❌ 조각이 부족합니다!\n(부족한 부위: **{p}**)\n낚시를 통해 4부위를 모두 모아보세요.", ephemeral=True)
+            if inv_items.get(p, 0) < 수량:
+                return await interaction.response.send_message(f"❌ 조각이 부족합니다!\n(달성 불가: **{p}**가 {수량}개 필요하지만 {inv_items.get(p, 0)}개 있음)\n낚시를 통해 4부위를 모두 모아보세요.", ephemeral=True)
 
         for p in pieces:
-            await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (interaction.user.id, p))
+            await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name=?", (수량, interaction.user.id, p))
         
-        await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id, "고대 해적의 보물지도 🗺️"))
+        await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, ?) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?", (interaction.user.id, "고대 해적의 보물지도 🗺️", 수량, 수량))
         await db.commit()
         
-        embed = discord.Embed(title="🗺️ 보물지도 합성 성공!", description="4개의 조각을 이어 붙여 **고대 해적의 보물지도 🗺️**를 완성했습니다!\n`/지도사용` 명령어를 통해 망자의 해역으로 떠나보세요.", color=0xf1c40f)
+        embed = discord.Embed(title=f"🗺️ 보물지도 {수량}장 합성 성공!", description=f"보유 중인 조각들을 이어 붙여 **고대 해적의 보물지도 🗺️** {수량}장을 대량으로 완성했습니다!\n`/지도사용` 명령어를 통해 망자의 해역으로 떠나보세요.", color=0xf1c40f)
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="지도사용", description="'고대 해적의 보물지도'를 사용하여 특별한 해역 버프(30분)를 개방합니다.")
