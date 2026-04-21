@@ -58,9 +58,17 @@ class EventCog(commands.Cog):
             MARKET_PRICES[fish] = max(int(base_price * 0.1), new_price)
             
         await db.execute("UPDATE market_sales SET amount_sold = 0")
+        
+        # 행동력(체력) 10분마다 자연 회복 (최대치 초과 방지)
+        try:
+            await db.execute("UPDATE user_data SET stamina = stamina + 15 WHERE stamina < max_stamina")
+            await db.execute("UPDATE user_data SET stamina = max_stamina WHERE stamina > max_stamina")
+        except:
+            pass
+            
         await db.commit()
         
-        print(f"[{datetime.datetime.now(kst).strftime('%H:%M')}] 📈 수산시장 시세가 실제 거래량(실물 경제) 기반으로 갱신되었습니다!")
+        print(f"[{datetime.datetime.now(kst).strftime('%H:%M')}] 📈 시세 변경 및 전 유저 체력 15⚡ 회복 완료.")
 
     @market_update_loop.before_loop
     async def before_market(self):

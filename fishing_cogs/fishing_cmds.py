@@ -144,7 +144,33 @@ class FishingCog(commands.Cog):
             embed.add_field(name="🐟 물고기 도감", value=item_list, inline=False)
         else:
             embed.add_field(name="🐟 물고기 도감", value="텅 비었습니다...", inline=False)
+            
+        async with db.conn.execute("SELECT stamina, max_stamina FROM user_data WHERE user_id=?", (target.id,)) as cursor:
+            stamina_res = await cursor.fetchone()
+        stamina, max_stamina = stamina_res if stamina_res else (100, 100)
+        embed.set_footer(text=f"⚡ 남은 체력: {stamina} / {max_stamina}")
+        
         await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="휴식", description="여관에서 3,000 코인을 지불하고 행동력(체력)을 즉시 전부 회복합니다.")
+    async def 휴식(self, interaction: discord.Interaction):
+        coins, _, _ = await db.get_user_data(interaction.user.id)
+        
+        async with db.conn.execute("SELECT stamina, max_stamina FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+            res = await cursor.fetchone()
+        stamina, max_stamina = res if res else (100, 100)
+        
+        if stamina >= max_stamina:
+            return await interaction.response.send_message("✨ 체력이 이미 가득 차 있습니다! 휴식이 필요하지 않습니다.", ephemeral=True)
+            
+        cost = 3000
+        if coins < cost:
+            return await interaction.response.send_message(f"❌ 코인이 부족합니다. (필요: `{cost:,} C` / 현재: `{coins:,} C`)\n💡 시간이 지나면 10분마다 15씩 지속적으로 자연 회복됩니다.", ephemeral=True)
+            
+        await db.execute("UPDATE user_data SET coins = coins - ?, stamina = max_stamina WHERE user_id=?", (cost, interaction.user.id))
+        await db.commit()
+        
+        await interaction.response.send_message(f"🛌 `{cost:,} C`를 지불하고 여관에서 푹 쉬었습니다! (체력 {max_stamina}⚡ 전부 회복 완료)")
 
     @app_commands.command(name="바다", description="현재 바다의 시간대와 날씨 환경을 확인합니다.")
     async def 바다(self, interaction: discord.Interaction):
