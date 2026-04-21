@@ -22,11 +22,19 @@ def load_recipes():
         with open('recipes.json', 'r', encoding='utf-8') as f:
             return json.load(f)
     except FileNotFoundError:
-        print("❌ 오류: recipes.json 파일이 없습니다!")
+        return {}
+
+def load_special_fish_data():
+    try:
+        with open('special_fish.json', 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
         return {}
 
 FISH_DATA = load_fish_data()
-MARKET_PRICES = {fish: data["price"] for fish, data in FISH_DATA.items()}
+FISH_DATA.update(load_special_fish_data())
+
+MARKET_PRICES = {fish: data["price"] for fish, data in FISH_DATA.items() if "price" in data}
 RECIPES = load_recipes()
 
 WEATHER_TYPES = ["☀️ 맑음", "☁️ 흐림", "🌧️ 비", "🌩️ 폭풍우", "🌫️ 안개"]
@@ -38,11 +46,13 @@ env_state = {
 def reload_data():
     """데이터 동기화: 기존 참조를 유지한 채 데이터만 덮어씌움"""
     new_fish = load_fish_data()
+    new_fish.update(load_special_fish_data())
+    
     FISH_DATA.clear()
     FISH_DATA.update(new_fish)
 
     MARKET_PRICES.clear()
-    MARKET_PRICES.update({fish: data["price"] for fish, data in FISH_DATA.items()})
+    MARKET_PRICES.update({fish: data["price"] for fish, data in FISH_DATA.items() if "price" in data})
 
     new_recipes = load_recipes()
     RECIPES.clear()
