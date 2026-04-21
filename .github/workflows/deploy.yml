@@ -20,5 +20,6 @@ jobs:
           port: 24111
           script: |
             cd /home/ubuntu/discord_bot
+            sed -i 's/fishing_rpg.py/fishing_main.py/g' deploy.sh
             chmod +x deploy.sh
             ./deploy.sh
