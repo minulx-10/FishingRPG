@@ -623,6 +623,48 @@ class MarketPaginationView(View):
         else:
             await interaction.response.defer()
 
+class DragonKingBlessingView(View):
+    def __init__(self):
+        super().__init__(timeout=300) # 5분간 유지
+        self.claimed_users = set()
+
+    @discord.ui.button(label="고개 조아리기", style=discord.ButtonStyle.success, emoji="🙇")
+    async def bow_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # 1. 유저 정보 확인 및 생성
+        await get_user_data(interaction.user.id)
+        
+        if interaction.user.id in self.claimed_users:
+            return await interaction.response.send_message("👑 용왕님: \"이미 축복을 내렸느니라. 과한 욕심은 화를 부르는 법이지.\"", ephemeral=True)
+
+        self.claimed_users.add(interaction.user.id)
+
+        # 2. 확률형 코인 지급 로직
+        rand_val = random.randint(1, 1000)
+
+        if rand_val == 1: # 0.1% 확률: 50만 코인 (잭팟)
+            bonus_coin = 500000
+            msg = "👑 **[전설적인 축복]** 용왕이 당신을 보며 파안대소합니다!\n"
+            msg += f"💰 `{bonus_coin:,} C`를 하사받았습니다!\n\n"
+            msg += "*\"허허, 마음에 쏙 드는구나! 혹시... 육지에 두고 왔다는 그 간도 나에게 줄 수 있겠느냐?\"*"
+
+        elif rand_val <= 30: # 3% 확률: 10만 ~ 49.9만
+            bonus_coin = random.randint(100000, 499999)
+            msg = f"✨ **[특별한 시선]** 용왕이 당신을 눈여겨봅니다...\n💰 `{bonus_coin:,} C`를 하사받았습니다!"
+
+        elif rand_val <= 200: # 17% 확률: 1만 ~ 9.9만
+            bonus_coin = random.randint(10000, 99999)
+            msg = f"🌊 용왕이 당신을 더욱 축복합니다.\n💰 `{bonus_coin:,} C`를 하사받았습니다."
+
+        else: # 80% 확률: 500 ~ 9,999
+            bonus_coin = random.randint(500, 9999)
+            msg = f"🐢 용왕의 소소한 축복이 닿았습니다.\n💰 `{bonus_coin:,} C`를 획득했습니다."
+
+        # 3. DB에 코인 지급
+        await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (bonus_coin, interaction.user.id))
+        await db.commit()
+
+        await interaction.response.send_message(msg, ephemeral=True)
+
 # ==========================================
 # 5. 슬래시 명령어 (Slash Commands)
 # ==========================================
@@ -1428,6 +1470,53 @@ async def 감정(interaction: discord.Interaction):
         
     await db.commit()
     await interaction.response.send_message(f"🧰 덜컹... 자물쇠를 부수고 상자를 열었습니다.\n\n{reward_msg}")
+
+# ==========================================
+# 🌟 [신규] 용왕 기도 시스템 (가챠)
+# ==========================================
+@bot.tree.command(name="기도", description="심해의 지배자, 용왕님께 기도를 올립니다. (0.05% 확률로 강림!)")
+@app_commands.checks.cooldown(1, 60.0, key=lambda i: i.user.id) # 도배 방지: 1분마다 1번만 가능
+async def 기도(interaction: discord.Interaction):
+    # 0.05% 확률 계산
+    success_chance = 0.0005
+    is_success = random.random() < success_chance
+
+    if is_success:
+        # --- [성공 : 해신 강림 연출] ---
+        await interaction.response.send_message("🌊 심해에서 알 수 없는 거대한 진동이 시작됩니다...", ephemeral=True)
+        await asyncio.sleep(3) 
+
+        # 전 서버 알림 임베드
+        alert_embed = discord.Embed(
+            title="👑 [海神降臨 : 해신 강림] 찬란한 수궁의 문이 열렸습니다!",
+            description=f"{interaction.user.mention}님의 지극한 정성에 수궁의 주인이 응답하셨습니다.\n\n바다의 절대자, **용왕 👑🐉**께서 스스로 강림하여 당신을 선택하셨으니...\n\n**모두 고개를 조아리십시오... 위대한 용왕을 맞이할 시간입니다.**",
+            color=0xffd700
+        )
+        alert_embed.set_footer(text="바다의 모든 피조물들이 일제히 숨을 죽이고 고개를 조아립니다...")
+
+        # 현재 낚시가 진행되는 채널 전체에 알림 및 축복 뷰 전송
+        await interaction.channel.send(content="@here", embed=alert_embed, view=DragonKingBlessingView())
+
+        # 기도 성공한 유저에게 확정으로 용왕 물고기 지급 (도감 및 인벤토리)
+        await db.execute("INSERT OR IGNORE INTO fish_dex (user_id, item_name) VALUES (?, ?)", (interaction.user.id, "용왕 👑"))
+        await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id, "용왕 👑"))
+        await db.commit()
+
+    else:
+        # --- [실패 : 고요한 바다] ---
+        fail_messages = [
+            "수면 위로 잔잔한 파도만이 일렁입니다.",
+            "바다는 대답이 없습니다. 기도가 부족한 듯합니다.",
+            "먼바다에서 전어 한 마리가 튀어 오르는 소리만 들려옵니다.",
+            "아직은 때가 아닌 듯합니다. 용왕님은 침묵을 지키고 계십니다."
+        ]
+        await interaction.response.send_message(f"✨ {random.choice(fail_messages)}")
+
+# 기도 명령어 쿨타임 에러 처리 (기존 on_app_command_error 에러 핸들러가 있다면 거기에 합쳐주세요)
+@기도.error
+async def 기도_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.CommandOnCooldown):
+        await interaction.response.send_message(f"🙏 기도는 정성이 중요합니다. `{error.retry_after:.0f}초` 후에 다시 기도를 올려주세요.", ephemeral=True)
 
 # ==========================================
 # 6. 관리자 전용 직권 명령어 (어뷰징 관리, 이벤트용)
