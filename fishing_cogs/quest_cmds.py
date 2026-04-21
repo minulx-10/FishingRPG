@@ -1,0 +1,379 @@
+import discord
+from discord.ext import commands
+from discord import app_commands
+import random
+import datetime
+import aiohttp
+import os
+import asyncio
+
+from fishing_core.database import db
+from fishing_core.shared import FISH_DATA, RECIPES, kst
+from fishing_core.utils import recipe_autocomplete, inv_autocomplete, aqua_autocomplete, check_boat_tier
+from fishing_core.views import QuestDeliveryView, DragonKingBlessingView
+
+class QuestCog(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    @app_commands.command(name="출석", description="하루에 한 번 출석체크하고 1000 코인을 받습니다!")
+    async def 출석(self, interaction: discord.Interaction):
+        await db.get_user_data(interaction.user.id) 
+        today = datetime.datetime.now(kst).strftime('%Y-%m-%d')
+        
+        async with db.conn.execute("SELECT last_daily FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+            last_daily = (await cursor.fetchone())[0]
+        
+        if last_daily == today:
+            return await interaction.response.send_message("❌ 오늘은 이미 출석하셨습니다! 내일 다시 와주세요.", ephemeral=True)
+        
+        reward = 1000
+        await db.execute("UPDATE user_data SET coins = coins + ?, last_daily = ? WHERE user_id = ?", (reward, today, interaction.user.id))
+        await db.commit()
+        
+        await interaction.response.send_message(f"✅ 출석 완료! 보상으로 `{reward} C`를 받았습니다. (잔액 확인: `/인벤토리`)")
+
+    @app_commands.command(name="도감", description="내가 지금까지 발견한 모든 물고기 기록과 수집률을 확인합니다.")
+    async def 도감(self, interaction: discord.Interaction):
+        async with db.conn.execute("SELECT item_name FROM fish_dex WHERE user_id=?", (interaction.user.id,)) as cursor:
+            dex_items = await cursor.fetchall()
+        
+        collected_names = [item[0] for item in dex_items]
+        total_fish = len(FISH_DATA)
+        collected_count = len(collected_names)
+        percent = (collected_count / total_fish) * 100
+        
+        if percent == 100: dex_rank = "👑 그랜드 마스터 앵글러"
+        elif percent >= 70: dex_rank = "🥇 엘리트 어류학자"
+        elif percent >= 50: dex_rank = "🥈 어류학자"
+        elif percent >= 30: dex_rank = "🥉 낚시계의 새싹"
+        elif percent >= 10: dex_rank = "🌱 낚시계의 떡잎"
+        else: dex_rank = "🥚 초보 낚시꾼"
+
+        embed = discord.Embed(title=f"📖 {interaction.user.name}님의 낚시 도감", color=0x9b59b6)
+        embed.add_field(name="현재 수집률", value=f"**{collected_count} / {total_fish} 종** (`{percent:.1f}%`)", inline=False)
+        embed.add_field(name="도감 등급", value=f"**{dex_rank}**", inline=False)
+        
+        if collected_names:
+            recent_fish = "\n".join([f"• {name}" for name in collected_names[-5:]]) 
+            embed.add_field(name="최근 발견한 어종", value=recent_fish, inline=False)
+        else:
+            embed.add_field(name="최근 발견한 어종", value="아직 발견한 물고기가 없습니다.", inline=False)
+            
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="한강물", description="모든 측정소의 한강 수온을 확인합니다. (우회 접속)")
+    async def 한강물(self, interaction: discord.Interaction):
+        await interaction.response.defer() 
+        
+        try:
+            api_key = os.getenv('SEOUL_API_KEY', 'sample')
+            proxy_url = "https://seoul-proxy.mingm7115.workers.dev" 
+            url = f"{proxy_url}/{api_key}/json/WPOSInformationTime/1/10/"
+            
+            timeout = aiohttp.ClientTimeout(total=15)
+            
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        
+                        if 'WPOSInformationTime' not in data:
+                            return await interaction.followup.send("❌ 데이터를 불러올 수 없습니다. API 키를 확인해주세요.")
+
+                        rows = data['WPOSInformationTime']['row']
+                        
+                        latest_data = {}
+                        for item in rows:
+                            site = item['MSRSTN_NM']
+                            if site not in latest_data:
+                                latest_data[site] = item
+                        
+                        embed = discord.Embed(title="🌊 한강 주요 지점 실시간 수온", color=0x00a8ff)
+                        
+                        operational_sites = 0
+                        for site, info in latest_data.items():
+                            temp = info['WATT']
+                            date = info['YMD']
+                            hour = info['HR']
+                            
+                            if temp == "점검중":
+                                temp_text = "🛠️ 점검 중"
+                            else:
+                                temp_text = f"**{temp}°C**"
+                                operational_sites += 1
+                            
+                            embed.add_field(name=f"📍 {site}", value=temp_text, inline=True)
+                        
+                        if operational_sites == 0:
+                            embed.description = "⚠️ 현재 모든 측정소가 점검 중입니다."
+                        else:
+                            embed.description = f"현재 {operational_sites}개 측정소가 정상 작동 중입니다. 🎣"
+                        
+                        first_date = rows[0]['YMD']
+                        first_hour = rows[0]['HR']
+                        embed.set_footer(text=f"측정 일시: {first_date[:4]}-{first_date[4:6]}-{first_date[6:8]} {first_hour}시 기준")
+                        
+                        await interaction.followup.send(embed=embed)
+                    else:
+                        await interaction.followup.send(f"❌ 서버 응답 오류: {response.status}")
+                        
+        except Exception as e:
+            await interaction.followup.send(f"❌ 연결 실패: 프록시 서버 또는 네트워크를 확인해주세요. (`{e}`)")
+        
+    @app_commands.command(name="요리", description="잡은 물고기로 요리를 만들어 버프를 얻거나 비싸게 팝니다.")
+    @app_commands.autocomplete(선택=recipe_autocomplete)
+    @check_boat_tier(2)
+    async def 요리(self, interaction: discord.Interaction, 선택: str):
+        recipe = RECIPES.get(선택)
+        if not recipe:
+            return await interaction.response.send_message("❌ 존재하지 않는 레시피입니다.", ephemeral=True)
+
+        for item, amt in recipe["ingredients"].items():
+            async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, item)) as cursor:
+                res = await cursor.fetchone()
+                if not res or res[0] < amt:
+                    return await interaction.response.send_message(f"❌ 재료가 부족합니다! (필요: `{item}` {amt}마리)", ephemeral=True)
+
+        for item, amt in recipe["ingredients"].items():
+            await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name=?", (amt, interaction.user.id, item))
+        
+        if recipe["buff_type"] == "sell_only":
+            await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id, 선택))
+            msg = f"👨‍🍳 **{선택}** 완성! 가방에 보관되었습니다. 시장에 비싸게 파세요!"
+        else:
+            end_time = datetime.datetime.now(kst) + datetime.timedelta(minutes=recipe["duration"])
+            end_time_str = end_time.strftime('%Y-%m-%d %H:%M:%S')
+            
+            if 선택 == "복어 지리탕 🍲" and random.random() < 0.1:
+                await db.execute("UPDATE user_data SET coins = MAX(0, coins - 5000) WHERE user_id=?", (interaction.user.id,))
+                msg = "🤢 **아야!** 복어 독에 당했습니다... 해독비로 `5,000C`를 썼지만, 버프는 적용되었습니다."
+            else:
+                msg = f"😋 **{선택}**을(를) 맛있게 먹었습니다!\n**효과:** {recipe['description']}"
+            
+            await db.execute("INSERT OR REPLACE INTO active_buffs (user_id, buff_type, end_time) VALUES (?, ?, ?)", 
+                             (interaction.user.id, recipe["buff_type"], end_time_str))
+        
+        await db.commit()
+        await interaction.response.send_message(msg)
+
+    @app_commands.command(name="의뢰", description="항구 게시판에서 오늘의 특별한 낚시 의뢰를 확인합니다.")
+    @check_boat_tier(2)
+    async def 의뢰(self, interaction: discord.Interaction):
+        await db.get_user_data(interaction.user.id)
+        today = datetime.datetime.now(kst).strftime('%Y-%m-%d')
+
+        async with db.conn.execute("SELECT quest_date, quest_item, quest_amount, quest_reward, quest_is_cleared FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+            res = await cursor.fetchone()
+            if not res:
+                res = ('', '', 0, 0, 0)
+            q_date, q_item, q_amount, q_reward, q_cleared = res
+
+        if q_date != today:
+            quest_pool = [fish for fish, data in FISH_DATA.items() if data["grade"] in ["일반", "희귀", "초희귀"]]
+            q_item = random.choice(quest_pool)
+            q_amount = random.randint(1, 3) 
+            q_reward = FISH_DATA[q_item]["price"] * q_amount * random.randint(3, 5)
+            q_cleared = 0
+            q_date = today
+
+            await db.execute("UPDATE user_data SET quest_date=?, quest_item=?, quest_amount=?, quest_reward=?, quest_is_cleared=0 WHERE user_id=?",
+                             (q_date, q_item, q_amount, q_reward, interaction.user.id))
+            await db.commit()
+
+        if q_cleared == 1:
+            embed = discord.Embed(title="📜 오늘의 항구 의뢰", description="오늘의 의뢰는 이미 완료했습니다!\n마을이 평화롭네요. 내일 다시 와주세요.", color=0x95a5a6)
+            return await interaction.response.send_message(embed=embed)
+
+        embed = discord.Embed(title="📜 오늘의 항구 의뢰", description="마을 촌장님이 급하게 생선을 찾고 있습니다!", color=0xe67e22)
+        embed.add_field(name="🎯 타겟 어종", value=f"**{q_item}**", inline=True)
+        embed.add_field(name="🔢 필요 수량", value=f"`{q_amount}마리`", inline=True)
+        embed.add_field(name="💰 납품 보상", value=f"`{q_reward:,} C`", inline=False)
+
+        async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, q_item)) as cursor:
+            res = await cursor.fetchone()
+        current = res[0] if res else 0
+
+        embed.set_footer(text=f"내 가방에 보유한 수량: {current} / {q_amount}")
+
+        view = QuestDeliveryView(interaction.user, q_item, q_amount, q_reward)
+        await interaction.response.send_message(embed=embed, view=view)
+
+    @app_commands.command(name="전시", description="가방에 있는 물고기를 수족관에 전시합니다. (최대 5마리)")
+    @app_commands.autocomplete(물고기=inv_autocomplete)
+    @check_boat_tier(3)
+    async def 전시(self, interaction: discord.Interaction, 물고기: str):
+        async with db.conn.execute("SELECT COUNT(*) FROM aquarium WHERE user_id=?", (interaction.user.id,)) as cursor:
+            count = (await cursor.fetchone())[0]
+        if count >= 5:
+            return await interaction.response.send_message("❌ 수족관이 꽉 찼습니다! (최대 5마리). `/전시해제`를 먼저 해주세요.", ephemeral=True)
+            
+        async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기)) as cursor:
+            res = await cursor.fetchone()
+        if not res or res[0] <= 0:
+            return await interaction.response.send_message(f"❌ 가방에 **{물고기}**가 없습니다!", ephemeral=True)
+            
+        await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기))
+        await db.execute("INSERT INTO aquarium (user_id, item_name) VALUES (?, ?)", (interaction.user.id, 물고기))
+        await db.commit()
+        
+        await interaction.response.send_message(f"✨ **{물고기}**을(를) 수족관에 멋지게 전시했습니다! (`/수족관`으로 확인해보세요!)")
+
+    @app_commands.command(name="전시해제", description="수족관에 전시된 물고기를 다시 가방으로 되돌립니다.")
+    @app_commands.autocomplete(물고기=aqua_autocomplete)
+    async def 전시해제(self, interaction: discord.Interaction, 물고기: str):
+        async with db.conn.execute("SELECT item_name FROM aquarium WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기)) as cursor:
+            res = await cursor.fetchone()
+        if not res:
+            return await interaction.response.send_message(f"❌ 수족관에 **{물고기}**가 없습니다!", ephemeral=True)
+            
+        await db.execute("DELETE FROM aquarium WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기))
+        await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id, 물고기))
+        await db.commit()
+        
+        await interaction.response.send_message(f"🎒 **{물고기}**을(를) 수족관에서 조심스럽게 꺼내 가방에 넣었습니다.")
+
+    @app_commands.command(name="수족관", description="나 또는 다른 유저의 수족관을 구경합니다.")
+    async def 수족관(self, interaction: discord.Interaction, 유저: discord.Member = None):
+        target = 유저 or interaction.user
+        async with db.conn.execute("SELECT item_name FROM aquarium WHERE user_id=?", (target.id,)) as cursor:
+            items = await cursor.fetchall()
+            
+        embed = discord.Embed(title=f"🏛️ {target.name}님의 수족관", color=0x00ffff)
+        if not items:
+            embed.description = "수족관이 텅 비어있습니다... 휑~ 🌬️"
+        else:
+            desc = ""
+            grade_emojis = {"일반": "⚪", "희귀": "🔵", "초희귀": "🟣", "에픽": "🔴", "레전드": "🟡", "신화": "🔥", "히든": "✨"}
+            
+            for (name,) in items:
+                grade = FISH_DATA[name]["grade"]
+                emoji = grade_emojis.get(grade, "🐟")
+                desc += f"{emoji} **{name}** `[{grade}]`\n\n"
+                
+            embed.description = desc
+            embed.set_footer(text="남들에게 자랑할 만한 희귀한 물고기를 수집해 보세요!")
+            
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="감정", description="코인을 지불하고 '가라앉은 보물상자 🧰'를 열어 대박을 노립니다!")
+    async def 감정(self, interaction: discord.Interaction):
+        fee = 2000 
+        coins, _, _ = await db.get_user_data(interaction.user.id)
+
+        async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name='가라앉은 보물상자 🧰'", (interaction.user.id,)) as cursor:
+            res = await cursor.fetchone()
+        
+        if not res or res[0] <= 0:
+            return await interaction.response.send_message("❌ 가방에 '가라앉은 보물상자 🧰'가 없습니다. (상점에서 자석 미끼를 사서 낚아보세요!)", ephemeral=True)
+            
+        if coins < fee:
+            return await interaction.response.send_message(f"❌ 감정 비용이 부족합니다. 열쇠공을 부르려면 `{fee} C`가 필요합니다.", ephemeral=True)
+
+        await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name='가라앉은 보물상자 🧰'", (interaction.user.id,))
+        await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id=?", (fee, interaction.user.id))
+        
+        rand = random.random()
+        if rand < 0.4: 
+            reward_msg = "아뿔싸... 텅 빈 상자였습니다. 바닥에 굴러다니는 **낡은 고철 ⚙️** (5개)만 주웠습니다."
+            await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 5) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 5", (interaction.user.id, "낡은 고철 ⚙️"))
+            
+        elif rand < 0.75: 
+            reward_coin = random.randint(20000, 40000) 
+            reward_msg = f"✨ 번쩍이는 금은보화가 가득합니다! 귀금속을 팔아 **`{reward_coin:,} C`**를 얻었습니다."
+            await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id=?", (reward_coin, interaction.user.id))
+            
+        elif rand < 0.98: 
+            reward_item = "해적의 금화 🪙"
+            reward_amt = random.randint(15, 30) 
+            reward_msg = f"🎉 잭팟!! 고대 해적의 유물인 **{reward_item}** {reward_amt}개를 무더기로 발견했습니다!"
+            await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, ?) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?", (interaction.user.id, reward_item, reward_amt, reward_amt))
+            
+        else: 
+            reward_item = "💎 GSM 황금 키보드"
+            reward_coin = 100000
+            reward_msg = f"🚨 **[기적]** 상자 밑바닥에서 엄청난 빛이 뿜어져 나옵니다!!!\n**`{reward_coin:,} C`**와 함께 전설의 **{reward_item}**를 얻었습니다!"
+            await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id=?", (reward_coin, interaction.user.id))
+            await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id, reward_item))
+            
+        await db.commit()
+        await interaction.response.send_message(f"🧰 덜컹... 자물쇠를 부수고 상자를 열었습니다.\n\n{reward_msg}")
+
+    @app_commands.command(name="지도합성", description="가방에 있는 찢어진 지도 조각(A, B, C, D)을 모아 '고대 해적의 보물지도'를 완성합니다.")
+    async def 지도합성(self, interaction: discord.Interaction):
+        pieces = ["찢어진 지도 조각 A 🧩", "찢어진 지도 조각 B 🧩", "찢어진 지도 조각 C 🧩", "찢어진 지도 조각 D 🧩"]
+        
+        async with db.conn.execute("SELECT item_name, amount FROM inventory WHERE user_id=? AND amount > 0", (interaction.user.id,)) as cursor:
+            inv_items = {row[0]: row[1] for row in await cursor.fetchall()}
+            
+        for p in pieces:
+            if inv_items.get(p, 0) < 1:
+                return await interaction.response.send_message(f"❌ 조각이 부족합니다!\n(부족한 부위: **{p}**)\n낚시를 통해 4부위를 모두 모아보세요.", ephemeral=True)
+
+        for p in pieces:
+            await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (interaction.user.id, p))
+        
+        await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id, "고대 해적의 보물지도 🗺️"))
+        await db.commit()
+        
+        embed = discord.Embed(title="🗺️ 보물지도 합성 성공!", description="4개의 조각을 이어 붙여 **고대 해적의 보물지도 🗺️**를 완성했습니다!\n`/지도사용` 명령어를 통해 망자의 해역으로 떠나보세요.", color=0xf1c40f)
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="지도사용", description="'고대 해적의 보물지도'를 사용하여 1시간 동안 금화만 낚이는 [망자의 해역]을 개방합니다.")
+    async def 지도사용(self, interaction: discord.Interaction):
+        async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name='고대 해적의 보물지도 🗺️'", (interaction.user.id,)) as cursor:
+            res = await cursor.fetchone()
+            
+        if not res or res[0] < 1:
+            return await interaction.response.send_message("❌ 가방에 **고대 해적의 보물지도 🗺️**가 없습니다!", ephemeral=True)
+
+        await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name='고대 해적의 보물지도 🗺️'", (interaction.user.id,))
+        
+        end_time = datetime.datetime.now(kst) + datetime.timedelta(hours=1)
+        end_time_str = end_time.strftime('%Y-%m-%d %H:%M:%S')
+        
+        await db.execute("INSERT OR REPLACE INTO active_buffs (user_id, buff_type, end_time) VALUES (?, ?, ?)", (interaction.user.id, "ghost_sea_open", end_time_str))
+        await db.commit()
+        
+        embed = discord.Embed(title="☠️ 망자의 해역 개방...", description="지도의 낡은 좌표를 따라 안개가 자욱한 해역에 도착했습니다.\n\n앞으로 **1시간 동안**, 당신의 낚싯대에는 물고기 대신 **금화와 보물상자**만 걸려 올라올 것입니다!", color=0x2c3e50)
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="기도", description="심해의 지배자, 용왕님께 기도를 올립니다. (0.05% 확률로 강림!)")
+    @app_commands.checks.cooldown(1, 60.0, key=lambda i: i.user.id)
+    async def 기도(self, interaction: discord.Interaction):
+        success_chance = 0.00005
+        is_success = random.random() < success_chance
+
+        if is_success:
+            await interaction.response.send_message("🌊 심해에서 알 수 없는 거대한 진동이 시작됩니다...", ephemeral=True)
+            await asyncio.sleep(3) 
+
+            alert_embed = discord.Embed(
+                title="👑 [海神降臨 : 해신 강림] 찬란한 수궁의 문이 열렸습니다!",
+                description=f"{interaction.user.mention}님의 지극한 정성에 수궁의 주인이 응답하셨습니다.\n\n바다의 절대자, **용왕 👑🐉**께서 스스로 강림하여 당신을 선택하셨으니...\n\n**모두 고개를 조아리십시오... 위대한 용왕을 맞이할 시간입니다.**",
+                color=0xffd700
+            )
+            alert_embed.set_footer(text="바다의 모든 피조물들이 일제히 숨을 죽이고 고개를 조아립니다...")
+
+            await interaction.channel.send(content="@here", embed=alert_embed, view=DragonKingBlessingView())
+
+            await db.execute("INSERT OR IGNORE INTO fish_dex (user_id, item_name) VALUES (?, ?)", (interaction.user.id, "용왕 👑"))
+            await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id, "용왕 👑"))
+            await db.commit()
+
+        else:
+            fail_messages = [
+                "수면 위로 잔잔한 파도만이 일렁입니다.",
+                "바다는 대답이 없습니다. 기도가 부족한 듯합니다.",
+                "먼바다에서 전어 한 마리가 튀어 오르는 소리만 들려옵니다.",
+                "아직은 때가 아닌 듯합니다. 용왕님은 침묵을 지키고 계십니다."
+            ]
+            await interaction.response.send_message(f"✨ {random.choice(fail_messages)}")
+
+    @기도.error
+    async def 기도_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        if isinstance(error, app_commands.CommandOnCooldown):
+            await interaction.response.send_message(f"🙏 기도는 정성이 중요합니다. `{error.retry_after:.0f}초` 후에 다시 기도를 올려주세요.", ephemeral=True)
+
+async def setup(bot):
+    await bot.add_cog(QuestCog(bot))
