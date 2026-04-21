@@ -4,6 +4,7 @@ import os
 from dotenv import load_dotenv
 
 from fishing_core.database import db
+from fishing_core.web_server import start_web_server
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix='!', intents=intents)
@@ -25,6 +26,7 @@ async def setup_hook():
     for cog in COGS:
         await bot.load_extension(cog)
     await bot.tree.sync()
+    bot.loop.create_task(start_web_server(bot))
 
 @bot.event
 async def on_ready():

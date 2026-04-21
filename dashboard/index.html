@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>수산시장 전산 통제실 🌊</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="login-container" class="glass-panel">
+        <div class="glow-orb" style="top: -50px; left: -50px; background: cyan;"></div>
+        <div class="glow-orb" style="bottom: -50px; right: -50px; background: magenta;"></div>
+        <h1>수산시장 접근 허가증 요구됨</h1>
+        <p>관리자 비밀번호를 입력하십시오</p>
+        <input type="password" id="password-input" placeholder="••••••••">
+        <button id="login-btn">시스템 접속</button>
+        <div id="login-error" class="hidden">접근 거부: 비밀번호가 일치하지 않습니다.</div>
+    </div>
+
+    <div id="dashboard-container" class="hidden">
+        <nav class="sidebar glass-panel">
+            <h2>HQ Control</h2>
+            <ul class="nav-links">
+                <li data-target="panel-home" class="active">대시보드 홈 📊</li>
+                <li data-target="panel-users">유저 관리 🧑‍💻</li>
+                <li data-target="panel-market">수산시장 경제 ⚖️</li>
+                <li data-target="panel-server">환경 통제실 🌍</li>
+            </ul>
+            <div class="nav-footer">
+                <button id="logout-btn">시스템 연결 해제</button>
+            </div>
+        </nav>
+
+        <main class="content">
+            <!-- 홈 패널 -->
+            <section id="panel-home" class="panel active">
+                <header>
+                    <h1>대시보드 요약표</h1>
+                </header>
+                <div class="stats-grid">
+                    <div class="stat-card glass-panel">
+                        <h3>총 유저 수</h3>
+                        <p id="stat-users">--</p>
+                    </div>
+                    <div class="stat-card glass-panel">
+                        <h3>총 발행 화폐량</h3>
+                        <p id="stat-coins">-- C</p>
+                    </div>
+                    <div class="stat-card glass-panel">
+                        <h3>봇 네트워크 지연</h3>
+                        <p id="stat-ping">-- ms</p>
+                    </div>
+                    <div class="stat-card glass-panel">
+                        <h3>현재 기상 상태</h3>
+                        <p id="stat-weather">--</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 유저 관리 패널 -->
+            <section id="panel-users" class="panel hidden">
+                <header>
+                    <h1>시스템 등록 인원</h1>
+                </header>
+                <div class="glass-panel user-list-container">
+                    <table id="users-table">
+                        <thead>
+                            <tr>
+                                <th>유저ID</th>
+                                <th>이름</th>
+                                <th>레이팅 (RP)</th>
+                                <th>보유 코인</th>
+                                <th>선박/낚싯대</th>
+                                <th>관리(Action)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-tbody">
+                            <!-- JS Injected -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- 시장 관리 패널 -->
+            <section id="panel-market" class="panel hidden">
+                <header>
+                    <h1>수산시장 물가 통제소</h1>
+                </header>
+                <div class="glass-panel" style="padding: 2rem;">
+                    <p>특정 생선의 시청 개입(시세 조작)을 진행합니다. 게임 생태계를 파괴하지 않도록 주의하세요.</p>
+                    <div class="input-group">
+                        <input type="text" id="market-fish-str" placeholder="어종명 (예: 광어 🐟)">
+                        <input type="number" id="market-price-input" placeholder="새로운 강제 시세 (단위: C)">
+                        <button id="btn-market-update">시장 가격 선포 완료</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 환경 통제실 -->
+            <section id="panel-server" class="panel hidden">
+                <header>
+                    <h1>시스템 환경 통제실</h1>
+                </header>
+                <div class="grid-2col">
+                    <div class="glass-panel">
+                        <h2>확성기 송출</h2>
+                        <input type="text" id="noti-title" placeholder="공지 제목">
+                        <textarea id="noti-content" rows="4" placeholder="공지 내용을 입력하세요 (디스코드 전역 송출)"></textarea>
+                        <button id="btn-send-noti" class="btn-danger">전역 시스템 공지 발송</button>
+                    </div>
+                    <div class="glass-panel">
+                        <h2>기상 조작기</h2>
+                        <select id="weather-select">
+                            <option value="☀️ 맑음">☀️ 맑음 (평화로움)</option>
+                            <option value="☁️ 흐림">☁️ 흐림 (어두움)</option>
+                            <option value="🌧️ 비">🌧️ 비 (네시 출몰 구역)</option>
+                            <option value="🌩️ 폭풍우">🌩️ 폭풍우 (위험함)</option>
+                            <option value="🌫️ 안개">🌫️ 안개 (스산함)</option>
+                        </select>
+                        <button id="btn-change-weather" class="btn-warn">기상 강제 변경</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- 유저 컨트롤 모달 -->
+    <div id="user-modal" class="modal-overlay hidden">
+        <div class="modal glass-panel">
+            <h2 id="modal-user-name">유저 이름</h2>
+            <p id="modal-user-id" style="font-size: 0.8rem; color: #aaa; margin-bottom: 20px;">ID: 123456</p>
+            
+            <div class="grid-2col">
+                <div class="input-group">
+                    <label>코인 수정</label>
+                    <input type="number" id="mod-coins">
+                </div>
+                <div class="input-group">
+                    <label>레이팅 (RP)</label>
+                    <input type="number" id="mod-rp">
+                </div>
+                <div class="input-group">
+                    <label>선박 등급</label>
+                    <input type="number" id="mod-boat">
+                </div>
+                <div class="input-group">
+                    <label>낚싯대 레벨</label>
+                    <input type="number" id="mod-rod">
+                </div>
+            </div>
+            
+            <hr style="margin: 20px 0; border-color: rgba(255,255,255,0.1);">
+            
+            <h3>인벤토리 개입 (아이템 지급/압수)</h3>
+            <div class="input-group" style="display: flex; gap: 10px;">
+                <input type="text" id="mod-item-name" placeholder="아이템명 (예: 용왕 👑)" style="flex: 2;">
+                <input type="number" id="mod-item-amt" value="1" style="flex: 1;">
+                <button id="btn-mod-give" class="btn-success">지급</button>
+                <button id="btn-mod-take" class="btn-danger">회수</button>
+            </div>
+
+            <div style="margin-top: 30px; display: flex; justify-content: flex-end; gap: 10px;">
+                <button id="btn-modal-close" class="btn-secondary">닫기</button>
+                <button id="btn-modal-save">변경사항 저장</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
