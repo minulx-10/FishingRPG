@@ -11,12 +11,12 @@ from .shared import FISH_DATA, MARKET_PRICES, env_state
 ACTIVE_SESSIONS = set()
 
 def require_auth(func):
-    async def wrapper(request):
+    async def wrapper(self, request):
         # 개발 환경이나 로컬 편의를 위해 쿠키 혹은 헤더 토큰 검증
         token = request.headers.get("Authorization")
         if not token or token.replace("Bearer ", "") not in ACTIVE_SESSIONS:
             return web.json_response({"error": "Unauthorized"}, status=401)
-        return await func(request)
+        return await func(self, request)
     return wrapper
 
 class DashboardServer:
