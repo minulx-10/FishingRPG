@@ -67,6 +67,8 @@ class DashboardServer:
             }
             return web.json_response({"success": True, "data": stats})
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return web.json_response({"error": str(e)}, status=500)
 
     @require_auth
@@ -98,6 +100,8 @@ class DashboardServer:
                 
             return web.json_response({"success": True, "data": users})
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return web.json_response({"error": str(e)}, status=500)
 
     @require_auth

@@ -70,6 +70,50 @@ class AdminCog(commands.Cog):
         MARKET_PRICES[어종명] = 가격
         await interaction.response.send_message(f"⚖️ 관리자 권한으로 **{어종명}**의 시장 시세를 **{가격} C**로 강제 조작했습니다!")
 
+    @app_commands.command(name="웹대시보드", description="[관리자 전용] 외부 관리자를 위해 임시로 암호화된 터널 접속 링크를 생성합니다.")
+    @is_developer()
+    async def 웹대시보드(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        import os
+        import subprocess
+        import re
+        import asyncio
+        
+        port = int(os.getenv("WEB_PORT", 8888))
+        
+        try:
+            # cloudflared 프로세스를 비동기로 실행하여 URL 추출
+            process = await asyncio.create_subprocess_exec(
+                'cloudflared', 'tunnel', '--url', f'http://localhost:{port}',
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT
+            )
+            
+            # 출력 로그에서 trycloudflare.com 도메인을 찾음
+            tunnel_url = None
+            for _ in range(30): # 최대 30줄(또는 30초 대기)
+                try:
+                    line = await asyncio.wait_for(process.stdout.readline(), timeout=1.0)
+                    if not line: break
+                    line = line.decode('utf-8').strip()
+                    
+                    match = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", line)
+                    if match:
+                        tunnel_url = match.group(0)
+                        break
+                except asyncio.TimeoutError:
+                    continue
+            
+            if tunnel_url:
+                await interaction.followup.send(f"🌐 **임시 대시보드 터널 생성 성공!**\n동료 관리자에게 아래 링크를 공유하세요. (봇 종료 시 링크 폭파)\n👉 **{tunnel_url}**\n*(접속 시 봇에 설정된 비밀번호가 필요합니다)*", ephemeral=True)
+            else:
+                await interaction.followup.send("❌ 터널을 생성했지만 URL을 파싱하지 못했습니다. 서버 로그를 확인하세요.", ephemeral=True)
+                
+        except FileNotFoundError:
+            await interaction.followup.send("❌ 서버에 `cloudflared`가 설치되어 있지 않아 터널링을 열 수 없습니다.", ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"❌ 오류 발생: {str(e)}", ephemeral=True)
+
     @app_commands.command(name="데이터새로고침", description="[관리자 전용] GitHub에서 최신 데이터를 가져온 후 봇 재시작 없이 반영합니다.")
     @is_developer()
     async def 데이터새로고침(self, interaction: discord.Interaction):

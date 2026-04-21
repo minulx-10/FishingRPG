@@ -20,6 +20,11 @@ jobs:
           port: 24111
           script: |
             cd /home/ubuntu/discord_bot
+            if ! command -v cloudflared &> /dev/null; then
+                wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O cloudflared
+                chmod +x cloudflared
+                sudo mv cloudflared /usr/local/bin/
+            fi
             sed -i 's/fishing_rpg.py/fishing_main.py/g' deploy.sh
             chmod +x deploy.sh
             ./deploy.sh
