@@ -61,7 +61,9 @@ class FishingCog(commands.Cog):
                     elif grade in ["희귀", "초희귀"]:
                         base_prob *= 1.5
 
-                if "deep_sea_boost" in active_buffs and data["element"] == "심해":
+                if "deep_sea_rift" in active_buffs and data["element"] == "심해":
+                    base_prob *= 3.0
+                elif "deep_sea_boost" in active_buffs and data["element"] == "심해":
                     base_prob *= 2.0
                     
                 if grade in ["에픽", "레전드", "신화"]:
@@ -84,7 +86,9 @@ class FishingCog(commands.Cog):
             target_fish = "낡은 장화 🥾"
             bait_text += "\n*(거대한 그림자가 지나갔지만, 날씨가 맑아 깊은 곳으로 숨어버렸습니다...)*"
 
-        view = FishingView(interaction.user, target_fish, rod_tier)
+        # 황금 조류 효과: 판정 한도 +1.5초
+        effective_rod_tier = rod_tier + 7.5 if "golden_tide" in active_buffs else rod_tier
+        view = FishingView(interaction.user, target_fish, effective_rod_tier)
         await interaction.response.send_message(f"🌊 찌를 던졌습니다... 조용히 기다리세요.{bait_text}\n(내 낚싯대: Lv.{rod_tier})", view=view)
         
         wait_min, wait_max = (1, 3) if "cooldown_reduction" in active_buffs else (2, 6)
@@ -105,15 +109,24 @@ class FishingCog(commands.Cog):
         except: 
             pass
 
-    @app_commands.command(name="인벤토리", description="내 가방과 현재 스탯을 확인합니다.")
-    async def 인벤토리(self, interaction: discord.Interaction):
-        coins, rod_tier, rating = await db.get_user_data(interaction.user.id)
-        async with db.conn.execute("SELECT item_name, amount FROM inventory WHERE user_id=? AND amount > 0", (interaction.user.id,)) as cursor:
+    @app_commands.command(name="인벤토리", description="나 또는 특정 유저의 가방과 스탯을 확인합니다.")
+    async def 인벤토리(self, interaction: discord.Interaction, 유저: discord.Member = None):
+        target = 유저 or interaction.user
+        coins, rod_tier, rating = await db.get_user_data(target.id)
+        
+        async with db.conn.execute("SELECT boat_tier FROM user_data WHERE user_id=?", (target.id,)) as cursor:
+            res = await cursor.fetchone()
+        current_tier = res[0] if res else 1
+        tier_names = {1: "나룻배 🛶", 2: "어선 🚤", 3: "쇄빙선 🛳️", 4: "잠수함 ⛴️"}
+        boat_str = tier_names.get(current_tier, f"Lv.{current_tier}")
+
+        async with db.conn.execute("SELECT item_name, amount FROM inventory WHERE user_id=? AND amount > 0", (target.id,)) as cursor:
             items = await cursor.fetchall()
         
-        embed = discord.Embed(title=f"🎒 {interaction.user.name}의 인벤토리", color=0x3498db)
+        embed = discord.Embed(title=f"🎒 {target.name}의 인벤토리", color=0x3498db)
         embed.add_field(name="🏆 전투 레이팅", value=f"`{rating} RP`", inline=True)
         embed.add_field(name="💰 보유 코인", value=f"`{coins:,} C`", inline=True)
+        embed.add_field(name="⛵ 선박 등급", value=f"**{boat_str}**", inline=True)
         embed.add_field(name="🎣 낚싯대 레벨", value=f"`Lv.{rod_tier}`", inline=True)
         
         if items:

@@ -19,6 +19,57 @@ class AdminCog(commands.Cog):
         await db.commit()
         await interaction.response.send_message(f"💰 관리자 권한으로 **{target.name}**님에게 `{amount:,} C`를 지급했습니다!")
 
+    @app_commands.command(name="아이템지급", description="[관리자 전용] 특정 유저에게 아이템을 강제 지급합니다.")
+    @is_developer()
+    async def 아이템지급(self, interaction: discord.Interaction, target: discord.Member, 아이템명: str, 수량: int):
+        await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, ?) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?", (target.id, 아이템명, 수량, 수량))
+        await db.commit()
+        await interaction.response.send_message(f"🎁 관리자 권한으로 **{target.name}**님에게 `{아이템명}` {수량}개를 지급했습니다!")
+
+    @app_commands.command(name="아이템회수", description="[관리자 전용] 특정 유저의 아이템을 강제 회수(삭제)합니다.")
+    @is_developer()
+    async def 아이템회수(self, interaction: discord.Interaction, target: discord.Member, 아이템명: str, 수량: int):
+        await db.execute("UPDATE inventory SET amount = MAX(0, amount - ?) WHERE user_id = ? AND item_name = ?", (수량, target.id, 아이템명))
+        await db.execute("DELETE FROM inventory WHERE amount <= 0")
+        await db.commit()
+        await interaction.response.send_message(f"🗑️ 관리자 권한으로 **{target.name}**님의 `{아이템명}` {수량}개를 강제 회수했습니다!")
+
+    @app_commands.command(name="유저스탯변경", description="[관리자 전용] 특정 유저의 스탯(선박, 낚싯대, 레이팅)을 설정합니다.")
+    @app_commands.choices(항목=[
+        app_commands.Choice(name="선박 티어 (boat_tier)", value="boat_tier"),
+        app_commands.Choice(name="낚싯대 레벨 (rod_tier)", value="rod_tier"),
+        app_commands.Choice(name="전투 레이팅 (rating)", value="rating")
+    ])
+    @is_developer()
+    async def 유저스탯변경(self, interaction: discord.Interaction, target: discord.Member, 항목: app_commands.Choice[str], 값: int):
+        await db.get_user_data(target.id) 
+        if 항목.value == "boat_tier":
+            await db.execute("UPDATE user_data SET boat_tier = ? WHERE user_id = ?", (값, target.id))
+        elif 항목.value == "rod_tier":
+            await db.execute("UPDATE user_data SET rod_tier = ? WHERE user_id = ?", (값, target.id))
+        elif 항목.value == "rating":
+            await db.execute("UPDATE user_data SET rating = ? WHERE user_id = ?", (값, target.id))
+        await db.commit()
+        await interaction.response.send_message(f"⚙️ 관리자 권한으로 **{target.name}**님의 `{항목.name}`을(를) **{값}**(으)로 설정했습니다!")
+
+    @app_commands.command(name="전체공지", description="[관리자 전용] 멋진 임베드로 전체 공지사항을 띄웁니다.")
+    @is_developer()
+    async def 전체공지(self, interaction: discord.Interaction, 제목: str, 내용: str):
+        embed = discord.Embed(title=f"📢 [시스템 공지] {제목}", description=내용.replace('\\n', '\n'), color=0xff0000)
+        embed.set_footer(text="수산시장 관리국에서 발송된 메시지입니다.")
+        await interaction.channel.send(content="@everyone", embed=embed)
+        await interaction.response.send_message("공지 발송 완료!", ephemeral=True)
+
+    @app_commands.command(name="시세조작", description="[관리자 전용] 특정 물고기의 현재 시세를 강제로 고정시킵니다.")
+    @is_developer()
+    async def 시세조작(self, interaction: discord.Interaction, 어종명: str, 가격: int):
+        from fishing_core.shared import MARKET_PRICES, FISH_DATA
+        if 어종명 not in FISH_DATA:
+            return await interaction.response.send_message(f"❌ 데이터베이스에 없는 어종입니다: {어종명}", ephemeral=True)
+            
+        MARKET_PRICES[어종명] = 가격
+        await interaction.response.send_message(f"⚖️ 관리자 권한으로 **{어종명}**의 시장 시세를 **{가격} C**로 강제 조작했습니다!")
+
     @app_commands.command(name="데이터새로고침", description="[관리자 전용] GitHub에서 최신 데이터를 가져온 후 봇 재시작 없이 반영합니다.")
     @is_developer()
     async def 데이터새로고침(self, interaction: discord.Interaction):

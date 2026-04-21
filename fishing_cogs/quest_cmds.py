@@ -319,7 +319,7 @@ class QuestCog(commands.Cog):
         embed = discord.Embed(title="🗺️ 보물지도 합성 성공!", description="4개의 조각을 이어 붙여 **고대 해적의 보물지도 🗺️**를 완성했습니다!\n`/지도사용` 명령어를 통해 망자의 해역으로 떠나보세요.", color=0xf1c40f)
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="지도사용", description="'고대 해적의 보물지도'를 사용하여 1시간 동안 금화만 낚이는 [망자의 해역]을 개방합니다.")
+    @app_commands.command(name="지도사용", description="'고대 해적의 보물지도'를 사용하여 특별한 해역 버프(30분)를 개방합니다.")
     async def 지도사용(self, interaction: discord.Interaction):
         async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name='고대 해적의 보물지도 🗺️'", (interaction.user.id,)) as cursor:
             res = await cursor.fetchone()
@@ -329,13 +329,23 @@ class QuestCog(commands.Cog):
 
         await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name='고대 해적의 보물지도 🗺️'", (interaction.user.id,))
         
-        end_time = datetime.datetime.now(kst) + datetime.timedelta(hours=1)
+        end_time = datetime.datetime.now(kst) + datetime.timedelta(minutes=30)
         end_time_str = end_time.strftime('%Y-%m-%d %H:%M:%S')
         
-        await db.execute("INSERT OR REPLACE INTO active_buffs (user_id, buff_type, end_time) VALUES (?, ?, ?)", (interaction.user.id, "ghost_sea_open", end_time_str))
+        buffs = ["ghost_sea_open", "deep_sea_rift", "golden_tide"]
+        weights = [30, 40, 30]
+        chosen_buff = random.choices(buffs, weights=weights, k=1)[0]
+        
+        await db.execute("INSERT OR REPLACE INTO active_buffs (user_id, buff_type, end_time) VALUES (?, ?, ?)", (interaction.user.id, chosen_buff, end_time_str))
         await db.commit()
         
-        embed = discord.Embed(title="☠️ 망자의 해역 개방...", description="지도의 낡은 좌표를 따라 안개가 자욱한 해역에 도착했습니다.\n\n앞으로 **1시간 동안**, 당신의 낚싯대에는 물고기 대신 **금화와 보물상자**만 걸려 올라올 것입니다!", color=0x2c3e50)
+        if chosen_buff == "ghost_sea_open":
+            embed = discord.Embed(title="☠️ 망자의 해역 개방...", description="지도의 낡은 좌표를 따라 안개가 자욱한 해역에 도착했습니다.\n\n앞으로 **30분 동안**, 당신의 낚싯대에는 물고기 대신 **금화와 낡은 고철, 보물상자**만 걸려 올라올 것입니다!", color=0x2c3e50)
+        elif chosen_buff == "deep_sea_rift":
+            embed = discord.Embed(title="🌊 심해의 균열 발견!", description="지도가 가리킨 곳에서 바다가 갈라진 깊은 심연이 보입니다.\n\n앞으로 **30분 동안**, **[심해] 속성** 어종들의 낚시 등장 확률이 3배 상승합니다!", color=0x1abc9c)
+        else:
+            embed = discord.Embed(title="✨ 황금 조류 발견!", description="지도를 따라가니 눈부시게 빛나는 따뜻한 해류를 만났습니다.\n\n앞으로 **30분 동안**, 낚시 타이밍 판정 시간이 매우 넉넉해져 물고기를 놓칠 확률이 극히 낮아집니다!", color=0xf1c40f)
+
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="기도", description="심해의 지배자, 용왕님께 기도를 올립니다. (0.05% 확률로 강림!)")
