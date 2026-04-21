@@ -82,32 +82,46 @@ class AdminCog(commands.Cog):
         port = int(os.getenv("WEB_PORT", 8888))
         
         try:
+            if hasattr(self.bot, 'tunnel_proc') and self.bot.tunnel_proc and self.bot.tunnel_proc.returncode is None:
+                self.bot.tunnel_proc.terminate()
+                
             # cloudflared 프로세스를 비동기로 실행하여 URL 추출
             process = await asyncio.create_subprocess_exec(
                 'cloudflared', 'tunnel', '--url', f'http://localhost:{port}',
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT
             )
+            self.bot.tunnel_proc = process
             
             # 출력 로그에서 trycloudflare.com 도메인을 찾음
             tunnel_url = None
-            for _ in range(30): # 최대 30줄(또는 30초 대기)
-                try:
-                    line = await asyncio.wait_for(process.stdout.readline(), timeout=1.0)
-                    if not line: break
-                    line = line.decode('utf-8').strip()
-                    
-                    match = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", line)
-                    if match:
-                        tunnel_url = match.group(0)
+            
+            async def read_stdout():
+                nonlocal tunnel_url
+                while True:
+                    try:
+                        line = await process.stdout.readline()
+                        if not line: break
+                        line = line.decode('utf-8').strip()
+                        if not tunnel_url:
+                            match = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", line)
+                            if match:
+                                tunnel_url = match.group(0)
+                    except:
                         break
-                except asyncio.TimeoutError:
-                    continue
+
+            # 백그라운드에서 로그를 계속 읽어 파이프가 막히지 않게 함
+            asyncio.create_task(read_stdout())
+            
+            # URL이 찾아질 때까지 대기
+            for _ in range(30):
+                if tunnel_url: break
+                await asyncio.sleep(1.0)
             
             if tunnel_url:
-                await interaction.followup.send(f"🌐 **임시 대시보드 터널 생성 성공!**\n동료 관리자에게 아래 링크를 공유하세요. (봇 종료 시 링크 폭파)\n👉 **{tunnel_url}**\n*(접속 시 봇에 설정된 비밀번호가 필요합니다)*", ephemeral=True)
+                await interaction.followup.send(f"🌐 **임시 대시보드 터널 생성 완료!**\n동료 관리자에게 아래 링크를 공유하세요. (새로 생성 시 기존 주소는 폭파됩니다)\n👉 **{tunnel_url}**\n*(접속 시 봇에 설정된 비밀번호가 필요합니다)*", ephemeral=True)
             else:
-                await interaction.followup.send("❌ 터널을 생성했지만 URL을 파싱하지 못했습니다. 서버 로그를 확인하세요.", ephemeral=True)
+                await interaction.followup.send("❌ 터널을 생성했지만 URL을 파싱하지 못했습니다. 서버 상태를 확인하세요.", ephemeral=True)
                 
         except FileNotFoundError:
             await interaction.followup.send("❌ 서버에 `cloudflared`가 설치되어 있지 않아 터널링을 열 수 없습니다.", ephemeral=True)
