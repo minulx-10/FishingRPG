@@ -1,10 +1,10 @@
 {
     "용왕 👑": {
         "prob": 0.00001,
-        "grade": "히든",
+        "grade": "해신(海神)",
         "price": 1000000,
         "base_window": 99.0,
-        "element": "심해",
+        "element": "무속성",
         "power": 99999
     }
 }
