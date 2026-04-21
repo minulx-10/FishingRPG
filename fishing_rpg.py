@@ -10,6 +10,7 @@ import os
 from dotenv import load_dotenv
 import json
 import aiohttp
+import subprocess
 
 # ==========================================
 # 1. 봇 기본 설정 및 준비
@@ -1530,21 +1531,32 @@ async def 코인지급(interaction: discord.Interaction, target: discord.Member,
     await interaction.response.send_message(f"💰 관리자 권한으로 **{target.name}**님에게 `{amount:,} C`를 지급했습니다!")
 
 # ==========================================
-# 🌟 [신규] 관리자 전용: 데이터 실시간 새로고침
+# 🌟 [수정됨] 관리자 전용: 데이터 실시간 새로고침 (Git Pull 포함)
 # ==========================================
-# 이 명령어를 쓰면 봇을 재시작하지 않아도 추가한 물고기 데이터가 바로 반영됩니다!
-@bot.tree.command(name="데이터새로고침", description="[관리자 전용] 봇 재시작 없이 JSON 데이터를 다시 불러옵니다.")
+@bot.tree.command(name="데이터새로고침", description="[관리자 전용] GitHub에서 최신 데이터를 가져온 후 봇 재시작 없이 반영합니다.")
 @is_developer()
 async def 데이터새로고침(interaction: discord.Interaction):
     global FISH_DATA, MARKET_PRICES, RECIPES
     
+    # 깃허브에서 다운받는 시간이 걸릴 수 있으니 디스코드에 '생각 중...'을 먼저 띄웁니다.
+    await interaction.response.defer(ephemeral=True) 
+    
     try:
+        # 1. 봇이 직접 서버 터미널에서 'git pull'을 실행하여 최신 파일을 다운로드합니다.
+        process = subprocess.Popen(["git", "pull"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        stdout, stderr = process.communicate()
+        
+        # 2. 다운로드된 최신 JSON 데이터를 봇의 뇌(메모리)에 다시 집어넣습니다.
         FISH_DATA = load_fish_data()
         MARKET_PRICES = {fish: data["price"] for fish, data in FISH_DATA.items()}
         RECIPES = load_recipes()
-        await interaction.response.send_message("✅ `fish_data.json` 및 `recipes.json`을 성공적으로 다시 불러왔습니다!", ephemeral=True)
+        
+        # 3. 성공 메시지와 깃허브 다운로드 로그를 함께 보여줍니다.
+        msg = f"✅ 최신 데이터를 깃허브에서 가져와 성공적으로 반영했습니다!\n```bash\n{stdout}```"
+        await interaction.followup.send(msg)
+        
     except Exception as e:
-        await interaction.response.send_message(f"❌ 데이터 로드 중 오류가 발생했습니다: {e}", ephemeral=True)
+        await interaction.followup.send(f"❌ 데이터 업데이트 중 오류가 발생했습니다.\n(JSON 파일에 오타나 문법 오류가 없는지 확인하세요!)\n**상세 오류:** `{e}`")
 
 # ==========================================
 # 7. 봇 이벤트 
