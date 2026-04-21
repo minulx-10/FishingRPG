@@ -81,32 +81,20 @@ class DashboardServer:
     @require_auth
     async def api_users(self, request):
         try:
-            # 기본적으로 모든 유저 스탯 조회
-            async with db.conn.execute("SELECT user_id, rating, coins, boat_tier, rod_tier, last_daily FROM user_data ORDER BY coins DESC, rating DESC") as cursor:
+            # 기본적으로 모든 유저 스탯 조회 (username 포함)
+            async with db.conn.execute("SELECT user_id, username, rating, coins, boat_tier, rod_tier, last_daily FROM user_data ORDER BY coins DESC, rating DESC") as cursor:
                 rows = await cursor.fetchall()
                 
             users = []
             for r in rows:
-                user_id, rating, coins, boat_tier, rod_tier, last_daily = r
+                user_id, username_db, rating, coins, boat_tier, rod_tier, last_daily = r
                 
-                name = str(user_id)
+                name = username_db if username_db else str(user_id)
                 avatar = None
                 
-                # 유저 이름 봇 캐시에서 불러오기 시도 (캐시 히트 최우선)
+                # 유저 이름 봇 메모리 캐시에서 우선 확인 (비동기 fetch_user 호출 원천 차단하여 Rate Limit 방지)
                 discord_user = self.bot.get_user(int(user_id))
                 
-                # 만약 메모리에 유저가 없다면 디스코드 API로 조회 (제한 피하기 위해 자체 USER_CACHE 확인)
-                if not discord_user:
-                    if user_id in self.USER_CACHE:
-                        discord_user = self.USER_CACHE[user_id]
-                    else:
-                        try:
-                            fetched_user = await self.bot.fetch_user(int(user_id))
-                            self.USER_CACHE[user_id] = fetched_user
-                            discord_user = fetched_user
-                        except Exception:
-                            pass # 계정이 삭제되었거나 API 한계 도달 시
-
                 if discord_user:
                     name = discord_user.name
                     avatar = discord_user.avatar.url if discord_user.avatar else None
