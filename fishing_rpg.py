@@ -860,7 +860,7 @@ async def 판매(interaction: discord.Interaction, 제외1: str = None, 제외2:
         items = await cursor.fetchall()
     
     # 기본적으로 보호되는 중요 아이템들 (고정)
-    protected_items = ["낡은 고철 ⚙️", "가라앉은 보물상자 🧰", "고급 미끼 🪱", "자석 미끼 🧲"]
+    protected_items = ["낡은 고철 ⚙️", "가라앉은 보물상자 🧰", "고급 미끼 🪱", "자석 미끼 🧲", "찢어진 지도 조각 A 🧩", "찢어진 지도 조각 B 🧩", "찢어진 지도 조각 C 🧩", "찢어진 지도 조각 D 🧩"]
     
     # 유저가 명령어를 칠 때 직접 선택한 제외 아이템들 추가
     user_excludes = [x for x in [제외1, 제외2, 제외3] if x is not None]
