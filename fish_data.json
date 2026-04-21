@@ -160,7 +160,7 @@
     "산천어 🐟": {"grade": "희귀", "prob": 20, "base_window": 2.3, "price": 380, "power": 20, "element": "무속성"},
     "우파루파 🦎": {"grade": "초희귀", "prob": 5, "base_window": 2.0, "price": 2000, "power": 5, "element": "무속성"},
     "황금빛 알비노 철갑상어 ⭐": {"grade": "에픽", "prob": 0.4, "base_window": 1.8, "price": 10000, "power": 30, "element": "무속성"},
-    "황금빛 알비노 피라루쿠 ⭐": {"grade": "에픽", "prob": 0.2, "base_window": 1.6, "price": 22500, "power": 40, "element": "무속성"}
+    "황금빛 알비노 피라루쿠 ⭐": {"grade": "에픽", "prob": 0.2, "base_window": 1.6, "price": 22500, "power": 40, "element": "무속성"},
 "내가 참치로 보이니? (멸치) 🐟": {
         "grade": "레전드", "prob": 5, "base_window": 1.5, "price": 1, "power": 1, "element": "무속성"
     },
