@@ -122,8 +122,12 @@ async function loadStats() {
             DOM.sCoins.innerText = res.data.total_coins.toLocaleString() + " C";
             DOM.sPing.innerText = res.data.bot_latency + " ms";
             DOM.sWeather.innerText = res.data.current_weather;
+        } else {
+            alert("통계 불러오기 실패: " + res.error);
         }
-    } catch(e) {}
+    } catch(e) {
+        alert("통계 네트워크 오류: " + e.message);
+    }
 }
 
 async function loadUsers() {
@@ -144,8 +148,12 @@ async function loadUsers() {
                 `;
                 DOM.usersTbody.appendChild(tr);
             });
+        } else {
+            alert("유저 정보 불러오기 실패: " + res.error);
         }
-    } catch(e) {}
+    } catch(e) {
+        alert("유저 정보 네트워크 오류: " + e.message);
+    }
 }
 
 function openModal(user) {

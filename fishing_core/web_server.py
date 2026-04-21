@@ -33,11 +33,16 @@ class DashboardServer:
             web.post('/api/admin/broadcast', self.api_broadcast),
             web.post('/api/admin/weather', self.api_set_weather),
         ])
+        self.app.add_routes([
+            web.get('/', self.serve_index)
+        ])
         
         # 정적 파일 서빙: 프론트엔드
-        # 먼저 폴더가 없으면 생성하여 에러 방지
         os.makedirs('dashboard', exist_ok=True)
-        self.app.router.add_static('/', 'dashboard', show_index=True)
+        self.app.router.add_static('/', 'dashboard', show_index=False)
+
+    async def serve_index(self, request):
+        return web.FileResponse('dashboard/index.html')
 
     async def api_login(self, request):
         data = await request.json()
