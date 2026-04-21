@@ -37,7 +37,7 @@ class MarketCog(commands.Cog):
     async def 판매(self, interaction: discord.Interaction, 제외1: str = None, 제외2: str = None, 제외3: str = None):
         await interaction.response.defer()
 
-        async with db.conn.execute("SELECT item_name, amount FROM inventory WHERE user_id=? AND amount > 0", (interaction.user.id,)) as cursor:
+        async with db.conn.execute("SELECT item_name, amount FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=0", (interaction.user.id,)) as cursor:
             items = await cursor.fetchall()
         
         protected_items = ["낡은 고철 ⚙️", "가라앉은 보물상자 🧰", "고급 미끼 🪱", "자석 미끼 🧲", "찢어진 지도 조각 A 🧩", "찢어진 지도 조각 B 🧩", "찢어진 지도 조각 C 🧩", "찢어진 지도 조각 D 🧩"]
@@ -90,9 +90,12 @@ class MarketCog(commands.Cog):
         if 수량 <= 0:
             return await interaction.response.send_message("❌ 수량은 1마리 이상이어야 합니다.", ephemeral=True)
             
-        async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, target_fish)) as cursor:
+        async with db.conn.execute("SELECT amount, is_locked FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, target_fish)) as cursor:
             res = await cursor.fetchone()
-        current_amount = res[0] if res else 0
+        current_amount, is_locked = res if res else (0, 0)
+        
+        if is_locked == 1:
+            return await interaction.response.send_message(f"❌ **{target_fish}**는 잠금(보호) 처리되어 판매할 수 없습니다. 먼저 `/잠금해제`를 사용하세요.", ephemeral=True)
         
         if current_amount < 수량:
             return await interaction.response.send_message(f"❌ 가방에 **{target_fish}**가 부족합니다. (현재 보유: {current_amount}마리)", ephemeral=True)
@@ -135,6 +138,37 @@ class MarketCog(commands.Cog):
         await db.commit()
         
         await interaction.response.send_message(f"🛍️ **{아이템.value}** {수량}개를 구매했습니다! (남은 코인: `{coins - price} C`)")
+
+    @app_commands.command(name="잠금", description="특정 물고기나 아이템을 일괄 판매 대상에서 제외하고 배틀용으로 보호합니다.")
+    @app_commands.autocomplete(물고기=inv_autocomplete)
+    async def 잠금(self, interaction: discord.Interaction, 물고기: str):
+        async with db.conn.execute("SELECT amount, is_locked FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기)) as cursor:
+            res = await cursor.fetchone()
+        
+        if not res or res[0] <= 0:
+            return await interaction.response.send_message(f"❌ 가방에 **{물고기}**가 없습니다.", ephemeral=True)
+            
+        if res[1] == 1:
+            return await interaction.response.send_message(f"⚠️ **{물고기}**는 이미 잠금 처리되어 있습니다.", ephemeral=True)
+            
+        await db.execute("UPDATE inventory SET is_locked=1 WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기))
+        await db.commit()
+        await interaction.response.send_message(f"🔒 **{물고기}**가 잠금(보호) 처리되었습니다! 이제 일괄 판매 시 제외되며 배틀 출전이 가능합니다.")
+
+    @app_commands.command(name="잠금해제", description="잠금(보호) 처리된 물고기의 잠금을 해제합니다.")
+    async def 잠금해제(self, interaction: discord.Interaction, 물고기: str):
+        async with db.conn.execute("SELECT amount, is_locked FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기)) as cursor:
+            res = await cursor.fetchone()
+        
+        if not res or res[0] <= 0:
+            return await interaction.response.send_message(f"❌ 가방에 **{물고기}**가 없습니다.", ephemeral=True)
+            
+        if res[1] == 0:
+            return await interaction.response.send_message(f"⚠️ **{물고기}**는 잠겨있지 않습니다.", ephemeral=True)
+            
+        await db.execute("UPDATE inventory SET is_locked=0 WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기))
+        await db.commit()
+        await interaction.response.send_message(f"🔓 **{물고기}**의 잠금을 해제했습니다! 이제 판매할 수 있습니다.")
 
 async def setup(bot):
     await bot.add_cog(MarketCog(bot))

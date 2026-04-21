@@ -28,10 +28,10 @@ class QuestCog(commands.Cog):
             return await interaction.response.send_message("❌ 오늘은 이미 출석하셨습니다! 내일 다시 와주세요.", ephemeral=True)
         
         reward = 1000
-        await db.execute("UPDATE user_data SET coins = coins + ?, last_daily = ? WHERE user_id = ?", (reward, today, interaction.user.id))
+        await db.execute("UPDATE user_data SET coins = coins + ?, stamina = max_stamina, last_daily = ? WHERE user_id = ?", (reward, today, interaction.user.id))
         await db.commit()
         
-        await interaction.response.send_message(f"✅ 출석 완료! 보상으로 `{reward} C`를 받았습니다. (잔액 확인: `/인벤토리`)")
+        await interaction.response.send_message(f"✅ 출석 완료! 보상으로 `{reward} C`를 받고 **행동력(체력)이 모두 회복**되었습니다! ⚡ (잔액 확인: `/인벤토리`)")
 
     @app_commands.command(name="도감", description="내가 지금까지 발견한 모든 물고기 기록과 수집률을 확인합니다.")
     async def 도감(self, interaction: discord.Interaction):

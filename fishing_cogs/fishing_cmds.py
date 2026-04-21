@@ -14,10 +14,19 @@ class FishingCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="낚시", description="찌를 던져 물고기(또는 보물)를 낚습니다! (타이밍 미니게임)")
+    @app_commands.command(name="낚시", description="찌를 던져 물고기(또는 보물)를 낚습니다! (타이밍 미니게임 / 체력 10 소모)")
     @app_commands.autocomplete(사용할미끼=bait_autocomplete)
     async def 낚시(self, interaction: discord.Interaction, 사용할미끼: str = "none"):
         coins, rod_tier, rating = await db.get_user_data(interaction.user.id)
+        
+        async with db.conn.execute("SELECT stamina, max_stamina FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+            stamina_res = await cursor.fetchone()
+        current_stamina, max_stamina = stamina_res if stamina_res else (100, 100)
+        
+        if current_stamina < 10:
+            return await interaction.response.send_message(f"❌ 행동력(체력)이 부족하여 낚싯대를 던질 수 없습니다!\n(필요 체력: 10 / 현재: {current_stamina}⚡)\n💡 `/출석`이나 `/요리`를 통해 체력을 회복하세요.", ephemeral=True)
+            
+        await db.execute("UPDATE user_data SET stamina = stamina - 10 WHERE user_id=?", (interaction.user.id,))
         
         bait_used = 사용할미끼
         bait_text = ""
@@ -89,7 +98,7 @@ class FishingCog(commands.Cog):
         # 황금 조류 효과: 판정 한도 +1.5초
         effective_rod_tier = rod_tier + 7.5 if "golden_tide" in active_buffs else rod_tier
         view = FishingView(interaction.user, target_fish, effective_rod_tier)
-        await interaction.response.send_message(f"🌊 찌를 던졌습니다... 조용히 기다리세요.{bait_text}\n(내 낚싯대: Lv.{rod_tier})", view=view)
+        await interaction.response.send_message(f"🌊 찌를 던졌습니다... 조용히 기다리세요.{bait_text}\n(내 낚싯대: Lv.{rod_tier} / 체력: {current_stamina-10}⚡)", view=view)
         
         wait_min, wait_max = (1, 3) if "cooldown_reduction" in active_buffs else (2, 6)
         wait_time = random.uniform(wait_min, wait_max)

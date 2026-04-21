@@ -75,6 +75,38 @@ class DBManager:
         except aiosqlite.OperationalError:
             pass
 
+        try:
+            await self.conn.execute("ALTER TABLE inventory ADD COLUMN is_locked INTEGER DEFAULT 0")
+        except aiosqlite.OperationalError:
+            pass
+
+        try:
+            await self.conn.execute("ALTER TABLE user_data ADD COLUMN stamina INTEGER DEFAULT 100")
+            await self.conn.execute("ALTER TABLE user_data ADD COLUMN max_stamina INTEGER DEFAULT 100")
+        except aiosqlite.OperationalError:
+            pass
+
+        # 통 (bucket) 마이그레이션 로직
+        try:
+            # bucket 테이블이 존재하는지 확인
+            await self.conn.execute("SELECT 1 FROM bucket LIMIT 1")
+            
+            # 버킷에 있는 물고기를 인벤토리로 이동시키며 is_locked = 1 로 설정
+            await self.conn.execute('''
+                INSERT INTO inventory (user_id, item_name, amount, is_locked)
+                SELECT user_id, item_name, amount, 1 FROM bucket
+                ON CONFLICT(user_id, item_name) DO UPDATE SET 
+                    amount = inventory.amount + excluded.amount, 
+                    is_locked = 1
+            ''')
+            
+            # 마이그레이션 완료 후 버킷 테이블 삭제
+            await self.conn.execute("DROP TABLE bucket")
+            print("✅ 마이그레이션 성공: 통(bucket) 데이터가 inventory로 안전하게 병합되었으며 테이블이 제거되었습니다.")
+        except aiosqlite.OperationalError:
+            # bucket 테이블이 없으면 이미 마이그레이션 완료된 것
+            pass
+
         await self.conn.commit()
 
     async def execute(self, query, params=()):

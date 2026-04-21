@@ -15,13 +15,11 @@ class BattleCog(commands.Cog):
     @app_commands.command(name="배틀", description="나의 가장 강한 물고기로 야생의 NPC 물고기와 턴제 배틀을 진행합니다!")
     @check_boat_tier(3)
     async def 배틀(self, interaction: discord.Interaction):
-        await db.get_user_data(interaction.user.id) 
-        
-        async with db.conn.execute("SELECT item_name FROM bucket WHERE user_id=? AND amount > 0", (interaction.user.id,)) as cursor:
+        async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (interaction.user.id,)) as cursor:
             items = await cursor.fetchall()
         
         if not items:
-            return await interaction.response.send_message("❌ 통(배틀용)이 비어있습니다! 낚시 후 '통에 보관'을 선택해 전사를 포획하세요.", ephemeral=True)
+            return await interaction.response.send_message("❌ 잠금(보호) 처리된 물고기가 없습니다! 인벤토리에서 `/잠금` 명령어로 전사를 보호하세요.", ephemeral=True)
         
         my_best_fish = None
         max_power = -1
@@ -32,7 +30,7 @@ class BattleCog(commands.Cog):
                 my_best_fish = name
                 
         if max_power == -1 or not my_best_fish:
-            return await interaction.response.send_message("❌ 배틀에 출전할 유효한 물고기가 없습니다! (통에 일반 아이템만 존재합니다)", ephemeral=True)
+            return await interaction.response.send_message("❌ 출전할 유효한 물고기가 없습니다! (잠금된 목록에 일반 아이템만 존재합니다)", ephemeral=True)
                 
         npc_pool = [name for name, data in FISH_DATA.items() if data.get("grade") != "히든"]
         npc_fish = random.choice(npc_pool)
@@ -40,53 +38,25 @@ class BattleCog(commands.Cog):
         view = BattleView(interaction.user, my_best_fish, npc_fish)
         await interaction.response.send_message(embed=view.generate_embed(), view=view)
 
-    @app_commands.command(name="통", description="나 또는 특정 유저의 배틀 대기조(통)를 확인합니다.")
-    async def 통(self, interaction: discord.Interaction, 유저: discord.Member = None):
+    @app_commands.command(name="잠금목록", description="나 또는 특정 유저의 가방에서 잠금(보호 및 배틀용) 처리된 목록을 확인합니다.")
+    async def 잠금목록(self, interaction: discord.Interaction, 유저: discord.Member = None):
         target = 유저 or interaction.user
-        async with db.conn.execute("SELECT item_name, amount FROM bucket WHERE user_id=? AND amount > 0", (target.id,)) as cursor:
+        async with db.conn.execute("SELECT item_name, amount FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (target.id,)) as cursor:
             items = await cursor.fetchall()
         
-        embed = discord.Embed(title=f"🪣 {target.name}의 통 (배틀 대기조)", color=0x2ecc71)
+        embed = discord.Embed(title=f"🔒 {target.name}의 잠금(보호) 목록", color=0x2ecc71)
         if items:
             item_list = ""
             for name, amt in items:
                 power = 99999 if name == "용왕 👑" else FISH_DATA.get(name, {}).get("power", 0)
-                item_list += f"• {name}: {amt}마리 (전투력: {power}⚡)\n"
-            embed.add_field(name="출전 가능한 물고기", value=item_list, inline=False)
+                if power > 0:
+                    item_list += f"• {name}: {amt}마리 (전투력: {power}⚡)\n"
+                else:
+                    item_list += f"• {name}: {amt}개\n"
+            embed.add_field(name="보존된 아이템 및 전사", value=item_list, inline=False)
         else:
-            embed.add_field(name="텅 비었습니다...", value="낚시 성공 후 '통에 보관'을 누르거나 `/통보관`을 사용하세요.", inline=False)
+            embed.add_field(name="텅 비었습니다...", value="`/잠금` 명령어를 통해 중요한 물고기와 아이템을 판매로부터 보호하세요.", inline=False)
         await interaction.response.send_message(embed=embed)
-
-    @app_commands.command(name="통보관", description="가방(인벤토리)에 있는 물고기를 통(배틀용)으로 옮깁니다.")
-    @app_commands.autocomplete(물고기=inv_autocomplete)
-    async def 통보관(self, interaction: discord.Interaction, 물고기: str, 수량: int = 1):
-        if 수량 <= 0: return await interaction.response.send_message("❌ 수량은 1 이상이어야 합니다.", ephemeral=True)
-        if 물고기 not in FISH_DATA and 물고기 != "용왕 👑":
-            return await interaction.response.send_message(f"❌ **{물고기}**는 배틀에 출전할 수 없는 아이템입니다!", ephemeral=True)
-        
-        async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기)) as cursor:
-            res = await cursor.fetchone()
-        current = res[0] if res else 0
-        if current < 수량: return await interaction.response.send_message(f"❌ 가방에 **{물고기}**가 부족합니다. (보유: {current}마리)", ephemeral=True)
-
-        await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name=?", (수량, interaction.user.id, 물고기))
-        await db.execute("INSERT INTO bucket (user_id, item_name, amount) VALUES (?, ?, ?) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?", (interaction.user.id, 물고기, 수량, 수량))
-        await db.commit()
-        await interaction.response.send_message(f"🎒➡️🪣 **{물고기}** {수량}마리를 배틀 출전용 통으로 옮겼습니다!")
-
-    @app_commands.command(name="통꺼내기", description="통(배틀용)에 있는 물고기를 가방(인벤토리)으로 다시 가져옵니다.")
-    async def 통꺼내기(self, interaction: discord.Interaction, 물고기: str, 수량: int = 1):
-        if 수량 <= 0: return await interaction.response.send_message("❌ 수량은 1 이상이어야 합니다.", ephemeral=True)
-        
-        async with db.conn.execute("SELECT amount FROM bucket WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기)) as cursor:
-            res = await cursor.fetchone()
-        current = res[0] if res else 0
-        if current < 수량: return await interaction.response.send_message(f"❌ 통에 **{물고기}**가 없거나 부족합니다. (보유: {current}마리)", ephemeral=True)
-
-        await db.execute("UPDATE bucket SET amount = amount - ? WHERE user_id=? AND item_name=?", (수량, interaction.user.id, 물고기))
-        await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, ?) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?", (interaction.user.id, 물고기, 수량, 수량))
-        await db.commit()
-        await interaction.response.send_message(f"🪣➡️🎒 **{물고기}** {수량}마리를 통에서 가방으로 꺼냈습니다!")
 
     @app_commands.command(name="수산대전", description="다른 유저를 지목하여 마라맛 PvP 배틀(약탈)을 겁니다!")
     @check_boat_tier(4)
@@ -99,15 +69,15 @@ class BattleCog(commands.Cog):
         await db.get_user_data(interaction.user.id)
         await db.get_user_data(상대.id)
 
-        async with db.conn.execute("SELECT item_name FROM bucket WHERE user_id=? AND amount > 0", (interaction.user.id,)) as cursor:
+        async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (interaction.user.id,)) as cursor:
             items1 = await cursor.fetchall()
         if not items1:
-            return await interaction.response.send_message("❌ 내 통(배틀용)이 비어있습니다! `/낚시` 후 통에 보관하세요.", ephemeral=True)
+            return await interaction.response.send_message("❌ 내 잠금 목록이 비어있습니다! `/잠금`으로 출전할 물고기를 보존하세요.", ephemeral=True)
 
-        async with db.conn.execute("SELECT item_name FROM bucket WHERE user_id=? AND amount > 0", (상대.id,)) as cursor:
+        async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (상대.id,)) as cursor:
             items2 = await cursor.fetchall()
         if not items2:
-            return await interaction.response.send_message(f"❌ 상대방({상대.name})의 통이 비어있어 약탈할 수 없습니다!", ephemeral=True)
+            return await interaction.response.send_message(f"❌ 상대방({상대.name})의 잠금 목록이 비어있어 약탈할 수 없습니다!", ephemeral=True)
 
         def get_best_fish(items):
             best = None
@@ -122,8 +92,8 @@ class BattleCog(commands.Cog):
         p1_fish, p1_p = get_best_fish(items1)
         p2_fish, p2_p = get_best_fish(items2)
         
-        if p1_p == -1: return await interaction.response.send_message("❌ 내 통에 출전 가능한 유효한 물고기가 없습니다!", ephemeral=True)
-        if p2_p == -1: return await interaction.response.send_message(f"❌ 상대방({상대.name})의 통에 유효한 물고기가 없어 약탈할 수 없습니다!", ephemeral=True)
+        if p1_p == -1: return await interaction.response.send_message("❌ 내 잠금 목록에 출전 가능한 유효한 물고기가 없습니다!", ephemeral=True)
+        if p2_p == -1: return await interaction.response.send_message(f"❌ 상대방({상대.name})에게 유효한 배틀 물고기가 없어 약탈할 수 없습니다!", ephemeral=True)
 
         view = PvPBattleView(interaction.user, 상대, p1_fish, p2_fish)
         
