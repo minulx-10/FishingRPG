@@ -8,6 +8,12 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
 </head>
 <body>
+    <!-- 전역 알림(Toast) 컨테이너 -->
+    <div id="toast-container"></div>
+    
+    <!-- 어종 자동완성 데이터리스트 -->
+    <datalist id="fish-list"></datalist>
+
     <div id="login-container" class="glass-panel">
         <div class="glow-orb" style="top: -50px; left: -50px; background: cyan;"></div>
         <div class="glow-orb" style="bottom: -50px; right: -50px; background: magenta;"></div>
@@ -87,13 +93,35 @@
                 <header>
                     <h1>수산시장 물가 통제소</h1>
                 </header>
-                <div class="glass-panel" style="padding: 2rem;">
-                    <p>특정 생선의 시청 개입(시세 조작)을 진행합니다. 게임 생태계를 파괴하지 않도록 주의하세요.</p>
+                <div class="glass-panel" style="padding: 1.5rem; margin-bottom: 2rem;">
+                    <p style="color: var(--text-muted); margin-bottom: 1rem;">특정 생선의 시장 가격(시세 조작)을 강제로 개입합니다. 게임 생태계를 파괴하지 않도록 주의하세요.</p>
                     <div class="input-group">
-                        <input type="text" id="market-fish-str" placeholder="어종명 (예: 광어 🐟)">
+                        <input type="text" id="market-fish-str" list="fish-list" placeholder="어종 검색 (초성/이름 입력)">
                         <input type="number" id="market-price-input" placeholder="새로운 강제 시세 (단위: C)">
                         <button id="btn-market-update">시장 가격 선포 완료</button>
                     </div>
+                </div>
+                
+                <div class="glass-panel user-list-container">
+                    <div style="padding: 1rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--glass-border);">
+                        <h3>전체 어종 시세표</h3>
+                        <input type="text" id="market-search" placeholder="물고기 이름으로 필터링 표 검색..." style="width: 300px; padding: 8px;">
+                    </div>
+                    <table id="market-table">
+                        <thead>
+                            <tr>
+                                <th>어종 이름</th>
+                                <th>등급</th>
+                                <th>속성</th>
+                                <th>기본 시세</th>
+                                <th>현재 적용 시세</th>
+                                <th>관리(Action)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="market-tbody">
+                            <!-- JS Injected -->
+                        </tbody>
+                    </table>
                 </div>
             </section>
 
@@ -104,13 +132,15 @@
                 </header>
                 <div class="grid-2col">
                     <div class="glass-panel">
-                        <h2>확성기 송출</h2>
+                        <h2>🔊 글로벌 무전 송출</h2>
+                        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:1rem;">해당 기능은 봇이 등록된 <strong>모든 디스코드 서버</strong>에 긴급 알림(빨간색 공식 임베드)을 푸시합니다. 이벤트 시작이나 점검 안내에 사용하세요.</p>
                         <input type="text" id="noti-title" placeholder="공지 제목">
                         <textarea id="noti-content" rows="4" placeholder="공지 내용을 입력하세요 (디스코드 전역 송출)"></textarea>
                         <button id="btn-send-noti" class="btn-danger">전역 시스템 공지 발송</button>
                     </div>
                     <div class="glass-panel">
-                        <h2>기상 조작기</h2>
+                        <h2>🌡️ 극기상 조작기</h2>
+                        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:1rem;">서버 전체의 날씨 생태계를 바꿉니다. 날씨에 따라 특정 히든 물고기(예: 비 오는 날 네시)의 등장 조건이 활성화될 수 있습니다.</p>
                         <select id="weather-select">
                             <option value="☀️ 맑음">☀️ 맑음 (평화로움)</option>
                             <option value="☁️ 흐림">☁️ 흐림 (어두움)</option>
@@ -154,7 +184,7 @@
             
             <h3>인벤토리 개입 (아이템 지급/압수)</h3>
             <div class="input-group" style="display: flex; gap: 10px;">
-                <input type="text" id="mod-item-name" placeholder="아이템명 (예: 용왕 👑)" style="flex: 2;">
+                <input type="text" id="mod-item-name" list="fish-list" placeholder="아이템 또는 어종 검색..." style="flex: 2;">
                 <input type="number" id="mod-item-amt" value="1" style="flex: 1;">
                 <button id="btn-mod-give" class="btn-success">지급</button>
                 <button id="btn-mod-take" class="btn-danger">회수</button>

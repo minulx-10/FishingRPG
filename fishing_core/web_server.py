@@ -23,12 +23,14 @@ class DashboardServer:
     def __init__(self, bot):
         self.bot = bot
         self.app = web.Application()
+        self.USER_CACHE = {} # 외부 통신 부하를 줄이기 위한 임시 캐시
         self.app.add_routes([
             web.post('/api/login', self.api_login),
             web.get('/api/stats', self.api_stats),
             web.get('/api/users', self.api_users),
             web.post('/api/users/{user_id}', self.api_update_user),
             web.post('/api/users/{user_id}/items', self.api_modify_item),
+            web.get('/api/market', self.api_get_market),
             web.post('/api/market', self.api_update_market),
             web.post('/api/admin/broadcast', self.api_broadcast),
             web.post('/api/admin/weather', self.api_set_weather),
@@ -87,10 +89,27 @@ class DashboardServer:
             for r in rows:
                 user_id, rating, coins, boat_tier, rod_tier, last_daily = r
                 
-                # 유저 이름 봇 캐시에서 불러오기 시도
+                name = str(user_id)
+                avatar = None
+                
+                # 유저 이름 봇 캐시에서 불러오기 시도 (캐시 히트 최우선)
                 discord_user = self.bot.get_user(int(user_id))
-                name = discord_user.name if discord_user else str(user_id)
-                avatar = discord_user.avatar.url if discord_user and discord_user.avatar else None
+                
+                # 만약 메모리에 유저가 없다면 디스코드 API로 조회 (제한 피하기 위해 자체 USER_CACHE 확인)
+                if not discord_user:
+                    if user_id in self.USER_CACHE:
+                        discord_user = self.USER_CACHE[user_id]
+                    else:
+                        try:
+                            fetched_user = await self.bot.fetch_user(int(user_id))
+                            self.USER_CACHE[user_id] = fetched_user
+                            discord_user = fetched_user
+                        except Exception:
+                            pass # 계정이 삭제되었거나 API 한계 도달 시
+
+                if discord_user:
+                    name = discord_user.name
+                    avatar = discord_user.avatar.url if discord_user.avatar else None
 
                 users.append({
                     "user_id": str(user_id),
@@ -146,6 +165,24 @@ class DashboardServer:
             await db.commit()
             return web.json_response({"success": True})
         except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
+
+    @require_auth
+    async def api_get_market(self, request):
+        try:
+            res_data = []
+            for fish_name, info in FISH_DATA.items():
+                res_data.append({
+                    "fish_name": fish_name,
+                    "grade": info.get("grade", "일반"),
+                    "base_price": info.get("price", 0),
+                    "element": info.get("element", "무속성"),
+                    "market_price": MARKET_PRICES.get(fish_name, info.get("price", 0))
+                })
+            return web.json_response({"success": True, "data": res_data})
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
             return web.json_response({"error": str(e)}, status=500)
 
     @require_auth

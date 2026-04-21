@@ -37,16 +37,31 @@ const DOM = {
     marketFish: document.getElementById('market-fish-str'),
     marketPrice: document.getElementById('market-price-input'),
     btnMarketUpdate: document.getElementById('btn-market-update'),
+    marketTbody: document.getElementById('market-tbody'),
+    marketSearch: document.getElementById('market-search'),
 
     // Server
     notiTitle: document.getElementById('noti-title'),
     notiContent: document.getElementById('noti-content'),
     btnSendNoti: document.getElementById('btn-send-noti'),
     weatherSelect: document.getElementById('weather-select'),
-    btnChangeWeather: document.getElementById('btn-change-weather')
+    btnChangeWeather: document.getElementById('btn-change-weather'),
+
+    // Global
+    toastContainer: document.getElementById('toast-container'),
+    fishListDatlist: document.getElementById('fish-list')
 };
 
 let currentUserEditing = null;
+let globalMarketData = [];
+
+function showToast(message, type="success") {
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerText = message;
+    DOM.toastContainer.appendChild(toast);
+    setTimeout(() => { toast.remove(); }, 3000);
+}
 
 async function apiCall(endpoint, method = 'GET', body = null) {
     const headers = { 'Content-Type': 'application/json' };
@@ -112,6 +127,7 @@ function switchPanel(targetId) {
     
     if(targetId === 'panel-home') loadStats();
     if(targetId === 'panel-users') loadUsers();
+    if(targetId === 'panel-market') loadMarket();
 }
 
 async function loadStats() {
@@ -123,11 +139,9 @@ async function loadStats() {
             DOM.sPing.innerText = res.data.bot_latency + " ms";
             DOM.sWeather.innerText = res.data.current_weather;
         } else {
-            alert("통계 불러오기 실패: " + res.error);
+            showToast("통계 에러: " + res.error, "error");
         }
-    } catch(e) {
-        alert("통계 네트워크 오류: " + e.message);
-    }
+    } catch(e) { showToast("네트워크 오류: " + e.message, "error"); }
 }
 
 async function loadUsers() {
@@ -149,11 +163,9 @@ async function loadUsers() {
                 DOM.usersTbody.appendChild(tr);
             });
         } else {
-            alert("유저 정보 불러오기 실패: " + res.error);
+            showToast("유저 목록 에러: " + res.error, "error");
         }
-    } catch(e) {
-        alert("유저 정보 네트워크 오류: " + e.message);
-    }
+    } catch(e) { showToast("네트워크 오류: " + e.message, "error"); }
 }
 
 function openModal(user) {
@@ -179,18 +191,20 @@ async function saveUserStats() {
     try {
         const res = await apiCall(`/users/${currentUserEditing.user_id}`, 'POST', body);
         if(res.success) {
-            alert('유저 스탯을 성공적으로 조작했습니다.');
+            showToast('히스토리 저장 완료 (스탯 적용됨)', 'success');
             loadUsers();
             closeModal();
+        } else {
+            showToast(res.error, "error");
         }
-    } catch(e) {}
+    } catch(e) { showToast(e.message, "error"); }
 }
 
 async function modifyItem(action) {
     if(!currentUserEditing) return;
     const item = DOM.mItemName.value;
     const amt = DOM.mItemAmt.value;
-    if(!item || amt < 1) return alert("올바른 아이템명과 수량을 입력하세요.");
+    if(!item || amt < 1) return showToast("오류: 올바른 아이템명과 수량을 입력하세요.", "error");
     
     try {
         const res = await apiCall(`/users/${currentUserEditing.user_id}/items`, 'POST', {
@@ -198,40 +212,97 @@ async function modifyItem(action) {
             amount: amt,
             action: action
         });
-        if(res.success) alert(`성공적으로 [${action === 'give' ? '지급' : '회수'}] 처리되었습니다.`);
-        else alert('오류가 발생했습니다.');
+        if(res.success) showToast(`시스템: 해상 물품 [${action === 'give' ? '지급' : '회수'}] 완료`, 'success');
+        else showToast(res.error, 'error');
+    } catch(e) { showToast(e.message, 'error'); }
+}
+
+// Market Logic
+async function loadMarket() {
+    try {
+        const res = await apiCall('/market');
+        if(res.success) {
+            globalMarketData = res.data;
+            renderMarketTable(globalMarketData);
+            
+            // 데이터리스트 전역 갱신 (자동완성 용도)
+            DOM.fishListDatlist.innerHTML = '';
+            res.data.forEach(f => {
+                const opt = document.createElement('option');
+                opt.value = f.fish_name;
+                DOM.fishListDatlist.appendChild(opt);
+            });
+        } else {
+            showToast("시장 정보 에러: " + res.error, "error");
+        }
     } catch(e) {}
 }
+
+function renderMarketTable(data) {
+    DOM.marketTbody.innerHTML = '';
+    data.forEach(f => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><b>${f.fish_name}</b></td>
+            <td><span style="color:var(--text-muted)">${f.grade}</span></td>
+            <td>${f.element}</td>
+            <td>${f.base_price.toLocaleString()} C</td>
+            <td><b style="color:var(--accent)">${f.market_price.toLocaleString()} C</b></td>
+            <td><button class="action-btn" onclick="openMarketEdit('${f.fish_name}', ${f.market_price})">개입</button></td>
+        `;
+        DOM.marketTbody.appendChild(tr);
+    });
+}
+
+function openMarketEdit(fishName, currentPrice) {
+    DOM.marketFish.value = fishName;
+    DOM.marketPrice.value = currentPrice;
+    window.scrollTo({top: 0, behavior: 'smooth'});
+    DOM.marketPrice.focus();
+}
+
+DOM.marketSearch.addEventListener('input', (e) => {
+    const term = e.target.value.toLowerCase();
+    const filtered = globalMarketData.filter(f => f.fish_name.toLowerCase().includes(term) || f.grade.includes(term));
+    renderMarketTable(filtered);
+});
 
 async function updateMarket() {
     const fish = DOM.marketFish.value;
     const price = DOM.marketPrice.value;
-    if(!fish || !price) return alert('어종명과 가격을 입력하세요.');
+    if(!fish || !price) return showToast('오류: 어종명과 가격을 입력하세요.', 'error');
     
     try {
         const res = await apiCall('/market', 'POST', {fish_name: fish, price: price});
-        if(res.success) alert(`${fish} 시세 통제 완료! (신규가: ${price} C)`);
-        else alert('존재하지 않는 어종이거나 에러가 발생했습니다.');
-    } catch(e) {}
+        if(res.success) {
+            showToast(`[시장 통제 알림] ${fish} 가격이 ${price}C 로 변동되었습니다.`, 'success');
+            loadMarket(); // 표 갱신
+        }
+        else showToast('데이터를 찾을 수 없습니다.', 'error');
+    } catch(e) { showToast(e.message, 'error'); }
 }
 
 async function sendBroadcast() {
     const title = DOM.notiTitle.value;
     const content = DOM.notiContent.value;
-    if(!title || !content) return alert('제목과 내용을 입력하세요.');
+    if(!title || !content) return showToast('오류: 제목과 내용을 작성하세요.', 'error');
     
     try {
         const res = await apiCall('/admin/broadcast', 'POST', {title, content});
-        if(res.success) alert(`총 ${res.channels_notified}개의 서버에 시스템 확성기를 송출했습니다!`);
-    } catch(e) {}
+        if(res.success) {
+            showToast(`통신 완료: 총 ${res.channels_notified}개의 서버에 무전을 송출했습니다.`, 'success');
+            DOM.notiTitle.value = ''; DOM.notiContent.value = '';
+        } else showToast(res.error, 'error');
+    } catch(e) { showToast(e.message, 'error'); }
 }
 
 async function forceWeather() {
     const weather = DOM.weatherSelect.value;
     try {
         const res = await apiCall('/admin/weather', 'POST', {weather: weather});
-        if(res.success) alert(`환경 통제: 날씨가 [${weather}](으)로 강제 변조되었습니다.`);
-    } catch(e) {}
+        if(res.success) showToast(`강제 기상 제어 완료: [${weather}]`, 'success');
+        else showToast(res.error, 'error');
+    } catch(e) { showToast(e.message, 'error'); }
 }
 
 // Events
