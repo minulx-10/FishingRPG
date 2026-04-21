@@ -1497,7 +1497,7 @@ async def 감정(interaction: discord.Interaction):
 @app_commands.checks.cooldown(1, 60.0, key=lambda i: i.user.id) # 도배 방지: 1분마다 1번만 가능
 async def 기도(interaction: discord.Interaction):
     # 0.05% 확률 계산
-    success_chance = 0.05
+    success_chance = 0.0005
     is_success = random.random() < success_chance
 
     if is_success:
