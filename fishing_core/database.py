@@ -99,7 +99,15 @@ class DBManager:
 
         try:
             await self.conn.execute("ALTER TABLE user_data ADD COLUMN title TEXT DEFAULT ''")
+        except aiosqlite.OperationalError:
+            pass
+
+        try:
             await self.conn.execute("ALTER TABLE user_data ADD COLUMN aquarium_slots INTEGER DEFAULT 5")
+        except aiosqlite.OperationalError:
+            pass
+
+        try:
             await self.conn.execute("ALTER TABLE user_data ADD COLUMN username TEXT DEFAULT ''")
         except aiosqlite.OperationalError:
             pass
