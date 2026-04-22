@@ -32,14 +32,33 @@ jobs:
                 git pull origin main
             else
                 echo "🔄 Full Deploy Mode: Restarting the bot!"
+                
+                echo "📋 === deploy.sh 내용 확인 ==="
+                cat deploy.sh
+                echo "📋 === ======================== ==="
+                
+                echo "📋 === .env 파일 존재 확인 ==="
+                ls -la .env 2>/dev/null || echo "⚠️ .env 파일이 없습니다!"
+                
+                echo "📋 === 기존 Python 프로세스 확인 ==="
+                ps aux | grep -E "python|fishing" | grep -v grep || echo "없음"
+                
                 sed -i 's/fishing_rpg.py/fishing_main.py/g' deploy.sh
                 chmod +x deploy.sh
                 ./deploy.sh
+                
+                echo "📋 === 배포 직후 프로세스 ==="
+                ps aux | grep -E "python|fishing" | grep -v grep || echo "없음"
+                
+                sleep 10
+                
+                echo "📋 === 10초 후 프로세스 생존 확인 ==="
+                ps aux | grep -E "fishing_main" | grep -v grep || echo "⚠️ fishing_main.py 프로세스가 죽었습니다!"
+                
+                echo "📋 === 로그 파일 탐색 ==="
+                ls -la *.log *.out 2>/dev/null || echo "로그 파일 없음"
+                find . -name "*.log" -o -name "*.out" -o -name "nohup*" 2>/dev/null | head -10
+                
+                echo "📋 === 직접 실행 테스트 (5초 타임아웃) ==="
+                timeout 5 python3 fishing_main.py 2>&1 || echo "프로세스 종료 (코드: $?)"
             fi
-            
-            echo "📋 === Bot Log (last 50 lines) ==="
-            sleep 5
-            tail -n 50 nohup.out 2>/dev/null || tail -n 50 bot.log 2>/dev/null || echo "No log file found (nohup.out / bot.log)"
-            
-            echo "📋 === Running Processes ==="
-            ps aux | grep -E "python|fishing" | grep -v grep || echo "No python process found!"
