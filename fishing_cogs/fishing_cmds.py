@@ -65,7 +65,9 @@ class FishingCog(commands.Cog):
             await db.commit()
             bait_text = f" ({bait_used} 사용됨!)"
 
-        await db.execute("UPDATE user_data SET stamina = stamina - 10 WHERE user_id=?", (interaction.user.id,))
+        # 뉴비 체력 소모 감소 (선박 티어 1인 경우 5소모, 그 외 10소모)
+        stamina_cost = 5 if current_tier == 1 else 10
+        await db.execute("UPDATE user_data SET stamina = stamina - ? WHERE user_id=?", (stamina_cost, interaction.user.id))
 
         now_str = datetime.datetime.now(kst).strftime('%Y-%m-%d %H:%M:%S')
         async with db.conn.execute("SELECT buff_type FROM active_buffs WHERE user_id=? AND end_time > ?", (interaction.user.id, now_str)) as cursor:
@@ -133,11 +135,23 @@ class FishingCog(commands.Cog):
         now_hour = datetime.datetime.now(kst).hour
         if target_fish == "바다의 원혼, 우미보즈 🌑" and not (0 <= now_hour < 4):
             target_fish = "낡은 장화 🥾"
-            bait_text += "\n*(으스스한 기운이 맴돌았지만, 날이 밝아 흩어졌습니다...)*"
+            # 조건 미달로 잡어 낚인 경우 미끼 복구 (UX 개선)
+            if bait_used != "none":
+                await db.execute("UPDATE inventory SET amount = amount + 1 WHERE user_id=? AND item_name=?", (interaction.user.id, bait_used))
+                await db.commit()
+                bait_text = " *(조건 미달로 미끼가 보존되었습니다!)*"
+            else:
+                bait_text += "\n*(으스스한 기운이 맴돌았지만, 날이 밝아 흩어졌습니다...)*"
                 
         if target_fish == "네스호의 그림자, 네시 🦕" and env_state["CURRENT_WEATHER"] not in ["🌧️ 비", "🌫️ 안개", "🌩️ 폭풍우"]:
             target_fish = "낡은 장화 🥾"
-            bait_text += "\n*(거대한 그림자가 지나갔지만, 깊은 곳으로 숨어버렸습니다...)*"
+            # 조건 미달로 잡어 낚인 경우 미끼 복구 (UX 개선)
+            if bait_used != "none":
+                await db.execute("UPDATE inventory SET amount = amount + 1 WHERE user_id=? AND item_name=?", (interaction.user.id, bait_used))
+                await db.commit()
+                bait_text = " *(조건 미달로 미끼가 보존되었습니다!)*"
+            else:
+                bait_text += "\n*(거대한 그림자가 지나갔지만, 깊은 곳으로 숨어버렸습니다...)*"
 
         # 폭풍우 시 안내 추가
         if env_state["CURRENT_WEATHER"] == "🌩️ 폭풍우":
@@ -234,9 +248,9 @@ class FishingCog(commands.Cog):
         today = datetime.datetime.now(kst).strftime('%Y-%m-%d')
         is_free = (last_free_rest != today)
         
-        # 선박 티어별 차등 비용
-        tier_costs = {1: 500, 2: 1500, 3: 3000, 4: 5000, 5: 8000}
-        cost = tier_costs.get(boat_tier, 3000)
+        # 선박 티어별 차등 비용 (가성비 개선)
+        tier_costs = {1: 500, 2: 1000, 3: 1800, 4: 2800, 5: 4000}
+        cost = tier_costs.get(boat_tier, 2500)
         
         if is_free:
             await db.execute("UPDATE user_data SET stamina = max_stamina, last_free_rest = ? WHERE user_id=?", (today, interaction.user.id))

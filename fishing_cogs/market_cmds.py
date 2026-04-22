@@ -37,6 +37,9 @@ class MarketCog(commands.Cog):
         app_commands.Choice(name="일반만", value="일반"),
         app_commands.Choice(name="희귀이하", value="희귀"),
         app_commands.Choice(name="초희귀이하", value="초희귀"),
+        app_commands.Choice(name="에픽이하", value="에픽"),
+        app_commands.Choice(name="레전드이하", value="레전드"),
+        app_commands.Choice(name="태고이하", value="태고"),
         app_commands.Choice(name="전체 (추천 안함)", value="전체")
     ])
     @app_commands.autocomplete(제외1=inv_autocomplete, 제외2=inv_autocomplete, 제외3=inv_autocomplete)
@@ -263,6 +266,7 @@ class MarketCog(commands.Cog):
         embed.add_field(name="[갑부] 💰", value="가격: `1,000,000 C`", inline=False)
         embed.add_field(name="[강태공] 🎣", value="가격: `5,000,000 C`", inline=False)
         embed.add_field(name="[바다의 왕] 🔱", value="가격: `20,000,000 C`", inline=False)
+        embed.add_field(name="[대부호] 💎", value="가격: `50,000,000 C`", inline=False)
         embed.add_field(name="[해신] 🌊", value="가격: `100,000,000 C`", inline=False)
         embed.set_footer(text="💡 구매 즉시 해당 칭호가 적용됩니다.")
         
@@ -277,6 +281,7 @@ class TitleShopView(discord.ui.View):
         discord.SelectOption(label="[갑부] 💰", value="갑부", description="1,000,000 C"),
         discord.SelectOption(label="[강태공] 🎣", value="강태공", description="5,000,000 C"),
         discord.SelectOption(label="[바다의 왕] 🔱", value="바다의 왕", description="20,000,000 C"),
+        discord.SelectOption(label="[대부호] 💎", value="대부호", description="50,000,000 C"),
         discord.SelectOption(label="[해신] 🌊", value="해신", description="100,000,000 C"),
     ])
     async def select_title(self, interaction: discord.Interaction, select: discord.ui.Select):
@@ -284,6 +289,7 @@ class TitleShopView(discord.ui.View):
             "갑부": 1000000,
             "강태공": 5000000,
             "바다의 왕": 20000000,
+            "대부호": 50000000,
             "해신": 100000000
         }
         

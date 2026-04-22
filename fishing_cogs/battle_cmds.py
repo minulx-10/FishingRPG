@@ -31,7 +31,7 @@ class BattleCog(commands.Cog):
         my_best_fish = None
         max_power = -1
         for (name,) in items:
-            power = 99999 if name == "용왕 👑" else FISH_DATA.get(name, {}).get("power", -1)
+            power = FISH_DATA.get(name, {}).get("power", -1)
             if power > max_power:
                 max_power = power
                 my_best_fish = name
@@ -55,7 +55,7 @@ class BattleCog(commands.Cog):
         if items:
             item_list = ""
             for name, amt in items:
-                power = 99999 if name == "용왕 👑" else FISH_DATA.get(name, {}).get("power", 0)
+                power = FISH_DATA.get(name, {}).get("power", 0)
                 if power > 0:
                     item_list += f"• {name}: {amt}마리 (전투력: {power}⚡)\n"
                 else:
@@ -96,16 +96,19 @@ class BattleCog(commands.Cog):
             now = dt.datetime.now(kst_tz)
             today_str = now.strftime('%Y-%m-%d')
             
-            # 1) RP 차이 제한 (500 이상 차이나면 하위 유저 공격 불가)
+            # 1) RP 차이 제한 (기본 500 차이, 고랭커는 완화)
             async with db.conn.execute("SELECT rating FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
                 my_rp = (await cursor.fetchone())[0]
             async with db.conn.execute("SELECT rating FROM user_data WHERE user_id=?", (상대.id,)) as cursor:
                 target_rp = (await cursor.fetchone())[0]
             
-            if my_rp - target_rp > 500:
+            rp_gap_limit = 500
+            if my_rp > 2000: rp_gap_limit = 1000 # 고랭커 매칭 풀 확보
+            
+            if my_rp - target_rp > rp_gap_limit:
                 return await interaction.response.send_message(
                     f"❌ 상대방과의 RP 격차가 너무 큽니다! (나: {my_rp} / 상대: {target_rp})\n"
-                    f"⚖️ 비슷한 실력의 유저에게만 수산대전을 걸 수 있습니다. (최대 차이: 500 RP)",
+                    f"⚖️ 비슷한 실력의 유저에게만 수산대전을 걸 수 있습니다. (현재 내 기준 최대 차이: {rp_gap_limit} RP)",
                     ephemeral=True
                 )
             
@@ -127,8 +130,8 @@ class BattleCog(commands.Cog):
                     ephemeral=True
                 )
             
-            # 3) 공격자 평화모드 강제 해제 + 6시간 쿨타임
-            cooldown_until = (now + dt.timedelta(hours=6)).isoformat()
+            # 3) 공격자 평화모드 강제 해제 + 1시간 쿨타임 (기존 6시간에서 단축)
+            cooldown_until = (now + dt.timedelta(hours=1)).isoformat()
             await db.execute("UPDATE user_data SET peace_mode=0, peace_cooldown=? WHERE user_id=?", (cooldown_until, interaction.user.id))
             
             # 방어자 보호막 1회 차감
@@ -148,7 +151,7 @@ class BattleCog(commands.Cog):
             def get_top3_fish(items):
                 fish_list = []
                 for (name,) in items:
-                    p = 99999 if name == "용왕 👑" else FISH_DATA.get(name, {}).get("power", -1)
+                    p = FISH_DATA.get(name, {}).get("power", -1)
                     if p > 0:
                         fish_list.append((name, p))
                 fish_list.sort(key=lambda x: x[1], reverse=True)
@@ -205,13 +208,13 @@ class BattleCog(commands.Cog):
         new_mode = 1 if current_mode == 0 else 0
         status_text = "켜졌습니다 🕊️ (이제 다른 유저가 나를 약탈할 수 없습니다)" if new_mode == 1 else "꺼졌습니다 ⚔️ (이제 다른 유저와 PvP 전투가 가능합니다)"
         
-        # 24시간 쿨타임 설정
-        cooldown_until = (now + dt.timedelta(hours=24)).isoformat()
+        # 1시간 쿨타임 설정 (기존 24시간에서 단축)
+        cooldown_until = (now + dt.timedelta(hours=1)).isoformat()
         
         await db.execute("UPDATE user_data SET peace_mode=?, peace_cooldown=? WHERE user_id=?", (new_mode, cooldown_until, interaction.user.id))
         await db.commit()
         
-        await interaction.response.send_message(f"✅ 평화 모드가 **{status_text}**\n⏳ *다음 전환까지 24시간 쿨타임이 적용됩니다.*")
+        await interaction.response.send_message(f"✅ 평화 모드가 **{status_text}**\n⏳ *다음 전환까지 1시간 쿨타임이 적용됩니다.*")
 
     @app_commands.command(name="레이드", description="서버 전체 유저들과 힘을 합쳐 월드 보스를 토벌합니다! (체력 25 소모, 30분 쿨타임)")
     @app_commands.checks.cooldown(1, 1800, key=lambda i: i.user.id)
@@ -231,8 +234,8 @@ class BattleCog(commands.Cog):
             lvl_res = await cursor.fetchone()
         boss_level = int(lvl_res[0]) if lvl_res else 1
         
-        # 보스 최대 HP = 기본 100만 × 1.2^(레벨-1)
-        boss_max_hp = int(1000000 * (1.2 ** (boss_level - 1)))
+        # 보스 최대 HP = 기본 100만 × 1.1^(레벨-1) (기존 1.2배에서 하향)
+        boss_max_hp = int(1000000 * (1.1 ** (boss_level - 1)))
 
         async with db.conn.execute("SELECT value FROM server_state WHERE key='RAID_BOSS_HP'") as cursor:
             res = await cursor.fetchone()
@@ -240,7 +243,7 @@ class BattleCog(commands.Cog):
         boss_hp = int(res[0]) if res else boss_max_hp
         if boss_hp <= 0:
             boss_level += 1
-            boss_max_hp = int(1000000 * (1.2 ** (boss_level - 1)))
+            boss_max_hp = int(1000000 * (1.1 ** (boss_level - 1)))
             boss_hp = boss_max_hp
             await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_BOSS_LEVEL', ?)", (str(boss_level),))
             await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_DAMAGE_LOG', ?)", ('{}',))
@@ -254,7 +257,7 @@ class BattleCog(commands.Cog):
             
         max_power = 0
         for (name,) in items:
-            pwr = 99999 if name == "용왕 👑" else FISH_DATA.get(name, {}).get("power", 0)
+            pwr = FISH_DATA.get(name, {}).get("power", 0)
             if pwr > max_power: max_power = pwr
             
         if max_power == 0:
@@ -285,7 +288,8 @@ class BattleCog(commands.Cog):
         damage_log[user_id_str] = damage_log.get(user_id_str, 0) + dmg
         await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_DAMAGE_LOG', ?)", (json.dumps(damage_log),))
         
-        reward = int(dmg * 1.5)
+        # 레이드 보상: 딜량의 0.2배 (하이퍼인플레이션 방지)
+        reward = int(dmg * 0.2)
         await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (reward, interaction.user.id))
         await db.commit()
         

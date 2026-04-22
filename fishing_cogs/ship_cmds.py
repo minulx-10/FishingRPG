@@ -16,6 +16,10 @@ class ShipCog(commands.Cog):
     async def 강화(self, interaction: discord.Interaction):
         coins, rod_tier, rating = await db.get_user_data(interaction.user.id)
         
+        async with db.conn.execute("SELECT upgrade_pity FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+            pity_res = await cursor.fetchone()
+        pity_count = pity_res[0] if pity_res else 0
+
         # 레벨이 오를수록 기하급수적으로 증가 (기본가 5000, 계수 1.3배수 방식)
         cost = int(5000 * (1.3 ** (rod_tier - 1)))
         
@@ -64,7 +68,14 @@ class ShipCog(commands.Cog):
             success_rate = 0.40  # 40% 성공
             drop_rate = 0.30     # 30% 하락 / 30% 유지
         
+        # 천장 시스템 적용 (10회 실패 시 100% 성공)
+        is_pity_trigger = False
+        if pity_count >= 10:
+            success_rate = 1.0
+            is_pity_trigger = True
+        
         # 비용 차감 (성공/실패 무관)
+        now = dt.datetime.now()
         await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id = ?", (cost, interaction.user.id))
         if scrap_needed > 0:
             await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name='낡은 고철 ⚙️'", (scrap_needed, interaction.user.id))
@@ -73,11 +84,12 @@ class ShipCog(commands.Cog):
         roll = random.random()
         if roll < success_rate:
             # 성공!
-            await db.execute("UPDATE user_data SET rod_tier = rod_tier + 1 WHERE user_id = ?", (interaction.user.id,))
+            await db.execute("UPDATE user_data SET rod_tier = rod_tier + 1, upgrade_pity = 0 WHERE user_id = ?", (interaction.user.id,))
             await db.commit()
             
             new_level = rod_tier + 1
-            msg = f"✨ {'🔥 **[초월 성공]** 🔥' if is_transcendence else '캉! 캉! 캉! ...'} 낚싯대가 **Lv.{new_level}** 로 강화되었습니다!"
+            pity_txt = "✨ **[천장 도달]** " if is_pity_trigger else ""
+            msg = f"{pity_txt}{'🔥 **[초월 성공]** 🔥' if is_transcendence else '캉! 캉! 캉! ...'} 낚싯대가 **Lv.{new_level}** 로 강화되었습니다!"
             
             # 마일스톤 알림 (50강 이후는 10단위로 계속 알림)
             if new_level % 10 == 0:
@@ -100,9 +112,11 @@ class ShipCog(commands.Cog):
                 )
             else:
                 # 유지
+                await db.execute("UPDATE user_data SET upgrade_pity = upgrade_pity + 1 WHERE user_id = ?", (interaction.user.id,))
                 await db.commit()
                 await interaction.response.send_message(
                     f"💨 캉... 쿵! 강화에 실패하여 낚싯대의 레벨이 **유지**되었습니다. (Lv.{rod_tier})\n"
+                    f"• 현재 천장 스택: `{pity_count + 1}/10` (10회 도달 시 100% 성공)\n"
                     f"• 소모된 코인: `{cost:,} C`" + (f"\n• 소모된 고철: `{scrap_needed}개`" if scrap_needed > 0 else "") +
                     f"\n*(성공 확률: {int(success_rate*100)}%)*"
                 )

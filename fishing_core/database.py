@@ -156,6 +156,12 @@ class DBManager:
         except aiosqlite.OperationalError:
             pass
 
+        # Phase 4: 강화 천장(Pity) 시스템
+        try:
+            await self.conn.execute("ALTER TABLE user_data ADD COLUMN upgrade_pity INTEGER DEFAULT 0")
+        except aiosqlite.OperationalError:
+            pass
+
         # 통 (bucket) 마이그레이션 로직
         try:
             # bucket 테이블이 존재하는지 확인
@@ -198,7 +204,7 @@ class DBManager:
             res = await cursor.fetchone()
         
         if not res:
-            await self.conn.execute("INSERT INTO user_data (user_id) VALUES (?)", (user_id,))
+            await self.conn.execute("INSERT INTO user_data (user_id, stamina, max_stamina) VALUES (?, 150, 150)", (user_id,))
             await self.conn.commit()
             return (0, 1, 1000) 
             
