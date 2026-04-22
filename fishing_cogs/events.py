@@ -61,7 +61,7 @@ class EventCog(commands.Cog):
         
         # 행동력(체력) 10분마다 자연 회복 (최대치 초과 방지)
         now_hour = datetime.datetime.now(kst).hour
-        stamina_regen = 5 if 0 <= now_hour < 8 else 15  # 밤/새벽 시간대는 자연 회복률 1/3 토막
+        stamina_regen = 5 if (18 <= now_hour <= 23 or 0 <= now_hour < 6) else 15  # 밤/새벽 시간대는 자연 회복률 1/3 토막
         
         try:
             await db.execute(f"UPDATE user_data SET stamina = stamina + {stamina_regen} WHERE stamina < max_stamina")

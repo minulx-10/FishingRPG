@@ -13,6 +13,23 @@ from fishing_core.utils import bait_autocomplete
 class FishingCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.equipped_baits = {}
+
+    @app_commands.command(name="미끼장착", description="자동으로 소모할 미끼를 장착하거나 해제합니다.")
+    @app_commands.autocomplete(미끼이름=bait_autocomplete)
+    async def 미끼장착(self, interaction: discord.Interaction, 미끼이름: str):
+        if 미끼이름 == "none":
+            self.equipped_baits.pop(interaction.user.id, None)
+            return await interaction.response.send_message("✅ 자동 장착된 미끼를 해제했습니다.")
+            
+        async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, 미끼이름)) as cursor:
+            res = await cursor.fetchone()
+        
+        if not res or res[0] <= 0:
+            return await interaction.response.send_message(f"❌ 가방에 **{미끼이름}**가 없습니다! 소지하고 있는 미끼만 장착할 수 있습니다.", ephemeral=True)
+            
+        self.equipped_baits[interaction.user.id] = 미끼이름
+        await interaction.response.send_message(f"✅ **{미끼이름}**를 낚싯대에 장착했습니다!\n이제 `/낚시` 시 이 미끼가 가방에서 자동으로 소모됩니다.")
 
     @app_commands.command(name="낚시", description="찌를 던져 물고기(또는 보물)를 낚습니다! (타이밍 미니게임 / 체력 10 소모)")
     @app_commands.autocomplete(사용할미끼=bait_autocomplete)
@@ -27,9 +44,10 @@ class FishingCog(commands.Cog):
         if current_stamina < 10:
             return await interaction.response.send_message(f"❌ 행동력(체력)이 부족하여 낚싯대를 던질 수 없습니다!\n(필요 체력: 10 / 현재: {current_stamina}⚡)\n💡 `/출석`이나 `/요리`를 통해 체력을 회복하세요.", ephemeral=True)
             
-        await db.execute("UPDATE user_data SET stamina = stamina - 10 WHERE user_id=?", (interaction.user.id,))
-        
         bait_used = 사용할미끼
+        if bait_used == "none" and interaction.user.id in self.equipped_baits:
+            bait_used = self.equipped_baits[interaction.user.id]
+            
         bait_text = ""
         
         if bait_used != "none":
@@ -37,11 +55,17 @@ class FishingCog(commands.Cog):
                 bait_res = await cursor.fetchone()
             
             if not bait_res or bait_res[0] <= 0:
-                return await interaction.response.send_message(f"❌ 가방에 **{bait_used}**가 없습니다! 상점에서 먼저 구매해주세요.", ephemeral=True)
+                if interaction.user.id in self.equipped_baits and self.equipped_baits[interaction.user.id] == bait_used:
+                    self.equipped_baits.pop(interaction.user.id, None)
+                    return await interaction.response.send_message(f"❌ 장착된 **{bait_used}**를 모두 소모했습니다! (자동 장착 해제)\n상점에서 미끼를 다시 구매하세요.", ephemeral=True)
+                else:
+                    return await interaction.response.send_message(f"❌ 가방에 **{bait_used}**가 없습니다! 상점에서 먼저 구매해주세요.", ephemeral=True)
                 
             await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (interaction.user.id, bait_used))
             await db.commit()
             bait_text = f" ({bait_used} 사용됨!)"
+
+        await db.execute("UPDATE user_data SET stamina = stamina - 10 WHERE user_id=?", (interaction.user.id,))
 
         now_str = datetime.datetime.now(kst).strftime('%Y-%m-%d %H:%M:%S')
         async with db.conn.execute("SELECT buff_type FROM active_buffs WHERE user_id=? AND end_time > ?", (interaction.user.id, now_str)) as cursor:
@@ -184,8 +208,8 @@ class FishingCog(commands.Cog):
         embed.add_field(name="현재 날씨", value=f"**{env_state['CURRENT_WEATHER']}**", inline=True)
         
         hints = ""
-        if time_str == "🌑 새벽": hints += "- ⚠️ [신화] 우미보즈가 출몰할 수 있는 으스스한 시간입니다.\n"
-        if env_state["CURRENT_WEATHER"] in ["🌧️ 비", "🌫️ 안개"]: hints += "- ⚠️ [레전드] 네시가 활동하기 좋은 날씨입니다.\n"
+        if 0 <= now_hour < 4: hints += "- ⚠️ [신화] 우미보즈가 출몰할 수 있는 으스스한 시간입니다.\n"
+        if env_state["CURRENT_WEATHER"] in ["🌧️ 비", "🌫️ 안개"]: hints += "- ⚠️ [미스터리] 네시가 활동하기 좋은 날씨입니다.\n"
         if not hints: hints = "- 평화로운 바다입니다. 낚시하기 딱 좋네요!"
         
         embed.add_field(name="생태계 정보", value=hints, inline=False)
