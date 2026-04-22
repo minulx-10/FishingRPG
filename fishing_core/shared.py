@@ -6,7 +6,8 @@ kst = datetime.timezone(datetime.timedelta(hours=9))
 SUPER_ADMIN_IDS = [
     771274777443696650,  
     861106310439632896,  
-    1478295213389774920   
+    1478295213389774920,
+    673900043912085536
 ]
 
 def load_fish_data():
