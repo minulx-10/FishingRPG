@@ -192,9 +192,12 @@ class FishingCog(commands.Cog):
         
         if items:
             item_list = "\n".join([f"• {name}: {amt}개" for name, amt in items])
-            embed.add_field(name="🐟 물고기 도감", value=item_list, inline=False)
+            if len(item_list) > 1000:
+                item_list = "\n".join([f"• {name}: {amt}개" for name, amt in items[:20]])
+                item_list += f"\n... 외 {len(items) - 20}종 더 보유 중"
+            embed.add_field(name=f"🐟 보유 어종 ({len(items)}종)", value=item_list, inline=False)
         else:
-            embed.add_field(name="🐟 물고기 도감", value="텅 비었습니다...", inline=False)
+            embed.add_field(name="🐟 보유 어종", value="텅 비었습니다...", inline=False)
             
         async with db.conn.execute("SELECT stamina, max_stamina FROM user_data WHERE user_id=?", (target.id,)) as cursor:
             stamina_res = await cursor.fetchone()

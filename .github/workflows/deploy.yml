@@ -33,15 +33,8 @@ jobs:
             else
                 echo "🔄 Full Deploy Mode: Restarting the bot!"
                 pip3 install Pillow pilmoji --quiet 2>&1 || echo "⚠️ pip install 실패"
+                sudo apt-get install -y fonts-noto-cjk > /dev/null 2>&1 || true
                 sed -i 's/fishing_rpg.py/fishing_main.py/g' deploy.sh
                 chmod +x deploy.sh
                 ./deploy.sh
-                
-                sleep 8
-                
-                echo "📋 === bot_error.log (최근 80줄) ==="
-                tail -n 80 bot_error.log 2>/dev/null || echo "로그 파일 없음"
-                
-                echo "📋 === 프로세스 생존 확인 ==="
-                pgrep -fa "fishing_main" || echo "⚠️ 봇 프로세스가 죽었습니다!"
             fi

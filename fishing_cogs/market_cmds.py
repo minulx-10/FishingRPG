@@ -4,7 +4,7 @@ from discord import app_commands
 
 from fishing_core.database import db
 from fishing_core.shared import FISH_DATA, MARKET_PRICES, RECIPES
-from fishing_core.utils import fish_autocomplete, inv_autocomplete, check_boat_tier
+from fishing_core.utils import fish_autocomplete, inv_autocomplete, locked_autocomplete, check_boat_tier
 from fishing_core.views import MarketPaginationView
 
 class MarketCog(commands.Cog):
@@ -159,6 +159,7 @@ class MarketCog(commands.Cog):
         await interaction.response.send_message(f"🔒 **{물고기}**가 잠금(보호) 처리되었습니다! 이제 일괄 판매 시 제외되며 배틀 출전이 가능합니다.")
 
     @app_commands.command(name="잠금해제", description="잠금(보호) 처리된 물고기의 잠금을 해제합니다.")
+    @app_commands.autocomplete(물고기=locked_autocomplete)
     async def 잠금해제(self, interaction: discord.Interaction, 물고기: str):
         async with db.conn.execute("SELECT amount, is_locked FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기)) as cursor:
             res = await cursor.fetchone()

@@ -291,8 +291,17 @@ class QuestCog(commands.Cog):
                 font = ImageFont.truetype("malgunbd.ttf", 24)
                 small_font = ImageFont.truetype("malgun.ttf", 16)
             except:
-                font = ImageFont.load_default()
-                small_font = font
+                try:
+                    # Linux: Noto Sans CJK (한글 지원 폰트)
+                    font = ImageFont.truetype("/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc", 24)
+                    small_font = ImageFont.truetype("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc", 16)
+                except:
+                    try:
+                        font = ImageFont.truetype("/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc", 24)
+                        small_font = ImageFont.truetype("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", 16)
+                    except:
+                        font = ImageFont.load_default()
+                        small_font = font
                 
             grade_colors = {
                 "일반": (200, 200, 200), "희귀": (100, 200, 255), "초희귀": (200, 100, 255), 
