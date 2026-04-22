@@ -54,6 +54,7 @@
     "홍합 🐚": {"grade": "일반", "prob": 55, "base_window": 3.0, "price": 12, "power": 1, "element": "암초"},
     "새우 🦐": {"grade": "일반", "prob": 60, "base_window": 3.0, "price": 15, "power": 1, "element": "표층"},
     "군소 🐌": {"grade": "일반", "prob": 40, "base_window": 2.7, "price": 45, "power": 2, "element": "암초"},
+    "소라게 🐚": {"grade": "일반", "prob": 40, "base_window": 3.0, "price": 50, "power": 1, "element": "암초"},
 
     "해적의 금화 🪙": {"grade": "희귀", "prob": 20, "base_window": 2.0, "price": 1000, "power": 0, "element": "무속성"},
     "날치 🐟": {"grade": "희귀", "prob": 25, "base_window": 2.5, "price": 120, "power": 10, "element": "표층"},
