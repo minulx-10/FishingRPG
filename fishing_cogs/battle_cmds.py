@@ -61,56 +61,59 @@ class BattleCog(commands.Cog):
     @app_commands.command(name="수산대전", description="다른 유저를 지목하여 마라맛 PvP 배틀(약탈)을 겁니다!")
     @check_boat_tier(4)
     async def 수산대전(self, interaction: discord.Interaction, 상대: discord.Member):
-        if interaction.user == 상대:
-            return await interaction.response.send_message("❌ 자기 자신과는 싸울 수 없습니다!", ephemeral=True)
-        if 상대.bot:
-            return await interaction.response.send_message("❌ 봇과는 싸울 수 없습니다!", ephemeral=True)
+        try:
+            if interaction.user == 상대:
+                return await interaction.response.send_message("❌ 자기 자신과는 싸울 수 없습니다!", ephemeral=True)
+            if 상대.bot:
+                return await interaction.response.send_message("❌ 봇과는 싸울 수 없습니다!", ephemeral=True)
 
-        await db.get_user_data(interaction.user.id)
-        await db.get_user_data(상대.id)
-        
-        async with db.conn.execute("SELECT peace_mode FROM user_data WHERE user_id=?", (상대.id,)) as cursor:
-            res = await cursor.fetchone()
-        if res and res[0] == 1:
-            return await interaction.response.send_message(f"❌ '{상대.name}'님은 현재 **평화 모드** 🕊️ 상태입니다. (약탈 불가)", ephemeral=True)
+            await db.get_user_data(interaction.user.id)
+            await db.get_user_data(상대.id)
+            
+            async with db.conn.execute("SELECT peace_mode FROM user_data WHERE user_id=?", (상대.id,)) as cursor:
+                res = await cursor.fetchone()
+            if res and res[0] == 1:
+                return await interaction.response.send_message(f"❌ '{상대.name}'님은 현재 **평화 모드** 🕊️ 상태입니다. (약탈 불가)", ephemeral=True)
 
-        async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (interaction.user.id,)) as cursor:
-            items1 = await cursor.fetchall()
-        if not items1:
-            return await interaction.response.send_message("❌ 내 잠금 목록이 비어있습니다! `/잠금`으로 출전할 물고기를 보존하세요.", ephemeral=True)
+            async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (interaction.user.id,)) as cursor:
+                items1 = await cursor.fetchall()
+            if not items1:
+                return await interaction.response.send_message("❌ 내 잠금 목록이 비어있습니다! `/잠금`으로 출전할 물고기를 보존하세요.", ephemeral=True)
 
-        async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (상대.id,)) as cursor:
-            items2 = await cursor.fetchall()
-        if not items2:
-            return await interaction.response.send_message(f"❌ 상대방({상대.name})의 잠금 목록이 비어있어 약탈할 수 없습니다!", ephemeral=True)
+            async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (상대.id,)) as cursor:
+                items2 = await cursor.fetchall()
+            if not items2:
+                return await interaction.response.send_message(f"❌ 상대방({상대.name})의 잠금 목록이 비어있어 약탈할 수 없습니다!", ephemeral=True)
 
-        def get_top3_fish(items):
-            fish_list = []
-            for (name,) in items:
-                p = 99999 if name == "용왕 👑" else FISH_DATA.get(name, {}).get("power", -1)
-                if p > 0:
-                    fish_list.append((name, p))
-            fish_list.sort(key=lambda x: x[1], reverse=True)
-            return fish_list[:3]
+            def get_top3_fish(items):
+                fish_list = []
+                for (name,) in items:
+                    p = 99999 if name == "용왕 👑" else FISH_DATA.get(name, {}).get("power", -1)
+                    if p > 0:
+                        fish_list.append((name, p))
+                fish_list.sort(key=lambda x: x[1], reverse=True)
+                return fish_list[:3]
 
-        p1_deck = get_top3_fish(items1)
-        p2_deck = get_top3_fish(items2)
-        
-        if not p1_deck: return await interaction.response.send_message("❌ 내 잠금 목록에 출전 가능한 유효한 물고기가 없습니다!", ephemeral=True)
-        if not p2_deck: return await interaction.response.send_message(f"❌ 상대방({상대.name})에게 유효한 배틀 물고기가 없어 약탈할 수 없습니다!", ephemeral=True)
+            p1_deck = get_top3_fish(items1)
+            p2_deck = get_top3_fish(items2)
+            
+            if not p1_deck: return await interaction.response.send_message("❌ 내 잠금 목록에 출전 가능한 유효한 물고기가 없습니다!", ephemeral=True)
+            if not p2_deck: return await interaction.response.send_message(f"❌ 상대방({상대.name})에게 유효한 배틀 물고기가 없어 약탈할 수 없습니다!", ephemeral=True)
 
-        async with db.conn.execute("SELECT title FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
-            res = await cursor.fetchone()
-        title1 = res[0] if res else ""
-        display_name1 = f"{title1} {interaction.user.name}" if title1 else interaction.user.name
+            title_str = await db.get_user_title(interaction.user.id)
+            display_name1 = f"{title_str} {interaction.user.name}" if title_str else interaction.user.name
 
-        view = PvPBattleView(interaction.user, 상대, p1_deck, p2_deck)
-        
-        await interaction.response.send_message(
-            f"⚔️ {상대.mention}! **{display_name1}**님이 3v3 릴레이 수산대전을 걸어왔습니다!\n(방어하지 못하면 코인과 RP를 약탈당합니다!)", 
-            embed=view.generate_embed(), 
-            view=view
-        )
+            view = PvPBattleView(interaction.user, 상대, p1_deck, p2_deck)
+            
+            await interaction.response.send_message(
+                f"⚔️ {상대.mention}! **{display_name1}**님이 3v3 릴레이 수산대전을 걸어왔습니다!\n(방어하지 못하면 코인과 RP를 약탈당합니다!)", 
+                embed=view.generate_embed(), 
+                view=view
+            )
+        except Exception as e:
+            import traceback
+            tb = traceback.format_exc()
+            await interaction.response.send_message(f"❌ 수산대전 실행 중 오류 발생:\n```py\n{tb[:1900]}\n```", ephemeral=True)
 
     @app_commands.command(name="평화모드", description="수산대전(PvP) 약탈을 거부하는 평화 모드를 켜거나 끕니다.")
     async def 평화모드(self, interaction: discord.Interaction):
