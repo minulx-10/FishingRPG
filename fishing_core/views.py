@@ -98,7 +98,6 @@ class FishingView(View):
                     async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=0", (self.user.id,)) as cursor:
                         items = await cursor.fetchall()
                     if items:
-                        from fishing_core.shared import FISH_DATA
                         most_exp = max(items, key=lambda x: FISH_DATA.get(x[0], {}).get("price", 0))[0]
                         await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (self.user.id, most_exp))
                         fail_msg += f"\n\n🦖 **[강철의 턱]** 둔클레오스테우스가 도망치며 당신의 가방을 찢어 가장 비싼 물고기(**{most_exp}**)를 먹어치웠습니다!"
