@@ -17,6 +17,7 @@ COGS = [
     "fishing_cogs.battle_cmds",
     "fishing_cogs.quest_cmds",
     "fishing_cogs.admin_cmds",
+    "fishing_cogs.help_cmds",
     "fishing_cogs.events"
 ]
 
