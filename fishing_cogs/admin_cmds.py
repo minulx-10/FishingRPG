@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 import subprocess
+import asyncio
 
 from fishing_core.utils import is_developer, log_admin_action
 from fishing_core.database import db
@@ -82,7 +83,6 @@ class AdminCog(commands.Cog):
         import os
         import subprocess
         import re
-        import asyncio
         
         port = int(os.getenv("WEB_PORT", 8888))
         
@@ -144,20 +144,29 @@ class AdminCog(commands.Cog):
         await interaction.response.defer(ephemeral=True) 
         
         try:
-            process = subprocess.Popen(["git", "pull"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            stdout, stderr = process.communicate()
+            # 동기적 Popen 대신 비동기 subprocess 사용 (이벤트 루프 블로킹 방지)
+            process = await asyncio.create_subprocess_exec(
+                "git", "pull",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await process.communicate()
+            
+            # 디코딩 처리
+            stdout_text = stdout.decode('utf-8')
             
             reload_data()
             
-            msg = f"✅ 최신 데이터를 깃허브에서 가져와 성공적으로 반영했습니다!\n```bash\n{stdout}```"
+            msg = f"✅ 최신 데이터를 깃허브에서 가져와 성공적으로 반영했습니다!\n```bash\n{stdout_text}```"
             await interaction.followup.send(msg)
             
         except Exception as e:
             await interaction.followup.send(f"❌ 데이터 업데이트 중 오류가 발생했습니다.\n**상세 오류:** `{e}`")
 
     @app_commands.command(name="시스템리로드", description="[관리자 전용] 봇 재시작 없이 모듈(코드)만 즉시 핫 리로드(Hot Reload)합니다.")
+    @app_commands.describe(동기화="슬래시 커맨드 변경사항이 있을 때만 True로 설정하세요 (API 제한 방지)")
     @is_developer()
-    async def 시스템리로드(self, interaction: discord.Interaction):
+    async def 시스템리로드(self, interaction: discord.Interaction, 동기화: bool = False):
         await interaction.response.defer(ephemeral=True)
         
         cogs = [
@@ -166,8 +175,8 @@ class AdminCog(commands.Cog):
             "fishing_cogs.ship_cmds",
             "fishing_cogs.battle_cmds",
             "fishing_cogs.quest_cmds",
-            "fishing_cogs.admin_cmds",
-            "fishing_cogs.events"
+            "fishing_cogs.events",
+            "fishing_cogs.admin_cmds" # 가급적 자신을 맨 마지막에 리로드하도록 순서 변경
         ]
         
         reloaded = []
@@ -180,10 +189,14 @@ class AdminCog(commands.Cog):
             except Exception as e:
                 failed.append(f"{cog}: {str(e)}")
                 
-        # 핫 리로드 후 슬래시 커맨드 트리 즉시 동기화
-        await self.bot.tree.sync()
+        # 잦은 봇 정지를 막기 위해, 커맨드 인자(옵션) 추가 등을 수정했을 때만 수동으로 동기화하도록 변경
+        if 동기화:
+            await self.bot.tree.sync()
+            sync_msg = "(슬래시 커맨드 동기화 됨)"
+        else:
+            sync_msg = "(명령어 동기화 생략됨)"
         
-        msg = f"🔄 **시스템 핫 리로드 완료! (무중단 업데이트)**\n✅ 성공 ({len(reloaded)}개): `{', '.join(reloaded)}`"
+        msg = f"🔄 **시스템 핫 리로드 완료! (무중단 업데이트)** {sync_msg}\n✅ 성공 ({len(reloaded)}개): `{', '.join(reloaded)}`"
         if failed:
             msg += f"\n❌ 실패 ({len(failed)}개):\n```\n" + '\n'.join(failed) + "\n```"
             
