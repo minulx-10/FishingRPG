@@ -73,6 +73,12 @@ class MarketCog(commands.Cog):
         if user_excludes:
             msg += f"*(🛡️ 선택 보호됨: {', '.join(user_excludes)})*\n\n"
 
+        from fishing_core.shared import env_state
+        current_weather = env_state.get("CURRENT_WEATHER", "☀️ 맑음")
+        weather_bonus_msg = ""
+        if current_weather == "☀️ 맑음":
+            weather_bonus_msg = "*(☀️ 맑은 날씨 보너스: 일반/희귀 어종 가격 1.3배 적용 중!)*\n"
+
         for name, amt in sellable_items:
             if name in MARKET_PRICES:
                 price = MARKET_PRICES[name]
@@ -82,6 +88,11 @@ class MarketCog(commands.Cog):
                 price = RECIPES[name]["price"]
             else:
                 price = 0 
+            
+            # 맑은 날 일반/희귀 보너스
+            item_grade = FISH_DATA.get(name, {}).get("grade", "일반")
+            if current_weather == "☀️ 맑음" and item_grade in ["일반", "희귀"]:
+                price = int(price * 1.3)
                 
             item_total = price * amt
             total_earned += item_total
@@ -95,7 +106,7 @@ class MarketCog(commands.Cog):
         await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (total_earned, interaction.user.id))
         await db.commit()
         
-        msg += f"\n**총 수익: +{total_earned:,} C**"
+        msg = f"{weather_bonus_msg}{msg}\n**총 수익: +{total_earned:,} C**"
         
         if len(msg) > 1900:
             msg = msg[:1900] + "\n... (목록이 너무 길어 생략됨) ...\n" + f"\n**총 수익: +{total_earned:,} C**"

@@ -599,14 +599,33 @@ class PvPBattleView(View):
         self.stop() 
         embed = self.generate_embed()
         
-        reward_rp = random.randint(15, 30)
-        reward_coin = random.randint(500, 2000) 
+        # === Phase 3: 연속 공격 패널티 로직 ===
+        async with db.conn.execute("SELECT pvp_last_target, pvp_consecutive_count FROM user_data WHERE user_id=?", (winner.id,)) as cursor:
+            res = await cursor.fetchone()
+        last_target, con_count = res if res else (0, 0)
         
+        penalty_msg = ""
+        reward_rp = random.randint(15, 30)
+        reward_coin = random.randint(500, 2000)
+
+        if last_target == loser.id:
+            con_count += 1
+            reduction = 0.5 ** (con_count - 1) # 2회째(con_count=2)부터 50% 차감
+            if con_count >= 2:
+                reward_rp = max(1, int(reward_rp * reduction))
+                reward_coin = max(100, int(reward_coin * reduction))
+                penalty_msg = f"\n⚠️ **연속 공격 패널티!** 동일 대상을 반복 공격하여 보상이 {int((1-reduction)*100)}% 감소했습니다."
+        else:
+            con_count = 1
+        
+        await db.execute("UPDATE user_data SET pvp_last_target=?, pvp_consecutive_count=? WHERE user_id=?", (loser.id, con_count, winner.id))
+        # === 패널티 로직 끝 ===
+
         await db.execute("UPDATE user_data SET rating = rating + ?, coins = coins + ? WHERE user_id = ?", (reward_rp, reward_coin, winner.id))
         await db.execute("UPDATE user_data SET rating = MAX(0, rating - ?), coins = MAX(0, coins - ?) WHERE user_id = ?", (reward_rp, int(reward_coin * 0.5), loser.id))
         await db.commit()
 
-        embed.description = f"🏆 **{winner.mention}님의 승리!!**\n\n**승자({winner.name}):** `+{reward_rp} RP`, `+{reward_coin} C`\n**패자({loser.name}):** `-{reward_rp} RP`, `-{int(reward_coin * 0.5)} C` (약탈당함!)"
+        embed.description = f"🏆 **{winner.mention}님의 승리!!**\n\n**승자({winner.name}):** `+{reward_rp} RP`, `+{reward_coin} C`{penalty_msg}\n**패자({loser.name}):** `-{reward_rp} RP`, `-{int(reward_coin * 0.5)} C` (약탈당함!)"
         embed.color = 0x00ff00
 
         await interaction.response.edit_message(embed=embed, view=None)

@@ -100,10 +100,18 @@ class FishingCog(commands.Cog):
                 elif "deep_sea_boost" in active_buffs and data["element"] == "심해":
                     base_prob *= 2.0
                     
+                # 1. 강화 레벨 보너스
                 if grade in ["에픽", "레전드", "신화"]:
                     base_prob *= (1 + (rod_tier * 0.1))
 
-                # 날씨 연동 글로벌 확률 펌핑 (핫타임) - 밸런스 조정됨
+                # 2. [신규] 버프 효과 체크 (가속 포션, 특수 떡밥)
+                async with db.conn.execute("SELECT buff_type FROM active_buffs WHERE user_id=? AND end_time > datetime('now', '+9 hours')", (interaction.user.id,)) as cursor:
+                    active_buffs = [row[0] for row in await cursor.fetchall()]
+                
+                if "rare_boost" in active_buffs and grade not in ["일반", "희귀"]:
+                    base_prob *= 1.5  # 특수 떡밥: 희귀 이상 확률 1.5배
+
+                # 3. 날씨 연동 글로벌 확률 펌핑 (핫타임) - 밸런스 조정됨
                 current_weather = env_state["CURRENT_WEATHER"]
                 if current_weather == "☀️ 맑음" and grade in ["일반", "희귀"]:
                     base_prob *= 1.3  # 맑은 날: 일반/희귀 어종 확률 증가 (안정적 수입)

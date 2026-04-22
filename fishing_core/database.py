@@ -143,6 +143,13 @@ class DBManager:
         except aiosqlite.OperationalError:
             pass
 
+        # Phase 3: PvP 연속 약탈 패널티 (동일 유저 공격 시 수익 감소)
+        try:
+            await self.conn.execute("ALTER TABLE user_data ADD COLUMN pvp_last_target INTEGER DEFAULT 0")
+            await self.conn.execute("ALTER TABLE user_data ADD COLUMN pvp_consecutive_count INTEGER DEFAULT 0")
+        except aiosqlite.OperationalError:
+            pass
+
         # Phase 3: 도감 보상 수령 현황 (JSON 형식)
         try:
             await self.conn.execute("ALTER TABLE user_data ADD COLUMN dex_rewards TEXT DEFAULT '{}'")
