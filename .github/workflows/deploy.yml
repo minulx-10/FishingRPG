@@ -25,6 +25,14 @@ jobs:
                 chmod +x cloudflared
                 sudo mv cloudflared /usr/local/bin/
             fi
-            sed -i 's/fishing_rpg.py/fishing_main.py/g' deploy.sh
-            chmod +x deploy.sh
-            ./deploy.sh
+            
+            COMMIT_MSG="${{ github.event.head_commit.message }}"
+            if [[ "$COMMIT_MSG" == *"[hotfix]"* ]]; then
+                echo "🔥 Hot Reload Mode: Pulling changes without restarting the bot!"
+                git pull origin main
+            else
+                echo "🔄 Full Deploy Mode: Restarting the bot!"
+                sed -i 's/fishing_rpg.py/fishing_main.py/g' deploy.sh
+                chmod +x deploy.sh
+                ./deploy.sh
+            fi
