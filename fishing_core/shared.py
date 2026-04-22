@@ -10,6 +10,9 @@ SUPER_ADMIN_IDS = [
     673900043912085536
 ]
 
+import os
+ADMIN_LOG_CHANNEL_ID = int(os.getenv("ADMIN_LOG_CHANNEL_ID", 0))
+
 def load_fish_data():
     try:
         with open('fish_data.json', 'r', encoding='utf-8') as f:

@@ -31,31 +31,23 @@ class EventCog(commands.Cog):
             base_price = data["price"]
             sold = sales_dict.get(fish, 0)
             
-            # 수요와 공급 기반 알고리즘
+            # 수요와 공급 기반 알고리즘 (탄력성 강화)
             if sold == 0:
-                current_ratio = MARKET_PRICES.get(fish, base_price) / base_price
-                now_hour = datetime.datetime.now(kst).hour
-                # 심야/새벽 시간대(0시 ~ 8시) 처리: 유저 활동이 적으므로 인플레이션 방지를 위해 매우 미세하게 상승(1%)
-                if 0 <= now_hour < 8:
-                    increase_rate = 0.01
-                else:
-                    increase_rate = 0.03 # 낮 시간대에는 3% 상승
-                    
-                base_fluctuation = min(2.5, current_ratio + increase_rate)
-            elif sold < 5:
-                base_fluctuation = 1.0
-            elif sold < 20:
-                base_fluctuation = 0.8
-            elif sold < 50:
-                base_fluctuation = 0.5
+                # 판매가 없으면 가격 상승 (0.5% ~ 3.5% 랜덤)
+                increase_rate = random.uniform(0.005, 0.035)
+                new_price = int(MARKET_PRICES.get(fish, base_price) * (1 + increase_rate))
+                # 최대 250% 제한
+                new_price = min(new_price, int(base_price * 2.5))
             else:
-                base_fluctuation = 0.2
+                # 판매량에 따른 가격 하락 (지수적 하락)
+                # sold가 많을수록 하락폭이 큼. 50마리 이상 팔리면 최저가(10%) 근접
+                drop_factor = max(0.1, 0.95 ** (sold / 2))
+                new_price = int(MARKET_PRICES.get(fish, base_price) * drop_factor)
+                # 최소 10% 제한
+                new_price = max(new_price, int(base_price * 0.1))
                 
-            jitter = random.uniform(0.98, 1.02) # 2% 랜덤 노이즈 (안정성 강화)
-            final_ratio = base_fluctuation * jitter
-            
-            new_price = int(base_price * final_ratio)
-            MARKET_PRICES[fish] = max(int(base_price * 0.1), new_price)
+            jitter = random.uniform(0.97, 1.03) # 3% 랜덤 노이즈
+            MARKET_PRICES[fish] = int(new_price * jitter)
             
         await db.execute("UPDATE market_sales SET amount_sold = 0")
         
@@ -79,7 +71,14 @@ class EventCog(commands.Cog):
 
     @tasks.loop(minutes=60)
     async def weather_update_loop(self):
-        new_weather = update_weather_randomly()
+        if "WEATHER_QUEUE" in env_state and env_state["WEATHER_QUEUE"]:
+            new_weather = env_state["WEATHER_QUEUE"].pop(0)
+            env_state["CURRENT_WEATHER"] = new_weather
+            if not env_state["WEATHER_QUEUE"]:
+                env_state.pop("WEATHER_QUEUE")
+        else:
+            new_weather = update_weather_randomly()
+        
         print(f"[{datetime.datetime.now(kst).strftime('%H:%M')}] 🌤️ 바다 날씨가 {new_weather} (으)로 변경되었습니다.")
 
     @weather_update_loop.before_loop

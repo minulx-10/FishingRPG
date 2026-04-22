@@ -1,7 +1,30 @@
 import discord
 from discord import app_commands
-from .shared import SUPER_ADMIN_IDS, FISH_DATA, RECIPES
+from .shared import SUPER_ADMIN_IDS, FISH_DATA, RECIPES, ADMIN_LOG_CHANNEL_ID
 from .database import db
+import datetime
+
+async def log_admin_action(bot, admin_user, target_user, action_name, detail):
+    """관리자 행동을 특정 채널에 로그로 남깁니다."""
+    if not ADMIN_LOG_CHANNEL_ID:
+        print(f"[Admin Log] {admin_user.name} -> {target_user.name if target_user else 'N/A'}: {action_name} ({detail})")
+        return
+
+    channel = bot.get_channel(ADMIN_LOG_CHANNEL_ID)
+    if not channel:
+        return
+
+    embed = discord.Embed(title="🛡️ 관리자 작업 로그", color=0xe74c3c, timestamp=datetime.datetime.now())
+    embed.add_field(name="실행자", value=f"{admin_user.mention} ({admin_user.id})", inline=True)
+    if target_user:
+        embed.add_field(name="대상", value=f"{target_user.mention} ({target_user.id})", inline=True)
+    embed.add_field(name="명령어", value=f"`/{action_name}`", inline=False)
+    embed.add_field(name="상세 내용", value=detail, inline=False)
+    
+    try:
+        await channel.send(embed=embed)
+    except:
+        pass
 
 async def bait_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
     baits = ["고급 미끼 🪱", "자석 미끼 🧲"]

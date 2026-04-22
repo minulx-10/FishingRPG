@@ -99,8 +99,8 @@ class DBManager:
             pass
 
         try:
-            await self.conn.execute("ALTER TABLE user_data ADD COLUMN stamina INTEGER DEFAULT 100")
-            await self.conn.execute("ALTER TABLE user_data ADD COLUMN max_stamina INTEGER DEFAULT 100")
+            await self.conn.execute("ALTER TABLE user_data ADD COLUMN stamina INTEGER DEFAULT 150")
+            await self.conn.execute("ALTER TABLE user_data ADD COLUMN max_stamina INTEGER DEFAULT 150")
         except aiosqlite.OperationalError:
             pass
 
@@ -159,6 +159,18 @@ class DBManager:
         # Phase 4: 강화 천장(Pity) 시스템
         try:
             await self.conn.execute("ALTER TABLE user_data ADD COLUMN upgrade_pity INTEGER DEFAULT 0")
+        except aiosqlite.OperationalError:
+            pass
+
+        # Phase 4: 마지막 활동 시간 (오프라인 보호용)
+        try:
+            await self.conn.execute("ALTER TABLE user_data ADD COLUMN last_active TEXT DEFAULT ''")
+        except aiosqlite.OperationalError:
+            pass
+
+        # Phase 4: 호위 어종 (오프라인 방어용)
+        try:
+            await self.conn.execute("ALTER TABLE user_data ADD COLUMN guard_fish TEXT DEFAULT ''")
         except aiosqlite.OperationalError:
             pass
 

@@ -31,7 +31,10 @@ async def setup_hook():
 @bot.tree.interaction_check
 async def update_username_cache(interaction: discord.Interaction):
     try:
-        await db.execute("UPDATE user_data SET username = ? WHERE user_id = ?", (interaction.user.name, interaction.user.id))
+        from fishing_core.shared import kst
+        import datetime
+        now_str = datetime.datetime.now(kst).isoformat()
+        await db.execute("UPDATE user_data SET username = ?, last_active = ? WHERE user_id = ?", (interaction.user.name, now_str, interaction.user.id))
         await db.commit()
     except Exception:
         pass

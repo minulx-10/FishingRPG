@@ -3,7 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 import subprocess
 
-from fishing_core.utils import is_developer
+from fishing_core.utils import is_developer, log_admin_action
 from fishing_core.database import db
 from fishing_core.shared import reload_data
 
@@ -17,6 +17,7 @@ class AdminCog(commands.Cog):
         await db.get_user_data(target.id)
         await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (amount, target.id))
         await db.commit()
+        await log_admin_action(self.bot, interaction.user, target, "코인지급", f"수량: `{amount:,} C`")
         await interaction.response.send_message(f"💰 관리자 권한으로 **{target.name}**님에게 `{amount:,} C`를 지급했습니다!")
 
     @app_commands.command(name="아이템지급", description="[관리자 전용] 특정 유저에게 아이템을 강제 지급합니다.")
@@ -24,6 +25,7 @@ class AdminCog(commands.Cog):
     async def 아이템지급(self, interaction: discord.Interaction, target: discord.Member, 아이템명: str, 수량: int):
         await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, ?) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?", (target.id, 아이템명, 수량, 수량))
         await db.commit()
+        await log_admin_action(self.bot, interaction.user, target, "아이템지급", f"아이템: `{아이템명}` / 수량: `{수량}`")
         await interaction.response.send_message(f"🎁 관리자 권한으로 **{target.name}**님에게 `{아이템명}` {수량}개를 지급했습니다!")
 
     @app_commands.command(name="아이템회수", description="[관리자 전용] 특정 유저의 아이템을 강제 회수(삭제)합니다.")
@@ -32,6 +34,7 @@ class AdminCog(commands.Cog):
         await db.execute("UPDATE inventory SET amount = MAX(0, amount - ?) WHERE user_id = ? AND item_name = ?", (수량, target.id, 아이템명))
         await db.execute("DELETE FROM inventory WHERE amount <= 0")
         await db.commit()
+        await log_admin_action(self.bot, interaction.user, target, "아이템회수", f"아이템: `{아이템명}` / 수량: `{수량}`")
         await interaction.response.send_message(f"🗑️ 관리자 권한으로 **{target.name}**님의 `{아이템명}` {수량}개를 강제 회수했습니다!")
 
     @app_commands.command(name="유저스탯변경", description="[관리자 전용] 특정 유저의 스탯(선박, 낚싯대, 레이팅)을 설정합니다.")
@@ -50,6 +53,7 @@ class AdminCog(commands.Cog):
         elif 항목.value == "rating":
             await db.execute("UPDATE user_data SET rating = ? WHERE user_id = ?", (값, target.id))
         await db.commit()
+        await log_admin_action(self.bot, interaction.user, target, "유저스탯변경", f"항목: `{항목.name}` / 변경된 값: `{값}`")
         await interaction.response.send_message(f"⚙️ 관리자 권한으로 **{target.name}**님의 `{항목.name}`을(를) **{값}**(으)로 설정했습니다!")
 
     @app_commands.command(name="전체공지", description="[관리자 전용] 멋진 임베드로 전체 공지사항을 띄웁니다.")
@@ -68,6 +72,7 @@ class AdminCog(commands.Cog):
             return await interaction.response.send_message(f"❌ 데이터베이스에 없는 어종입니다: {어종명}", ephemeral=True)
             
         MARKET_PRICES[어종명] = 가격
+        await log_admin_action(self.bot, interaction.user, None, "시세조작", f"어종: `{어종명}` / 강제 시세: `{가격:,} C`")
         await interaction.response.send_message(f"⚖️ 관리자 권한으로 **{어종명}**의 시장 시세를 **{가격} C**로 강제 조작했습니다!")
 
     @app_commands.command(name="웹대시보드", description="[관리자 전용] 외부 관리자를 위해 임시로 암호화된 터널 접속 링크를 생성합니다.")

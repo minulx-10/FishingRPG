@@ -124,6 +124,10 @@ class FishingCog(commands.Cog):
                 elif current_weather == "🌩️ 폭풍우" and grade in ["신화", "태고", "환상", "미스터리"]:
                     base_prob *= 2.0  # 폭풍우: 최고급 확률 증가 (기존 5.0 → 2.0)
 
+                # 4. [신규] 칭호 보너스 (해신: 신화/미스터리/태고 확률 1.3배)
+                if title == "[해신]" and grade in ["신화", "미스터리", "태고", "환상"]:
+                    base_prob *= 1.3
+
                 candidates.append(fish)
                 weights.append(base_prob)
             
@@ -174,6 +178,11 @@ class FishingCog(commands.Cog):
         else:
             wait_min, wait_max = 2.0, 6.0
             
+        # 칭호 보너스 (강태공: 대기 시간 15% 단축)
+        if title == "[강태공]":
+            wait_min *= 0.85
+            wait_max *= 0.85
+
         wait_time = random.uniform(wait_min, wait_max)
         await asyncio.sleep(wait_time)
         
@@ -282,6 +291,76 @@ class FishingCog(commands.Cog):
         
         embed.add_field(name="생태계 정보", value=hints, inline=False)
         await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="기상예측", description="기상청의 위성 자료를 분석하여 향후 3시간의 날씨 변화를 예측합니다. (비용: 3,000 C)")
+    async def 기상예측(self, interaction: discord.Interaction):
+        coins, _, _ = await db.get_user_data(interaction.user.id)
+        if coins < 3000:
+            return await interaction.response.send_message(f"❌ 코인이 부족합니다. (필요: `3,000 C` / 현재: `{coins:,} C`)", ephemeral=True)
+        
+        await db.execute("UPDATE user_data SET coins = coins - 3000 WHERE user_id=?", (interaction.user.id,))
+        await db.commit()
+        
+        from fishing_core.shared import WEATHER_TYPES
+        # 현재 시간 기준으로 1시간, 2시간, 3시간 뒤 날씨를 시뮬레이션 (랜덤이지만 유저에게는 예측으로 보여줌)
+        # 실제 시스템은 1시간마다 weather_update_loop가 돌며 변경하므로, 
+        # 이 예측을 실제 적용하기 위해선 env_state에 큐를 쌓아두는 것이 좋음.
+        
+        if "WEATHER_QUEUE" not in env_state:
+            env_state["WEATHER_QUEUE"] = [random.choices(WEATHER_TYPES, weights=[40, 25, 20, 5, 10], k=1)[0] for _ in range(3)]
+        
+        q = env_state["WEATHER_QUEUE"]
+        embed = discord.Embed(title="📡 수산시장 기상청 정밀 예보", color=0x3498db)
+        embed.description = "위성 사진과 기압골 데이터를 분석한 결과입니다."
+        embed.add_field(name="1시간 뒤", value=q[0], inline=True)
+        embed.add_field(name="2시간 뒤", value=q[1], inline=True)
+        embed.add_field(name="3시간 뒤", value=q[2], inline=True)
+        embed.set_footer(text="⚠️ 기상 상황은 급변할 수 있으며, 기우제 발생 시 예보가 빗나갈 수 있습니다.")
+        
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="기우제", description="전 서버 유저들과 힘을 합쳐 코인을 모으고 바다의 날씨를 강제로 변경합니다!")
+    async def 기우제(self, interaction: discord.Interaction, 기부금: int):
+        if 기부금 < 1000:
+            return await interaction.response.send_message("❌ 최소 기부금은 `1,000 C`입니다.", ephemeral=True)
+        
+        coins, _, _ = await db.get_user_data(interaction.user.id)
+        if coins < 기부금:
+            return await interaction.response.send_message(f"❌ 코인이 부족합니다. (현재 보유: `{coins:,} C`)", ephemeral=True)
+        
+        await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id=?", (기부금, interaction.user.id))
+        
+        # 현재 누적액 확인
+        async with db.conn.execute("SELECT value FROM server_state WHERE key='RITUAL_COINS'") as cursor:
+            res = await cursor.fetchone()
+        current_total = int(res[0]) if res else 0
+        new_total = current_total + 기부금
+        
+        target_amount = 500000 # 기우제 성공 목표액
+        
+        await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RITUAL_COINS', ?)", (str(new_total),))
+        await db.commit()
+        
+        if new_total >= target_amount:
+            # 기우제 성공! 날씨 변경 (폭풍우로 고정)
+            await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RITUAL_COINS', '0')", ())
+            env_state["CURRENT_WEATHER"] = "🌩️ 폭풍우"
+            # 예보 큐 초기화
+            env_state.pop("WEATHER_QUEUE", None)
+            await db.commit()
+            
+            embed = discord.Embed(title="🌩️ 기우제 성공! 하늘이 응답했습니다!", color=0xffd700)
+            embed.description = f"**{interaction.user.name}**님의 마지막 정성이 닿았습니다!\n총 `{new_total:,} C`가 모여 바다에 **강력한 폭풍우**가 몰아치기 시작합니다!"
+            embed.set_image(url="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/l41lTfuxV5RWRsBPO/giphy.gif") # 천둥 이미지 (예시)
+            await interaction.response.send_message(embed=embed)
+            await interaction.channel.send("📢 **[시스템]** 기우제 성공으로 인해 날씨가 **🌩️ 폭풍우**로 고정되었습니다! (1시간 지속)")
+        else:
+            embed = discord.Embed(title="🙏 기우제 정성 모집 중...", color=0x3498db)
+            embed.description = f"**{interaction.user.name}**님이 `{기부금:,} C`를 기부하셨습니다!\n\n현재 모인 정성: `{new_total:,} / {target_amount:,} C`\n목표 도달 시 바다에 **폭풍우**가 찾아옵니다!"
+            progress = int((new_total / target_amount) * 10)
+            bar = "🟦" * progress + "⬜" * (10 - progress)
+            embed.add_field(name="진행도", value=f"{bar} ({progress*10}%)", inline=False)
+            await interaction.response.send_message(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(FishingCog(bot))

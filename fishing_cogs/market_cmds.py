@@ -97,6 +97,11 @@ class MarketCog(commands.Cog):
             if current_weather == "☀️ 맑음" and item_grade in ["일반", "희귀"]:
                 price = int(price * 1.3)
                 
+            # 칭호 보너스 (갑부: 판매 수익 5% 추가)
+            title = await db.get_user_title(interaction.user.id)
+            if title == "[갑부]":
+                price = int(price * 1.05)
+
             item_total = price * amt
             total_earned += item_total
             msg += f"• {name} {amt}마리 : `{item_total:,} C` (개당 {price:,}C)\n"
@@ -135,6 +140,12 @@ class MarketCog(commands.Cog):
             return await interaction.response.send_message(f"❌ 가방에 **{target_fish}**가 부족합니다. (현재 보유: {current_amount}마리)", ephemeral=True)
         
         price_per_item = MARKET_PRICES.get(target_fish, FISH_DATA[target_fish]["price"])
+        
+        # 칭호 보너스 (갑부: 판매 수익 5% 추가)
+        title = await db.get_user_title(interaction.user.id)
+        if title == "[갑부]":
+            price_per_item = int(price_per_item * 1.05)
+
         total_earned = price_per_item * 수량
         
         await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name=?", (수량, interaction.user.id, target_fish))
@@ -258,6 +269,18 @@ class MarketCog(commands.Cog):
         await db.execute("UPDATE inventory SET is_locked=0 WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기))
         await db.commit()
         await interaction.response.send_message(f"🔓 **{물고기}**의 잠금을 해제했습니다! 이제 판매할 수 있습니다.")
+    
+    @app_commands.command(name="일괄잠금", description="현재 가방에 있는 모든 물고기를 일괄 잠금(보호) 처리합니다.")
+    async def 일괄잠금(self, interaction: discord.Interaction):
+        await db.execute("UPDATE inventory SET is_locked=1 WHERE user_id=? AND amount > 0", (interaction.user.id,))
+        await db.commit()
+        await interaction.response.send_message("🔒 가방에 있는 모든 물고기를 **일괄 잠금** 처리했습니다! (판매 시 보호됨)")
+
+    @app_commands.command(name="일괄해제", description="현재 가방에 있는 모든 물고기의 잠금을 일괄 해제합니다.")
+    async def 일괄해제(self, interaction: discord.Interaction):
+        await db.execute("UPDATE inventory SET is_locked=0 WHERE user_id=? AND amount > 0", (interaction.user.id,))
+        await db.commit()
+        await interaction.response.send_message("🔓 가방에 있는 모든 물고기의 **잠금을 일괄 해제**했습니다! (이제 판매가 가능합니다)")
 
     @app_commands.command(name="칭호상점", description="어마어마한 코인을 지불하여 명예로운 칭호를 구매합니다. (엔드게임 콘텐츠)")
     async def 칭호상점(self, interaction: discord.Interaction):

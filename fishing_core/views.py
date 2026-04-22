@@ -34,9 +34,17 @@ class FishActionView(View):
             return await interaction.response.send_message(f"🚫 가방이 가득 찼습니다! (현재: {current_species}/{max_species}종)\n어종 수를 줄이거나 선박을 개조하세요.", ephemeral=True)
 
         self.action_taken = True
-        await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (self.user.id, self.target_fish))
+        fish_grade = FISH_DATA.get(self.target_fish, {}).get("grade", "일반")
+        grade_order = {"일반": 1, "희귀": 2, "초희귀": 3, "에픽": 4, "레전드": 5, "태고": 6, "환상": 7, "미스터리": 8, "신화": 9}
+        
+        # 에픽 등급 이상은 자동 잠금 처리
+        is_high_grade = grade_order.get(fish_grade, 0) >= 4
+        lock_val = 1 if is_high_grade else 0
+        lock_msg = " (🔒 자동 잠금됨)" if is_high_grade else ""
+
+        await db.execute("INSERT INTO inventory (user_id, item_name, amount, is_locked) VALUES (?, ?, 1, ?) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1, is_locked = MAX(is_locked, ?)", (self.user.id, self.target_fish, lock_val, lock_val))
         await db.commit()
-        await interaction.response.edit_message(content=f"🎒 **{self.target_fish}**를 가방에 안전하게 넣었습니다!", view=None)
+        await interaction.response.edit_message(content=f"🎒 **{self.target_fish}**를 가방에 안전하게 넣었습니다!{lock_msg}", view=None)
 
     @discord.ui.button(label="잠금 보관 (배틀용)", style=discord.ButtonStyle.success, emoji="🔒")
     async def btn_bucket(self, interaction: discord.Interaction, button: Button):
@@ -69,6 +77,12 @@ class FishActionView(View):
         if interaction.user != self.user or self.action_taken: return
         self.action_taken = True
         
+        fish_grade = FISH_DATA.get(self.target_fish, {}).get("grade", "일반")
+        grade_order = {"일반": 1, "희귀": 2, "초희귀": 3, "에픽": 4, "레전드": 5, "태고": 6, "환상": 7, "미스터리": 8, "신화": 9}
+        
+        if grade_order.get(fish_grade, 0) >= 4:
+            return await interaction.response.send_message(f"⚠️ **{fish_grade}** 등급 이상의 물고기는 '바로 판매'가 불가능합니다. 실수 방지를 위해 가방에 보관 후 개별 판매하거나 잠금을 해제하세요.", ephemeral=True)
+
         price = MARKET_PRICES.get(self.target_fish, FISH_DATA.get(self.target_fish, {}).get("price", 100))
         await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (price, self.user.id))
         await db.commit()
@@ -387,7 +401,22 @@ class BattleView(View):
             
             self.npc_hp -= dmg
             elem_txt = "(효과 발군!)" if mult > 1.0 else ("(효과 미미...)" if mult < 1.0 else "")
-            self.battle_log += f"🔵 {self.my_fish}의 공격! 💥 {dmg} 피해! {elem_txt}\n"
+            
+            # [신규] 특수 스킬 적용
+            skill_msg = ""
+            fish_grade = FISH_DATA.get(self.my_fish, {}).get("grade", "일반")
+            if fish_grade in ["레전드", "신화", "태고", "환상", "미스터리"] and random.random() < 0.2:
+                dmg *= 2
+                skill_msg += "\n⚔️ **[연속 공격]** 데미지 2배!"
+            if fish_grade in ["신화", "태고", "환상", "미스터리"]:
+                heal = int(dmg * 0.2)
+                self.my_hp = min(self.my_max_hp, self.my_hp + heal)
+                skill_msg += f"\n🩸 **[흡혈]** {heal} HP 회복!"
+            if fish_grade in ["태고", "환상", "미스터리"] and random.random() < 0.15:
+                self.npc_ap = 0
+                skill_msg += "\n💫 **[기절]** 상대 AP 제거!"
+
+            self.battle_log += f"🔵 {self.my_fish}의 공격! 💥 {dmg} 피해! {elem_txt}{skill_msg}\n"
             self.my_ap = 1 
         else: 
             self.is_my_defending = True
@@ -472,6 +501,27 @@ class PvPBattleView(View):
         self.turn_count = 1
         self.current_turn_user = p1
         self.battle_log = f"⚔️ {p1.name}님이 {p2.name}님에게 3v3 수산대전을 걸었습니다!\n"
+        
+        self.p1_title = ""
+        self.p2_title = ""
+        self.bot = None 
+        self.is_offline_target = False
+
+        # --- Phase 3 추가 사항 ---
+        # 1. 속성 공명 (3마리 동일 속성 시 공격력 20% 증가)
+        self.p1_resonance = False
+        self.p2_resonance = False
+        
+        p1_elements = [FISH_DATA.get(f[0], {}).get("element", "무속성") for f in p1_deck]
+        if len(set(p1_elements)) == 1 and p1_elements[0] != "무속성":
+            self.p1_resonance = True
+            self.battle_log += f"✨ **[속성 공명]** {p1.name}님의 전사들이 모두 [{p1_elements[0]}] 속성으로 결집하여 공격력이 20% 상승합니다!\n"
+
+        p2_elements = [FISH_DATA.get(f[0], {}).get("element", "무속성") for f in p2_deck]
+        if len(set(p2_elements)) == 1 and p2_elements[0] != "무속성":
+            self.p2_resonance = True
+            self.battle_log += f"✨ **[속성 공명]** {p2.name}님의 전사들이 모두 [{p2_elements[0]}] 속성으로 결집하여 공격력이 20% 상승합니다!\n"
+        # -----------------------
 
     def _init_fish(self, p_num):
         if p_num == 1:
@@ -521,6 +571,11 @@ class PvPBattleView(View):
         is_p1 = (interaction.user == self.p1)
         attacker_name = self.p1.name if is_p1 else self.p2.name
         
+        # 첫 턴에 칭호 정보 로드 (비동기 생성자가 불가능하므로 첫 실행 시점에 로드)
+        if not self.p1_title:
+            self.p1_title = await db.get_user_title(self.p1.id)
+            self.p2_title = await db.get_user_title(self.p2.id)
+
         if action == "attack":
             if is_p1: self.p1_defending = False
             else: self.p2_defending = False
@@ -534,24 +589,54 @@ class PvPBattleView(View):
             defender_defending = self.p2_defending if is_p1 else self.p1_defending
             
             dmg = int(attacker_atk * attacker_ap * mult)
+            
+            # 속성 공명 보너스 (20%)
+            if (is_p1 and self.p1_resonance) or (not is_p1 and self.p2_resonance):
+                dmg = int(dmg * 1.2)
+
+            # 칭호 보너스 (바다의 왕: PvP 공격력 10% 증가)
+            attacker_title = self.p1_title if is_p1 else self.p2_title
+            if attacker_title == "[바다의 왕]":
+                dmg = int(dmg * 1.1)
+
             if defender_defending: dmg //= 2
             
             attacker_fish = self.p1_fish if is_p1 else self.p2_fish
             defender_fish = self.p2_fish if is_p1 else self.p1_fish
             
-            # 특수 스킬 적용
+            # 특수 스킬 적용 (고도화)
             skill_msg = ""
+            fish_grade = FISH_DATA.get(attacker_fish, {}).get("grade", "일반")
+            
+            # [연속 공격] 레전드 이상 20% 확률로 2회 공격
+            if fish_grade in ["레전드", "신화", "태고", "환상", "미스터리"] and random.random() < 0.2:
+                dmg *= 2
+                skill_msg += f"\n⚔️ **[연속 공격]** {attacker_fish}(이)가 폭풍 같은 연타를 가합니다! (데미지 2배)"
+            
+            # [흡혈] 신화 이상 데미지의 20% 체력 회복
+            if fish_grade in ["신화", "태고", "환상", "미스터리"]:
+                heal = int(dmg * 0.2)
+                if is_p1: self.p1_hp = min(self.p1_max_hp, self.p1_hp + heal)
+                else: self.p2_hp = min(self.p2_max_hp, self.p2_hp + heal)
+                skill_msg += f"\n🩸 **[흡혈]** 적의 생명력을 흡수하여 `{heal}` HP를 회복했습니다!"
+
+            # [스턴] 태고 이상 15% 확률로 상대 AP 0으로 초기화
+            if fish_grade in ["태고", "환상", "미스터리"] and random.random() < 0.15:
+                if is_p1: self.p2_ap = 0
+                else: self.p1_ap = 0
+                skill_msg += f"\n💫 **[기절]** 상대가 괴수의 위압감에 압도당해 행동력(AP)을 잃었습니다!"
+
             if attacker_fish == "리비아탄 멜빌레이 🐋" and "상어" in defender_fish:
                 dmg *= 2
-                skill_msg = "\n🐋 **[태고의 격돌]** 상어의 천적! 대미지가 2배로 증폭되었습니다!"
+                skill_msg += "\n🐋 **[태고의 격돌]** 상어의 천적! 대미지가 2배로 증폭되었습니다!"
             if attacker_fish == "헬리코프리온 🦈":
                 if is_p1: self.p2_atk = max(1, int(self.p2_atk * 0.9))
                 else: self.p1_atk = max(1, int(self.p1_atk * 0.9))
-                skill_msg = "\n🦈 **[회전 톱날]** 상대의 턱을 부숴 공격력을 10% 영구 감소시킵니다!"
+                skill_msg += "\n🦈 **[회전 톱날]** 상대의 턱을 부숴 공격력을 10% 영구 감소시킵니다!"
             if attacker_fish == "죽음의 선율, 세이렌의 군주 🧜‍♀️" and random.random() < 0.3:
                 if is_p1: self.p2_ap = max(0, self.p2_ap - 1)
                 else: self.p1_ap = max(0, self.p1_ap - 1)
-                skill_msg = "\n🎵 **[매혹]** 노래에 홀린 상대의 행동력(AP)이 1 깎였습니다!"
+                skill_msg += "\n🎵 **[매혹]** 노래에 홀린 상대의 행동력(AP)이 1 깎였습니다!"
 
             if is_p1:
                 self.p2_hp -= dmg
@@ -610,14 +695,24 @@ class PvPBattleView(View):
 
         if last_target == loser.id:
             con_count += 1
-            reduction = 0.5 ** (con_count - 1) # 2회째(con_count=2)부터 50% 차감
+            # 연속 공격 패널티 강화: 2회(50%), 3회(10%), 4회 이상(0%)
+            if con_count == 2: reduction = 0.5
+            elif con_count == 3: reduction = 0.1
+            else: reduction = 0.0
+            
             if con_count >= 2:
                 reward_rp = max(1, int(reward_rp * reduction))
                 reward_coin = max(100, int(reward_coin * reduction))
-                penalty_msg = f"\n⚠️ **연속 공격 패널티!** 동일 대상을 반복 공격하여 보상이 {int((1-reduction)*100)}% 감소했습니다."
+                penalty_msg = f"\n⚠️ **연속 공격 패널티!** ({con_count}회 연속) 보상이 {int((1-reduction)*100)}% 감소했습니다."
         else:
             con_count = 1
         
+        # 오프라인 보호 (추가 감면)
+        if self.is_offline_target:
+            reward_coin = int(reward_coin * 0.4) # 60% 감소
+            reward_rp = max(1, int(reward_rp * 0.5)) # 50% 감소
+            penalty_msg += "\n🕊️ **오프라인 보호 발동!** 상대의 미접속 기간이 길어 약탈량이 크게 줄었습니다."
+
         await db.execute("UPDATE user_data SET pvp_last_target=?, pvp_consecutive_count=? WHERE user_id=?", (loser.id, con_count, winner.id))
         # === 패널티 로직 끝 ===
 
