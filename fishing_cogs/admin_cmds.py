@@ -150,5 +150,39 @@ class AdminCog(commands.Cog):
         except Exception as e:
             await interaction.followup.send(f"❌ 데이터 업데이트 중 오류가 발생했습니다.\n**상세 오류:** `{e}`")
 
+    @app_commands.command(name="시스템리로드", description="[관리자 전용] 봇 재시작 없이 모듈(코드)만 즉시 핫 리로드(Hot Reload)합니다.")
+    @is_developer()
+    async def 시스템리로드(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        
+        cogs = [
+            "fishing_cogs.fishing_cmds",
+            "fishing_cogs.market_cmds",
+            "fishing_cogs.ship_cmds",
+            "fishing_cogs.battle_cmds",
+            "fishing_cogs.quest_cmds",
+            "fishing_cogs.admin_cmds",
+            "fishing_cogs.events"
+        ]
+        
+        reloaded = []
+        failed = []
+        
+        for cog in cogs:
+            try:
+                await self.bot.reload_extension(cog)
+                reloaded.append(cog.split('.')[-1])
+            except Exception as e:
+                failed.append(f"{cog}: {str(e)}")
+                
+        # 핫 리로드 후 슬래시 커맨드 트리 즉시 동기화
+        await self.bot.tree.sync()
+        
+        msg = f"🔄 **시스템 핫 리로드 완료! (무중단 업데이트)**\n✅ 성공 ({len(reloaded)}개): `{', '.join(reloaded)}`"
+        if failed:
+            msg += f"\n❌ 실패 ({len(failed)}개):\n```\n" + '\n'.join(failed) + "\n```"
+            
+        await interaction.followup.send(msg)
+
 async def setup(bot):
     await bot.add_cog(AdminCog(bot))
