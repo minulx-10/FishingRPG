@@ -36,9 +36,9 @@ class FishingCog(commands.Cog):
     async def 낚시(self, interaction: discord.Interaction, 사용할미끼: str = "none"):
         coins, rod_tier, rating = await db.get_user_data(interaction.user.id)
         
-        async with db.conn.execute("SELECT stamina, max_stamina, title FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+        async with db.conn.execute("SELECT stamina, max_stamina, title, boat_tier FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
             stamina_res = await cursor.fetchone()
-        current_stamina, max_stamina, title = stamina_res if stamina_res else (100, 100, "")
+        current_stamina, max_stamina, title, current_tier = stamina_res if stamina_res else (100, 100, "", 1)
         display_name = f"{title} {interaction.user.name}" if title else interaction.user.name
         
         if current_stamina < 10:
