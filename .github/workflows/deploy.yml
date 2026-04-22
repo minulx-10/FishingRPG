@@ -32,6 +32,7 @@ jobs:
                 git pull origin main
             else
                 echo "🔄 Full Deploy Mode: Restarting the bot!"
+                pip3 install Pillow pilmoji --quiet 2>&1 || echo "⚠️ pip install 실패"
                 sed -i 's/fishing_rpg.py/fishing_main.py/g' deploy.sh
                 chmod +x deploy.sh
                 ./deploy.sh
