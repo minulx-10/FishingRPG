@@ -36,3 +36,10 @@ jobs:
                 chmod +x deploy.sh
                 ./deploy.sh
             fi
+            
+            echo "📋 === Bot Log (last 50 lines) ==="
+            sleep 5
+            tail -n 50 nohup.out 2>/dev/null || tail -n 50 bot.log 2>/dev/null || echo "No log file found (nohup.out / bot.log)"
+            
+            echo "📋 === Running Processes ==="
+            ps aux | grep -E "python|fishing" | grep -v grep || echo "No python process found!"
