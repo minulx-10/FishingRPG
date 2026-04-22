@@ -103,6 +103,15 @@ class FishingCog(commands.Cog):
                 if grade in ["에픽", "레전드", "신화"]:
                     base_prob *= (1 + (rod_tier * 0.1))
 
+                # 날씨 연동 글로벌 확률 펌핑 (핫타임)
+                current_weather = env_state["CURRENT_WEATHER"]
+                if current_weather == "🌧️ 비" and grade == "에픽":
+                    base_prob *= 2.0
+                elif current_weather == "🌫️ 안개" and grade == "레전드":
+                    base_prob *= 3.0
+                elif current_weather == "🌩️ 폭풍우" and grade in ["신화", "태고", "환상", "미스터리"]:
+                    base_prob *= 5.0
+
                 candidates.append(fish)
                 weights.append(base_prob)
             
@@ -116,16 +125,31 @@ class FishingCog(commands.Cog):
             target_fish = "낡은 장화 🥾"
             bait_text += "\n*(으스스한 기운이 맴돌았지만, 날이 밝아 흩어졌습니다...)*"
                 
-        if target_fish == "네스호의 그림자, 네시 🦕" and env_state["CURRENT_WEATHER"] not in ["🌧️ 비", "🌫️ 안개"]:
+        if target_fish == "네스호의 그림자, 네시 🦕" and env_state["CURRENT_WEATHER"] not in ["🌧️ 비", "🌫️ 안개", "🌩️ 폭풍우"]:
             target_fish = "낡은 장화 🥾"
-            bait_text += "\n*(거대한 그림자가 지나갔지만, 날씨가 맑아 깊은 곳으로 숨어버렸습니다...)*"
+            bait_text += "\n*(거대한 그림자가 지나갔지만, 깊은 곳으로 숨어버렸습니다...)*"
 
-        # 황금 조류 효과: 판정 한도 +1.5초
+        # 폭풍우 시 안내 추가
+        if env_state["CURRENT_WEATHER"] == "🌩️ 폭풍우":
+            bait_text += "\n*(거친 폭풍우가 몰아칩니다! 심연의 괴수들이 활동하기 시작합니다!)*"
+
+        # 황금 조류 효과 및 요리 버프 연동
         effective_rod_tier = rod_tier + 7.5 if "golden_tide" in active_buffs else rod_tier
+        
+        if "fishing_speed_up" in active_buffs:
+            effective_rod_tier += 2.0  # 낚시 속도 증가 버프 (난이도 하락)
+            
         view = FishingView(interaction.user, target_fish, effective_rod_tier)
         await interaction.response.send_message(f"🌊 **{display_name}**님이 찌를 던졌습니다... 조용히 기다리세요.{bait_text}\n(내 낚싯대: Lv.{rod_tier} / 체력: {current_stamina-10}⚡)", view=view)
         
-        wait_min, wait_max = (1, 3) if "cooldown_reduction" in active_buffs else (2, 6)
+        # 입질 대기 시간 계산
+        if "fishing_speed_up" in active_buffs:
+            wait_min, wait_max = 0.5, 2.0
+        elif "cooldown_reduction" in active_buffs:
+            wait_min, wait_max = 1.0, 3.0
+        else:
+            wait_min, wait_max = 2.0, 6.0
+            
         wait_time = random.uniform(wait_min, wait_max)
         await asyncio.sleep(wait_time)
         
@@ -157,7 +181,10 @@ class FishingCog(commands.Cog):
         async with db.conn.execute("SELECT item_name, amount FROM inventory WHERE user_id=? AND amount > 0", (target.id,)) as cursor:
             items = await cursor.fetchall()
         
-        embed = discord.Embed(title=f"🎒 {target.name}의 인벤토리", color=0x3498db)
+        title = await db.get_user_title(target.id)
+        display_name = f"{title} {target.name}" if title else target.name
+        
+        embed = discord.Embed(title=f"🎒 {display_name}의 인벤토리", color=0x3498db)
         embed.add_field(name="🏆 전투 레이팅", value=f"`{rating} RP`", inline=True)
         embed.add_field(name="💰 보유 코인", value=f"`{coins:,} C`", inline=True)
         embed.add_field(name="⛵ 선박 등급", value=f"**{boat_str}**", inline=True)

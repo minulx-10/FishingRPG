@@ -6,6 +6,12 @@ import datetime
 import aiohttp
 import os
 import asyncio
+import io
+from PIL import Image, ImageDraw, ImageFont
+try:
+    from pilmoji import Pilmoji
+except ImportError:
+    pass
 
 from fishing_core.database import db
 from fishing_core.shared import FISH_DATA, RECIPES, kst
@@ -51,7 +57,10 @@ class QuestCog(commands.Cog):
         elif percent >= 10: dex_rank = "🌱 낚시계의 떡잎"
         else: dex_rank = "🥚 초보 낚시꾼"
 
-        embed = discord.Embed(title=f"📖 {target.name}님의 낚시 도감", color=0x9b59b6)
+        title = await db.get_user_title(target.id)
+        display_name = f"{title} {target.name}" if title else target.name
+
+        embed = discord.Embed(title=f"📖 {display_name}님의 낚시 도감", color=0x9b59b6)
         if target.avatar:
             embed.set_thumbnail(url=target.avatar.url)
             
@@ -61,6 +70,12 @@ class QuestCog(commands.Cog):
         if collected_names:
             recent_fish = "\n".join([f"• {name}" for name in collected_names[-5:]]) 
             embed.add_field(name="최근 발견한 어종", value=recent_fish, inline=False)
+            
+            async with db.conn.execute("SELECT item_name, max_size FROM fish_records WHERE user_id=? ORDER BY max_size DESC LIMIT 5", (target.id,)) as cursor:
+                records = await cursor.fetchall()
+            if records:
+                record_str = "\n".join([f"🏆 **{name}** : `{size} cm`" for name, size in records])
+                embed.add_field(name="월척 기록 (Top 5)", value=record_str, inline=False)
         else:
             embed.add_field(name="최근 발견한 어종", value="아직 발견한 물고기가 없습니다.", inline=False)
             
@@ -249,28 +264,105 @@ class QuestCog(commands.Cog):
         
         await interaction.response.send_message(f"🎒 **{물고기}**을(를) 수족관에서 조심스럽게 꺼내 가방에 넣었습니다.")
 
-    @app_commands.command(name="수족관", description="나 또는 다른 유저의 수족관을 구경합니다.")
+    @app_commands.command(name="수족관", description="나 또는 다른 유저의 수족관을 구경합니다. (이미지로 렌더링)")
     async def 수족관(self, interaction: discord.Interaction, 유저: discord.Member = None):
         target = 유저 or interaction.user
+        
+        await interaction.response.defer() # 렌더링 시간 확보용
+        
         async with db.conn.execute("SELECT item_name FROM aquarium WHERE user_id=?", (target.id,)) as cursor:
             items = await cursor.fetchall()
             
-        embed = discord.Embed(title=f"🏛️ {target.name}님의 수족관", color=0x00ffff)
+        title = await db.get_user_title(target.id)
+        display_name = f"{title} {target.name}" if title else target.name
+        
+        embed = discord.Embed(title=f"🏛️ {display_name}님의 수족관", color=0x00ffff)
         if not items:
-            embed.description = "수족관이 텅 비어있습니다... 휑~ 🌬️"
-        else:
-            desc = ""
-            grade_emojis = {"일반": "⚪", "희귀": "🔵", "초희귀": "🟣", "에픽": "🔴", "레전드": "🟡", "신화": "🔥", "히든": "✨"}
+            embed.description = "수족관이 텅 비어있습니다... 휑~ 🌬️\n(`/전시` 명령어로 물고기를 전시해보세요!)"
+            return await interaction.followup.send(embed=embed)
             
-            for (name,) in items:
-                grade = FISH_DATA[name]["grade"]
-                emoji = grade_emojis.get(grade, "🐟")
-                desc += f"{emoji} **{name}** `[{grade}]`\n\n"
+        try:
+            # 수족관 배경 생성 (바다색)
+            img = Image.new("RGBA", (800, 600), (10, 30, 60, 255))
+            draw = ImageDraw.Draw(img)
+            
+            # 폰트 로드 (윈도우 맑은고딕 굵게 기준)
+            try:
+                font = ImageFont.truetype("malgunbd.ttf", 24)
+                small_font = ImageFont.truetype("malgun.ttf", 16)
+            except:
+                font = ImageFont.load_default()
+                small_font = font
                 
-            embed.description = desc
+            grade_colors = {
+                "일반": (200, 200, 200), "희귀": (100, 200, 255), "초희귀": (200, 100, 255), 
+                "에픽": (255, 100, 100), "레전드": (255, 200, 0), "신화": (255, 50, 50), "히든": (255, 255, 255)
+            }
+            
+            # 장식용 물방울
+            for _ in range(20):
+                x, y = random.randint(0, 800), random.randint(0, 600)
+                r = random.randint(2, 8)
+                draw.ellipse([x-r, y-r, x+r, y+r], outline=(255, 255, 255, 100), width=1)
+                
+            # 바닥 모래
+            draw.rectangle([0, 550, 800, 600], fill=(210, 180, 140, 255))
+            
+            # 수조 배치 로직 (격자 배열)
+            cols = 4
+            cell_width = 800 // cols
+            cell_height = 500 // ((len(items) - 1) // cols + 1)
+            if cell_height > 150: cell_height = 150
+            
+            with Pilmoji(img) as pilmoji:
+                for idx, (name,) in enumerate(items):
+                    grade = FISH_DATA[name]["grade"]
+                    color = grade_colors.get(grade, (255,255,255))
+                    
+                    col = idx % cols
+                    row = idx // cols
+                    
+                    cx = col * cell_width + cell_width // 2
+                    cy = row * cell_height + cell_height // 2 + 30
+                    
+                    # 물고기 주변 은은한 빛
+                    for r in range(30, 0, -5):
+                        alpha = int(50 * (r / 30))
+                        draw.ellipse([cx-r, cy-r, cx+r, cy+r], fill=(color[0], color[1], color[2], alpha))
+                        
+                    # 물고기 텍스트/이모지 렌더링
+                    parts = name.split(" ")
+                    emoji = parts[-1] if len(parts) > 1 and len(parts[-1]) <= 2 else "🐟" # 간단한 이모지 추출
+                    name_text = " ".join(parts[:-1]) if emoji != "🐟" else name
+                    
+                    pilmoji.text((cx-30, cy-40), emoji, fill=(255, 255, 255), font=font)
+                    
+                    # 이름 렌더링
+                    w = draw.textlength(name_text, font=small_font)
+                    draw.text((cx - w/2, cy + 10), name_text, fill=color, font=small_font)
+                    
+                    # 등급 렌더링
+                    gw = draw.textlength(f"[{grade}]", font=small_font)
+                    draw.text((cx - gw/2, cy + 30), f"[{grade}]", fill=color, font=small_font)
+                    
+            buf = io.BytesIO()
+            img.save(buf, format='PNG')
+            buf.seek(0)
+            
+            file = discord.File(buf, filename="aquarium.png")
+            embed.set_image(url="attachment://aquarium.png")
             embed.set_footer(text=f"수족관 공간: {len(items)} / (확장 가능)")
             
-        await interaction.response.send_message(embed=embed)
+            await interaction.followup.send(embed=embed, file=file)
+            
+        except Exception as e:
+            # PIL 에러 등 예방
+            desc = ""
+            for (name,) in items:
+                grade = FISH_DATA[name]["grade"]
+                desc += f"**{name}** `[{grade}]`\n"
+            embed.description = f"*(이미지 렌더링 오류 발생. 텍스트로 대체합니다)*\n\n{desc}"
+            await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="수족관확장", description="코인을 지불하여 수족관 전시 슬롯을 하나 추가합니다.")
     async def 수족관확장(self, interaction: discord.Interaction):

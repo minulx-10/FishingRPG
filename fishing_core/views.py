@@ -91,16 +91,45 @@ class FishingView(View):
             if grade in ["레전드", "신화", "태고", "환상", "미스터리"] and self.rod_tier > 1:
                 if random.random() < 0.5:
                     await db.execute("UPDATE user_data SET rod_tier = rod_tier - 1 WHERE user_id = ?", (self.user.id,))
-                    await db.commit()
                     fail_msg += "\n\n💥 **[치명적 손상]** 괴수의 힘을 이기지 못하고 **낚싯대가 부러졌습니다!** (낚싯대 레벨 1 하락)"
+            
+            if self.target_fish == "둔클레오스테우스 🦖":
+                async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=0", (self.user.id,)) as cursor:
+                    items = await cursor.fetchall()
+                if items:
+                    from fishing_core.shared import FISH_DATA
+                    most_exp = max(items, key=lambda x: FISH_DATA.get(x[0], {}).get("price", 0))[0]
+                    await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (self.user.id, most_exp))
+                    fail_msg += f"\n\n🦖 **[강철의 턱]** 둔클레오스테우스가 도망치며 당신의 가방을 찢어 가장 비싼 물고기(**{most_exp}**)를 먹어치웠습니다!"
+            
+            await db.commit()
             await interaction.response.edit_message(content=fail_msg, view=None)
 
     async def on_bite_success(self, interaction, elapsed, grade):
         await db.execute("INSERT OR IGNORE INTO fish_dex (user_id, item_name) VALUES (?, ?)", (self.user.id, self.target_fish))
+        
+        # 개체값(크기) 생성
+        power = FISH_DATA.get(self.target_fish, {}).get("power", 10)
+        fish_size = round(random.uniform(power * 1.5, power * 2.5), 2)
+        
+        async with db.conn.execute("SELECT max_size FROM fish_records WHERE user_id=? AND item_name=?", (self.user.id, self.target_fish)) as cursor:
+            record_res = await cursor.fetchone()
+            
+        is_new_record = False
+        if not record_res:
+            await db.execute("INSERT INTO fish_records (user_id, item_name, max_size) VALUES (?, ?, ?)", (self.user.id, self.target_fish, fish_size))
+            is_new_record = True
+        elif fish_size > record_res[0]:
+            await db.execute("UPDATE fish_records SET max_size=? WHERE user_id=? AND item_name=?", (fish_size, self.user.id, self.target_fish))
+            is_new_record = True
+            
         await db.commit()
         
         embed = discord.Embed(title=f"🎉 낚시 성공! [{grade}]", description=f"**{self.target_fish}**를 낚았습니다!", color=0x00ff00)
-        embed.add_field(name="반응 속도", value=f"`{elapsed:.3f}초` (판정 한도: {self.limit_time:.2f}초)")
+        
+        record_mark = " 🆕 **[최대 크기 신기록!]**" if is_new_record else ""
+        embed.add_field(name="측정 크기", value=f"`{fish_size} cm`{record_mark}", inline=False)
+        embed.add_field(name="반응 속도", value=f"`{elapsed:.3f}초` (판정 한도: {self.limit_time:.2f}초)", inline=False)
         
         if random.random() < 0.05:
             piece = random.choice(["찢어진 지도 조각 A 🧩", "찢어진 지도 조각 B 🧩", "찢어진 지도 조각 C 🧩", "찢어진 지도 조각 D 🧩"])
@@ -109,7 +138,7 @@ class FishingView(View):
             embed.add_field(name="🗺️ 바다의 파편 발견!", value=f"물고기와 함께 **{piece}**가 딸려왔습니다! (4부위를 모아 합성하세요)", inline=False)
 
         if self.target_fish == "심해의 파멸, 크라켄 🦑":
-            async with db.conn.execute("SELECT user_id, coins FROM user_data WHERE user_id != ? AND coins > 1000 ORDER BY RANDOM() LIMIT 1", (self.user.id,)) as cursor:
+            async with db.conn.execute("SELECT user_id, coins FROM user_data WHERE user_id != ? AND coins > 1000 AND peace_mode=0 ORDER BY RANDOM() LIMIT 1", (self.user.id,)) as cursor:
                 target = await cursor.fetchone()
             
             if target:
@@ -224,19 +253,27 @@ class TensionFishingView(View):
         fish_action = random.choice([-15, -10, 10, 15])
         self.tension += fish_action
 
-        if self.tension >= 100:
+        if self.tension >= 100 or self.tension <= 0:
             self.stop()
-            if self.grade in ["레전드", "신화", "태고", "환상", "미스터리"] and self.rod_tier > 1 and random.random() < 0.5:
-                await db.execute("UPDATE user_data SET rod_tier = rod_tier - 1 WHERE user_id = ?", (self.user.id,))
-                await db.commit()
-                msg = f"💥 줄이 끊어졌습니다! (텐션 100% 초과)\n\n괴수의 힘을 이기지 못하고 **낚싯대가 부러졌습니다!** (레벨 1 하락)\n놓친 물고기: **{self.target_fish}**"
-            else:
+            if self.tension >= 100:
                 msg = f"💥 줄이 끊어졌습니다! (텐션 100% 초과)\n놓친 물고기: **{self.target_fish}**"
-            return await interaction.response.edit_message(content=msg, embed=None, view=None)
+                if self.grade in ["레전드", "신화", "태고", "환상", "미스터리"] and self.rod_tier > 1 and random.random() < 0.5:
+                    await db.execute("UPDATE user_data SET rod_tier = rod_tier - 1 WHERE user_id = ?", (self.user.id,))
+                    msg += "\n\n💥 **[치명적 손상]** 괴수의 힘을 이기지 못하고 **낚싯대가 부러졌습니다!** (레벨 1 하락)"
+            else:
+                msg = f"💨 물고기가 바늘을 털고 도망갔습니다! (텐션 0% 미만)\n놓친 물고기: **{self.target_fish}**"
+                
+            if self.target_fish == "둔클레오스테우스 🦖":
+                async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=0", (self.user.id,)) as cursor:
+                    items = await cursor.fetchall()
+                if items:
+                    from fishing_core.shared import FISH_DATA
+                    most_exp = max(items, key=lambda x: FISH_DATA.get(x[0], {}).get("price", 0))[0]
+                    await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (self.user.id, most_exp))
+                    msg += f"\n\n🦖 **[강철의 턱]** 둔클레오스테우스가 도망치며 가장 비싼 물고기(**{most_exp}**)를 먹어치웠습니다!"
             
-        elif self.tension <= 0:
-            self.stop()
-            return await interaction.response.edit_message(content=f"💨 물고기가 바늘을 털고 도망갔습니다! (텐션 0% 미만)\n놓친 물고기: **{self.target_fish}**", embed=None, view=None)
+            await db.commit()
+            return await interaction.response.edit_message(content=msg, embed=None, view=None)
 
         if self.turn >= self.max_turns:
             if not (20 <= self.tension <= 80):
@@ -449,6 +486,23 @@ class PvPBattleView(View):
             
             dmg = int(attacker_atk * attacker_ap * mult)
             if defender_defending: dmg //= 2
+            
+            attacker_fish = self.p1_fish if is_p1 else self.p2_fish
+            defender_fish = self.p2_fish if is_p1 else self.p1_fish
+            
+            # 특수 스킬 적용
+            skill_msg = ""
+            if attacker_fish == "리비아탄 멜빌레이 🐋" and "상어" in defender_fish:
+                dmg *= 2
+                skill_msg = "\n🐋 **[태고의 격돌]** 상어의 천적! 대미지가 2배로 증폭되었습니다!"
+            if attacker_fish == "헬리코프리온 🦈":
+                if is_p1: self.p2_atk = max(1, int(self.p2_atk * 0.9))
+                else: self.p1_atk = max(1, int(self.p1_atk * 0.9))
+                skill_msg = "\n🦈 **[회전 톱날]** 상대의 턱을 부숴 공격력을 10% 영구 감소시킵니다!"
+            if attacker_fish == "죽음의 선율, 세이렌의 군주 🧜‍♀️" and random.random() < 0.3:
+                if is_p1: self.p2_ap = max(0, self.p2_ap - 1)
+                else: self.p1_ap = max(0, self.p1_ap - 1)
+                skill_msg = "\n🎵 **[매혹]** 노래에 홀린 상대의 행동력(AP)이 1 깎였습니다!"
 
             if is_p1:
                 self.p2_hp -= dmg
@@ -457,9 +511,8 @@ class PvPBattleView(View):
                 self.p1_hp -= dmg
                 self.p2_ap = 1
 
-            attacker_fish = self.p1_fish if is_p1 else self.p2_fish
             elem_txt = "(효과 발군!)" if mult > 1.0 else ("(효과 미미...)" if mult < 1.0 else "")
-            self.battle_log += f"[{attacker_name}] {attacker_fish}의 공격! 💥 {dmg} 피해! {elem_txt}\n"
+            self.battle_log += f"[{attacker_name}] {attacker_fish}의 공격! 💥 {dmg} 피해! {elem_txt}{skill_msg}\n"
 
         else: 
             if is_p1:

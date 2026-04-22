@@ -71,6 +71,14 @@ class DBManager:
                 value TEXT
             )
         ''')
+        await self.conn.execute('''
+            CREATE TABLE IF NOT EXISTS fish_records (
+                user_id INTEGER,
+                item_name TEXT,
+                max_size REAL DEFAULT 0.0,
+                PRIMARY KEY (user_id, item_name)
+            )
+        ''')
 
         await self.conn.execute('CREATE INDEX IF NOT EXISTS idx_active_buffs_end_time ON active_buffs (user_id, end_time)')
         
@@ -170,5 +178,10 @@ class DBManager:
             return (0, 1, 1000) 
             
         return res
+
+    async def get_user_title(self, user_id):
+        async with self.conn.execute("SELECT title FROM user_data WHERE user_id=?", (user_id,)) as cursor:
+            res = await cursor.fetchone()
+        return res[0] if res and res[0] else ""
 
 db = DBManager()
