@@ -98,7 +98,16 @@ class DashboardServer:
                 if discord_user:
                     name = discord_user.name
                     avatar = discord_user.avatar.url if discord_user.avatar else None
-
+                elif not username_db:
+                    # 캐시에도 없고 DB에도 없는 최초 상태일 경우에만 fetch_user 1회 호출 후 DB에 저장
+                    try:
+                        fetched = await self.bot.fetch_user(int(user_id))
+                        name = fetched.name
+                        avatar = fetched.avatar.url if fetched.avatar else None
+                        await db.execute("UPDATE user_data SET username=? WHERE user_id=?", (name, user_id))
+                    except Exception:
+                        pass
+                
                 users.append({
                     "user_id": str(user_id),
                     "name": name,
@@ -110,6 +119,7 @@ class DashboardServer:
                     "last_daily": last_daily
                 })
                 
+            await db.commit()
             return web.json_response({"success": True, "data": users})
         except Exception as e:
             import traceback
