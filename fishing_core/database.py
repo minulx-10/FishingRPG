@@ -59,6 +59,18 @@ class DBManager:
                 amount_sold INTEGER DEFAULT 0
             )
         ''')
+        await self.conn.execute('''
+            CREATE TABLE IF NOT EXISTS admin_sessions (
+                token TEXT PRIMARY KEY,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        await self.conn.execute('''
+            CREATE TABLE IF NOT EXISTS server_state (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        ''')
 
         await self.conn.execute('CREATE INDEX IF NOT EXISTS idx_active_buffs_end_time ON active_buffs (user_id, end_time)')
         

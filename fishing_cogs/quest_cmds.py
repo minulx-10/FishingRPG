@@ -33,9 +33,10 @@ class QuestCog(commands.Cog):
         
         await interaction.response.send_message(f"✅ 출석 완료! 보상으로 `{reward} C`를 받고 **행동력(체력)이 모두 회복**되었습니다! ⚡ (잔액 확인: `/인벤토리`)")
 
-    @app_commands.command(name="도감", description="내가 지금까지 발견한 모든 물고기 기록과 수집률을 확인합니다.")
-    async def 도감(self, interaction: discord.Interaction):
-        async with db.conn.execute("SELECT item_name FROM fish_dex WHERE user_id=?", (interaction.user.id,)) as cursor:
+    @app_commands.command(name="도감", description="나 또는 특정 유저가 지금까지 발견한 모든 물고기 기록과 수집률을 확인합니다.")
+    async def 도감(self, interaction: discord.Interaction, 유저: discord.Member = None):
+        target = 유저 or interaction.user
+        async with db.conn.execute("SELECT item_name FROM fish_dex WHERE user_id=?", (target.id,)) as cursor:
             dex_items = await cursor.fetchall()
         
         collected_names = [item[0] for item in dex_items]
@@ -50,7 +51,10 @@ class QuestCog(commands.Cog):
         elif percent >= 10: dex_rank = "🌱 낚시계의 떡잎"
         else: dex_rank = "🥚 초보 낚시꾼"
 
-        embed = discord.Embed(title=f"📖 {interaction.user.name}님의 낚시 도감", color=0x9b59b6)
+        embed = discord.Embed(title=f"📖 {target.name}님의 낚시 도감", color=0x9b59b6)
+        if target.avatar:
+            embed.set_thumbnail(url=target.avatar.url)
+            
         embed.add_field(name="현재 수집률", value=f"**{collected_count} / {total_fish} 종** (`{percent:.1f}%`)", inline=False)
         embed.add_field(name="도감 등급", value=f"**{dex_rank}**", inline=False)
         

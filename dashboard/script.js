@@ -63,6 +63,17 @@ function showToast(message, type="success") {
     setTimeout(() => { toast.remove(); }, 3000);
 }
 
+function setLoading(btn, isLoading, originalText = '') {
+    if (isLoading) {
+        btn.dataset.originalText = btn.innerText;
+        btn.classList.add('btn-loading');
+    } else {
+        btn.classList.remove('btn-loading');
+        if (originalText) btn.innerText = originalText;
+        else btn.innerText = btn.dataset.originalText || '';
+    }
+}
+
 async function apiCall(endpoint, method = 'GET', body = null) {
     const headers = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -182,6 +193,8 @@ function closeModal() { DOM.userModal.classList.add('hidden'); }
 
 async function saveUserStats() {
     if(!currentUserEditing) return;
+    setLoading(DOM.btnModalSave, true);
+    
     const body = {
         coins: DOM.mCoins.value,
         rating: DOM.mRp.value,
@@ -192,12 +205,30 @@ async function saveUserStats() {
         const res = await apiCall(`/users/${currentUserEditing.user_id}`, 'POST', body);
         if(res.success) {
             showToast('히스토리 저장 완료 (스탯 적용됨)', 'success');
-            loadUsers();
+            
+            // 낙관적 UI 업데이트 (리로드 없이 DOM 직접 변경)
+            currentUserEditing.coins = parseInt(body.coins);
+            currentUserEditing.rating = parseInt(body.rating);
+            currentUserEditing.boat_tier = parseInt(body.boat_tier);
+            currentUserEditing.rod_tier = parseInt(body.rod_tier);
+            
+            const trs = DOM.usersTbody.querySelectorAll('tr');
+            for(let tr of trs) {
+                if(tr.innerHTML.includes(currentUserEditing.user_id)) {
+                    tr.cells[2].innerHTML = `<span style="color:var(--warn)">${currentUserEditing.rating}</span> RP`;
+                    tr.cells[3].innerHTML = `<span style="color:var(--accent)">${currentUserEditing.coins.toLocaleString()}</span> C`;
+                    tr.cells[4].innerHTML = `Lv.${currentUserEditing.rod_tier} 🎣 / T.${currentUserEditing.boat_tier} ⛵`;
+                    break;
+                }
+            }
             closeModal();
         } else {
             showToast(res.error, "error");
         }
     } catch(e) { showToast(e.message, "error"); }
+    finally {
+        setLoading(DOM.btnModalSave, false, '변경사항 저장');
+    }
 }
 
 async function modifyItem(action) {

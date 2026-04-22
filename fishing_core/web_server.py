@@ -7,15 +7,19 @@ import discord
 from .database import db
 from .shared import FISH_DATA, MARKET_PRICES, env_state
 
-# 메모리에 토큰 저장 (서버 재시작 시 강제 로그아웃됨 - 보안상 유리)
-ACTIVE_SESSIONS = set()
-
 def require_auth(func):
     async def wrapper(self, request):
-        # 개발 환경이나 로컬 편의를 위해 쿠키 혹은 헤더 토큰 검증
         token = request.headers.get("Authorization")
-        if not token or token.replace("Bearer ", "") not in ACTIVE_SESSIONS:
+        if not token:
             return web.json_response({"error": "Unauthorized"}, status=401)
+            
+        raw_token = token.replace("Bearer ", "")
+        async with db.conn.execute("SELECT 1 FROM admin_sessions WHERE token=?", (raw_token,)) as cursor:
+            res = await cursor.fetchone()
+            
+        if not res:
+            return web.json_response({"error": "Unauthorized"}, status=401)
+            
         return await func(self, request)
     return wrapper
 
@@ -53,7 +57,8 @@ class DashboardServer:
         
         if password == master_pw:
             token = secrets.token_hex(32)
-            ACTIVE_SESSIONS.add(token)
+            await db.execute("INSERT INTO admin_sessions (token) VALUES (?)", (token,))
+            await db.commit()
             return web.json_response({"success": True, "token": token})
         
         return web.json_response({"success": False, "error": "Invalid Password"}, status=401)
@@ -231,11 +236,20 @@ class DashboardServer:
         
         if weather:
             env_state["CURRENT_WEATHER"] = weather
+            await db.execute("INSERT INTO server_state (key, value) VALUES ('CURRENT_WEATHER', ?) ON CONFLICT(key) DO UPDATE SET value=?", (weather, weather))
+            await db.commit()
             return web.json_response({"success": True, "current_weather": weather})
         return web.json_response({"error": "Invalid weather"}, status=400)
 
 async def start_web_server(bot):
     port = int(os.getenv("WEB_PORT", 8888))
+    
+    # 서버 기동 시 DB에서 날씨 상태 복구
+    async with db.conn.execute("SELECT value FROM server_state WHERE key='CURRENT_WEATHER'") as cursor:
+        res = await cursor.fetchone()
+        if res:
+            env_state["CURRENT_WEATHER"] = res[0]
+            
     server = DashboardServer(bot)
     runner = web.AppRunner(server.app)
     await runner.setup()
