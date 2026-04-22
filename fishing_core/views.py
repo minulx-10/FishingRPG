@@ -21,21 +21,21 @@ class FishActionView(View):
         await db.commit()
         await interaction.response.edit_message(content=f"🎒 **{self.target_fish}**를 가방에 안전하게 넣었습니다!", view=None)
 
-    @discord.ui.button(label="통에 보관 (배틀용)", style=discord.ButtonStyle.success, emoji="🪣")
+    @discord.ui.button(label="잠금 보관 (배틀용)", style=discord.ButtonStyle.success, emoji="🔒")
     async def btn_bucket(self, interaction: discord.Interaction, button: Button):
         if interaction.user != self.user or self.action_taken: return
         self.action_taken = True
         
-        await db.execute("INSERT INTO bucket (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (self.user.id, self.target_fish))
+        await db.execute("INSERT INTO inventory (user_id, item_name, amount, is_locked) VALUES (?, ?, 1, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1, is_locked = 1", (self.user.id, self.target_fish))
         await db.commit()
-        await interaction.response.edit_message(content=f"🪣 **{self.target_fish}**를 통에 담았습니다! 이제 배틀에 출전할 수 있습니다.", view=None)
+        await interaction.response.edit_message(content=f"🔒 **{self.target_fish}**를 잠금 보관했습니다! 판매에서 보호되며 배틀에 출전할 수 있습니다.", view=None)
 
     @discord.ui.button(label="바로 판매", style=discord.ButtonStyle.danger, emoji="💰")
     async def btn_sell(self, interaction: discord.Interaction, button: Button):
         if interaction.user != self.user or self.action_taken: return
         self.action_taken = True
         
-        price = MARKET_PRICES.get(self.target_fish, FISH_DATA[self.target_fish]["price"])
+        price = MARKET_PRICES.get(self.target_fish, FISH_DATA.get(self.target_fish, {}).get("price", 100))
         await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (price, self.user.id))
         await db.commit()
         await interaction.response.edit_message(content=f"💰 **{self.target_fish}**를 시장에 바로 넘겨서 `{price} C`를 벌었습니다!", view=None)
@@ -75,81 +75,97 @@ class FishingView(View):
         
         if not self.is_bite:
             return await interaction.response.edit_message(content="🎣 앗! 너무 일찍 챘습니다. 물고기가 도망갔어요! 💨", view=None)
-            
-        elapsed = datetime.datetime.now().timestamp() - self.start_time
-        fish_info = FISH_DATA.get(self.target_fish, {"grade": "보물"})
-        grade = fish_info["grade"]
         
-        if elapsed <= self.limit_time:
-            if grade in ["에픽", "레전드", "신화", "태고", "환상", "미스터리"]:
-                tension_view = TensionFishingView(self.user, self.target_fish, self.rod_tier, grade, self, elapsed)
-                await interaction.response.edit_message(content=f"❗ 거대한 물고기가 걸렸습니다! 힘겨루기 시작!", embed=tension_view.get_embed(), view=tension_view)
+        try:
+            elapsed = datetime.datetime.now().timestamp() - self.start_time
+            fish_info = FISH_DATA.get(self.target_fish, {"grade": "보물"})
+            grade = fish_info["grade"]
+            
+            if elapsed <= self.limit_time:
+                if grade in ["에픽", "레전드", "신화", "태고", "환상", "미스터리"]:
+                    tension_view = TensionFishingView(self.user, self.target_fish, self.rod_tier, grade, self, elapsed)
+                    await interaction.response.edit_message(content=f"❗ 거대한 물고기가 걸렸습니다! 힘겨루기 시작!", embed=tension_view.get_embed(), view=tension_view)
+                else:
+                    await self.on_bite_success(interaction, elapsed, grade)
             else:
-                await self.on_bite_success(interaction, elapsed, grade)
-        else:
-            fail_msg = f"⏰ 너무 늦었습니다! `{elapsed:.3f}초` 걸림.\n(놓친 물고기: **{self.target_fish}** / 제한: {self.limit_time:.2f}초)"
-            if grade in ["레전드", "신화", "태고", "환상", "미스터리"] and self.rod_tier > 1:
-                if random.random() < 0.5:
-                    await db.execute("UPDATE user_data SET rod_tier = rod_tier - 1 WHERE user_id = ?", (self.user.id,))
-                    fail_msg += "\n\n💥 **[치명적 손상]** 괴수의 힘을 이기지 못하고 **낚싯대가 부러졌습니다!** (낚싯대 레벨 1 하락)"
-            
-            if self.target_fish == "둔클레오스테우스 🦖":
-                async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=0", (self.user.id,)) as cursor:
-                    items = await cursor.fetchall()
-                if items:
-                    from fishing_core.shared import FISH_DATA
-                    most_exp = max(items, key=lambda x: FISH_DATA.get(x[0], {}).get("price", 0))[0]
-                    await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (self.user.id, most_exp))
-                    fail_msg += f"\n\n🦖 **[강철의 턱]** 둔클레오스테우스가 도망치며 당신의 가방을 찢어 가장 비싼 물고기(**{most_exp}**)를 먹어치웠습니다!"
-            
-            await db.commit()
-            await interaction.response.edit_message(content=fail_msg, view=None)
+                fail_msg = f"⏰ 너무 늦었습니다! `{elapsed:.3f}초` 걸림.\n(놓친 물고기: **{self.target_fish}** / 제한: {self.limit_time:.2f}초)"
+                if grade in ["레전드", "신화", "태고", "환상", "미스터리"] and self.rod_tier > 1:
+                    if random.random() < 0.5:
+                        await db.execute("UPDATE user_data SET rod_tier = rod_tier - 1 WHERE user_id = ?", (self.user.id,))
+                        fail_msg += "\n\n💥 **[치명적 손상]** 괴수의 힘을 이기지 못하고 **낚싯대가 부러졌습니다!** (낚싯대 레벨 1 하락)"
+                
+                if self.target_fish == "둔클레오스테우스 🦖":
+                    async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=0", (self.user.id,)) as cursor:
+                        items = await cursor.fetchall()
+                    if items:
+                        from fishing_core.shared import FISH_DATA
+                        most_exp = max(items, key=lambda x: FISH_DATA.get(x[0], {}).get("price", 0))[0]
+                        await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (self.user.id, most_exp))
+                        fail_msg += f"\n\n🦖 **[강철의 턱]** 둔클레오스테우스가 도망치며 당신의 가방을 찢어 가장 비싼 물고기(**{most_exp}**)를 먹어치웠습니다!"
+                
+                await db.commit()
+                await interaction.response.edit_message(content=fail_msg, view=None)
+        except Exception as e:
+            import traceback
+            tb = traceback.format_exc()
+            try:
+                await interaction.response.edit_message(content=f"❌ 낚시 처리 중 오류:\n```py\n{tb[:1800]}\n```", view=None)
+            except:
+                await interaction.followup.send(f"❌ 낚시 처리 중 오류:\n```py\n{tb[:1800]}\n```", ephemeral=True)
 
     async def on_bite_success(self, interaction, elapsed, grade):
-        await db.execute("INSERT OR IGNORE INTO fish_dex (user_id, item_name) VALUES (?, ?)", (self.user.id, self.target_fish))
-        
-        # 개체값(크기) 생성
-        power = FISH_DATA.get(self.target_fish, {}).get("power", 10)
-        fish_size = round(random.uniform(power * 1.5, power * 2.5), 2)
-        
-        async with db.conn.execute("SELECT max_size FROM fish_records WHERE user_id=? AND item_name=?", (self.user.id, self.target_fish)) as cursor:
-            record_res = await cursor.fetchone()
+        try:
+            await db.execute("INSERT OR IGNORE INTO fish_dex (user_id, item_name) VALUES (?, ?)", (self.user.id, self.target_fish))
             
-        is_new_record = False
-        if not record_res:
-            await db.execute("INSERT INTO fish_records (user_id, item_name, max_size) VALUES (?, ?, ?)", (self.user.id, self.target_fish, fish_size))
-            is_new_record = True
-        elif fish_size > record_res[0]:
-            await db.execute("UPDATE fish_records SET max_size=? WHERE user_id=? AND item_name=?", (fish_size, self.user.id, self.target_fish))
-            is_new_record = True
+            # 개체값(크기) 생성
+            power = FISH_DATA.get(self.target_fish, {}).get("power", 10)
+            fish_size = round(random.uniform(max(power * 1.5, 0.1), max(power * 2.5, 0.5)), 2)
             
-        await db.commit()
-        
-        embed = discord.Embed(title=f"🎉 낚시 성공! [{grade}]", description=f"**{self.target_fish}**를 낚았습니다!", color=0x00ff00)
-        
-        record_mark = " 🆕 **[최대 크기 신기록!]**" if is_new_record else ""
-        embed.add_field(name="측정 크기", value=f"`{fish_size} cm`{record_mark}", inline=False)
-        embed.add_field(name="반응 속도", value=f"`{elapsed:.3f}초` (판정 한도: {self.limit_time:.2f}초)", inline=False)
-        
-        if random.random() < 0.05:
-            piece = random.choice(["찢어진 지도 조각 A 🧩", "찢어진 지도 조각 B 🧩", "찢어진 지도 조각 C 🧩", "찢어진 지도 조각 D 🧩"])
-            await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (self.user.id, piece))
+            async with db.conn.execute("SELECT max_size FROM fish_records WHERE user_id=? AND item_name=?", (self.user.id, self.target_fish)) as cursor:
+                record_res = await cursor.fetchone()
+                
+            is_new_record = False
+            if not record_res:
+                await db.execute("INSERT INTO fish_records (user_id, item_name, max_size) VALUES (?, ?, ?)", (self.user.id, self.target_fish, fish_size))
+                is_new_record = True
+            elif fish_size > record_res[0]:
+                await db.execute("UPDATE fish_records SET max_size=? WHERE user_id=? AND item_name=?", (fish_size, self.user.id, self.target_fish))
+                is_new_record = True
+                
             await db.commit()
-            embed.add_field(name="🗺️ 바다의 파편 발견!", value=f"물고기와 함께 **{piece}**가 딸려왔습니다! (4부위를 모아 합성하세요)", inline=False)
-
-        if self.target_fish == "심해의 파멸, 크라켄 🦑":
-            async with db.conn.execute("SELECT user_id, coins FROM user_data WHERE user_id != ? AND coins > 1000 AND peace_mode=0 ORDER BY RANDOM() LIMIT 1", (self.user.id,)) as cursor:
-                target = await cursor.fetchone()
             
-            if target:
-                stolen_amount = int(target[1] * 0.1)
-                await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id = ?", (stolen_amount, target[0]))
-                await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (stolen_amount, self.user.id))
+            embed = discord.Embed(title=f"🎉 낚시 성공! [{grade}]", description=f"**{self.target_fish}**를 낚았습니다!", color=0x00ff00)
+            
+            record_mark = " 🆕 **[최대 크기 신기록!]**" if is_new_record else ""
+            embed.add_field(name="측정 크기", value=f"`{fish_size} cm`{record_mark}", inline=False)
+            embed.add_field(name="반응 속도", value=f"`{elapsed:.3f}초` (판정 한도: {self.limit_time:.2f}초)", inline=False)
+            
+            if random.random() < 0.05:
+                piece = random.choice(["찢어진 지도 조각 A 🧩", "찢어진 지도 조각 B 🧩", "찢어진 지도 조각 C 🧩", "찢어진 지도 조각 D 🧩"])
+                await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (self.user.id, piece))
                 await db.commit()
-                embed.add_field(name="🦑 크라켄의 촉수 발동!", value=f"심연에서 뻗어 나온 거대한 촉수가 누군가의 금고를 부수고 `{stolen_amount:,} C`를 훔쳐 당신에게 가져왔습니다!!", inline=False)
-        
-        action_view = FishActionView(self.user, self.target_fish)
-        await interaction.response.edit_message(content="🎊 앗, 낚았습니다! 이 물고기를 어떻게 할까요?", embed=embed, view=action_view)
+                embed.add_field(name="🗺️ 바다의 파편 발견!", value=f"물고기와 함께 **{piece}**가 딸려왔습니다! (4부위를 모아 합성하세요)", inline=False)
+
+            if self.target_fish == "심해의 파멸, 크라켄 🦑":
+                async with db.conn.execute("SELECT user_id, coins FROM user_data WHERE user_id != ? AND coins > 1000 AND peace_mode=0 ORDER BY RANDOM() LIMIT 1", (self.user.id,)) as cursor:
+                    target = await cursor.fetchone()
+                
+                if target:
+                    stolen_amount = int(target[1] * 0.1)
+                    await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id = ?", (stolen_amount, target[0]))
+                    await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (stolen_amount, self.user.id))
+                    await db.commit()
+                    embed.add_field(name="🦑 크라켄의 촉수 발동!", value=f"심연에서 뻗어 나온 거대한 촉수가 누군가의 금고를 부수고 `{stolen_amount:,} C`를 훔쳐 당신에게 가져왔습니다!!", inline=False)
+            
+            action_view = FishActionView(self.user, self.target_fish)
+            await interaction.response.edit_message(content="🎊 앗, 낚았습니다! 이 물고기를 어떻게 할까요?", embed=embed, view=action_view)
+        except Exception as e:
+            import traceback
+            tb = traceback.format_exc()
+            try:
+                await interaction.response.edit_message(content=f"❌ 낚시 결과 처리 중 오류:\n```py\n{tb[:1800]}\n```", view=None)
+            except:
+                await interaction.followup.send(f"❌ 낚시 결과 처리 중 오류:\n```py\n{tb[:1800]}\n```", ephemeral=True)
         
         if grade in ["태고", "환상", "미스터리", "신화"]:
             alert_embed = None
