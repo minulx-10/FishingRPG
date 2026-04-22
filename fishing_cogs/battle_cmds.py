@@ -12,9 +12,16 @@ class BattleCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="배틀", description="나의 가장 강한 물고기로 야생의 NPC 물고기와 턴제 배틀을 진행합니다!")
+    @app_commands.command(name="배틀", description="나의 가장 강한 물고기로 야생의 NPC 물고기와 턴제 배틀을 진행합니다! (체력 15 소모)")
     @check_boat_tier(3)
     async def 배틀(self, interaction: discord.Interaction):
+        # 체력 체크
+        async with db.conn.execute("SELECT stamina FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+            st = await cursor.fetchone()
+        if st and st[0] < 15:
+            return await interaction.response.send_message(f"❌ 행동력(체력)이 부족합니다! (필요: 15⚡ / 현재: {st[0]}⚡)\n💡 `/출석`이나 `/휴식`으로 체력을 회복하세요.", ephemeral=True)
+        await db.execute("UPDATE user_data SET stamina = stamina - 15 WHERE user_id=?", (interaction.user.id,))
+
         async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (interaction.user.id,)) as cursor:
             items = await cursor.fetchall()
         
@@ -68,6 +75,13 @@ class BattleCog(commands.Cog):
                 return await interaction.response.send_message("❌ 봇과는 싸울 수 없습니다!", ephemeral=True)
 
             await db.get_user_data(interaction.user.id)
+            
+            # 체력 체크 (PvP는 20 소모)
+            async with db.conn.execute("SELECT stamina FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+                st = await cursor.fetchone()
+            if st and st[0] < 20:
+                return await interaction.response.send_message(f"❌ 행동력(체력)이 부족합니다! (필요: 20⚡ / 현재: {st[0]}⚡)\n💡 `/출석`이나 `/휴식`으로 체력을 회복하세요.", ephemeral=True)
+            await db.execute("UPDATE user_data SET stamina = stamina - 20 WHERE user_id=?", (interaction.user.id,))
             await db.get_user_data(상대.id)
             
             async with db.conn.execute("SELECT peace_mode FROM user_data WHERE user_id=?", (상대.id,)) as cursor:
@@ -129,9 +143,17 @@ class BattleCog(commands.Cog):
         
         await interaction.response.send_message(f"✅ 평화 모드가 **{status_text}**")
 
-    @app_commands.command(name="레이드", description="서버 전체 유저들과 힘을 합쳐 월드 보스(1,000,000 HP)를 토벌합니다! (30분 쿨타임)")
+    @app_commands.command(name="레이드", description="서버 전체 유저들과 힘을 합쳐 월드 보스(1,000,000 HP)를 토벌합니다! (체력 25 소모, 30분 쿨타임)")
     @app_commands.checks.cooldown(1, 1800, key=lambda i: i.user.id)
     async def 레이드(self, interaction: discord.Interaction):
+        # 체력 체크 (레이드는 25 소모)
+        await db.get_user_data(interaction.user.id)
+        async with db.conn.execute("SELECT stamina FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+            st = await cursor.fetchone()
+        if st and st[0] < 25:
+            return await interaction.response.send_message(f"❌ 행동력(체력)이 부족합니다! (필요: 25⚡ / 현재: {st[0]}⚡)\n💡 `/출석`이나 `/휴식`으로 체력을 회복하세요.", ephemeral=True)
+        await db.execute("UPDATE user_data SET stamina = stamina - 25 WHERE user_id=?", (interaction.user.id,))
+
         async with db.conn.execute("SELECT value FROM server_state WHERE key='RAID_BOSS_HP'") as cursor:
             res = await cursor.fetchone()
         
