@@ -31,26 +31,44 @@ class MarketCog(commands.Cog):
         view = MarketPaginationView(MARKET_PRICES)
         await interaction.response.send_message(embed=view.make_embed(), view=view)
 
-    @app_commands.command(name="판매", description="인벤토리에 있는 물고기를 일괄 판매합니다. (특정 물고기를 판매에서 제외할 수 있습니다)")
-    @app_commands.describe(제외1="판매하지 않고 보호할 아이템 1", 제외2="판매하지 않고 보호할 아이템 2", 제외3="판매하지 않고 보호할 아이템 3")
+    @app_commands.command(name="판매", description="인벤토리에 있는 물고기를 일괄 판매합니다. (등급 필터를 사용할 수 있습니다)")
+    @app_commands.describe(제외1="판매하지 않고 보호할 아이템 1", 제외2="판매하지 않고 보호할 아이템 2", 제외3="판매하지 않고 보호할 아이템 3", 등급필터="지정한 등급 이하만 판매합니다.")
+    @app_commands.choices(등급필터=[
+        app_commands.Choice(name="일반만", value="일반"),
+        app_commands.Choice(name="희귀이하", value="희귀"),
+        app_commands.Choice(name="초희귀이하", value="초희귀"),
+        app_commands.Choice(name="전체 (추천 안함)", value="전체")
+    ])
     @app_commands.autocomplete(제외1=inv_autocomplete, 제외2=inv_autocomplete, 제외3=inv_autocomplete)
-    async def 판매(self, interaction: discord.Interaction, 제외1: str = None, 제외2: str = None, 제외3: str = None):
+    async def 판매(self, interaction: discord.Interaction, 제외1: str = None, 제외2: str = None, 제외3: str = None, 등급필터: str = "전체"):
         await interaction.response.defer()
 
         async with db.conn.execute("SELECT item_name, amount FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=0", (interaction.user.id,)) as cursor:
             items = await cursor.fetchall()
         
-        protected_items = ["낡은 고철 ⚙️", "가라앉은 보물상자 🧰", "고급 미끼 🪱", "자석 미끼 🧲", "찢어진 지도 조각 A 🧩", "찢어진 지도 조각 B 🧩", "찢어진 지도 조각 C 🧩", "찢어진 지도 조각 D 🧩"]
+        protected_items = ["낡은 고철 ⚙️", "가라앉은 보물상자 🧰", "고급 미끼 🪱", "자석 미끼 🧲", "찢어진 지도 조각 A 🧩", "찢어진 지도 조각 B 🧩", "찢어진 지도 조각 C 🧩", "찢어진 지도 조각 D 🧩", "레이드 작살 🔱"]
         user_excludes = [x for x in [제외1, 제외2, 제외3] if x is not None]
         protected_items.extend(user_excludes)
         
-        sellable_items = [(name, amt) for name, amt in items if name not in protected_items]
+        grade_order = {"일반": 1, "희귀": 2, "초희귀": 3, "에픽": 4, "레전드": 5, "태고": 6, "환상": 7, "미스터리": 8, "신화": 9}
+        target_grade_lv = grade_order.get(등급필터, 10) # '전체'면 10으로 설정해 모든 등급 포함
+        
+        sellable_items = []
+        for name, amt in items:
+            if name in protected_items: continue
+            
+            # 등급 필터링
+            fish_grade = FISH_DATA.get(name, {}).get("grade", "일반")
+            if grade_order.get(fish_grade, 0) > target_grade_lv:
+                continue
+            
+            sellable_items.append((name, amt))
         
         if not sellable_items:
-            return await interaction.followup.send("❌ 판매할 수 있는 물고기가 없습니다!\n(모두 보호 처리되었거나 가방이 텅 비어있습니다.)", ephemeral=True)
+            return await interaction.followup.send(f"❌ 판매할 수 있는 물고기가 없습니다!\n(필터: {등급필터} 이하 / 모두 보호 처리되었거나 가방이 비어있음)", ephemeral=True)
             
         total_earned = 0
-        msg = "**[💰 수산시장 일괄 판매 영수증]**\n"
+        msg = f"**[💰 수산시장 일괄 판매 영수증 - {등급필터} 필터]**\n"
         
         if user_excludes:
             msg += f"*(🛡️ 선택 보호됨: {', '.join(user_excludes)})*\n\n"
@@ -118,12 +136,20 @@ class MarketCog(commands.Cog):
         embed = discord.Embed(title="🏪 수산시장 아이템 상점", color=0xf1c40f)
         embed.add_field(name="고급 미끼 🪱 (가격: 500 C)", value="다음 낚시 때 일반 어종을 피하고 희귀 어종 등장 확률을 올려줍니다.", inline=False)
         embed.add_field(name="자석 미끼 🧲 (가격: 800 C)", value="물고기는 낚이지 않지만, 바다 밑에 가라앉은 고철이나 보물을 확정적으로 건져냅니다.", inline=False)
+        embed.add_field(name="에너지 드링크 ⚡ (가격: 1,500 C)", value="즉시 행동력(체력)을 **50⚡** 회복합니다. (최대치 초과 불가)", inline=False)
+        embed.add_field(name="가속 포션 💨 (가격: 3,000 C)", value="30분간 낚시 입질 대기 시간이 50% 단축됩니다.", inline=False)
+        embed.add_field(name="특수 떡밥 🎣 (가격: 2,000 C)", value="30분간 희귀 등급 이상 물고기 확률이 1.5배 증가합니다.", inline=False)
+        embed.add_field(name="레이드 작살 🔱 (가격: 5,000 C)", value="다음 레이드 공격 시 데미지가 2배로 증가합니다! (1회용)", inline=False)
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="구매", description="상점에서 아이템을 구매합니다.")
     @app_commands.choices(아이템=[
         app_commands.Choice(name="고급 미끼 🪱", value="고급 미끼 🪱"),
-        app_commands.Choice(name="자석 미끼 🧲", value="자석 미끼 🧲")
+        app_commands.Choice(name="자석 미끼 🧲", value="자석 미끼 🧲"),
+        app_commands.Choice(name="에너지 드링크 ⚡", value="에너지 드링크 ⚡"),
+        app_commands.Choice(name="가속 포션 💨", value="가속 포션 💨"),
+        app_commands.Choice(name="특수 떡밥 🎣", value="특수 떡밥 🎣"),
+        app_commands.Choice(name="레이드 작살 🔱", value="레이드 작살 🔱")
     ])
     @check_boat_tier(2)
     async def 구매(self, interaction: discord.Interaction, 아이템: app_commands.Choice[str], 수량: int = 1):
@@ -131,16 +157,61 @@ class MarketCog(commands.Cog):
             return await interaction.response.send_message("❌ 수량은 1개 이상이어야 합니다.", ephemeral=True)
             
         coins, _, _ = await db.get_user_data(interaction.user.id)
-        price = 500 * 수량 if 아이템.value == "고급 미끼 🪱" else 800 * 수량
+        
+        # 아이템별 가격 매핑
+        item_prices = {
+            "고급 미끼 🪱": 500,
+            "자석 미끼 🧲": 800,
+            "에너지 드링크 ⚡": 1500,
+            "가속 포션 💨": 3000,
+            "특수 떡밥 🎣": 2000,
+            "레이드 작살 🔱": 5000
+        }
+        
+        unit_price = item_prices.get(아이템.value, 500)
+        price = unit_price * 수량
         
         if coins < price:
-            return await interaction.response.send_message(f"❌ 코인이 부족합니다! (필요: {price} C / 현재: {coins} C)", ephemeral=True)
+            return await interaction.response.send_message(f"❌ 코인이 부족합니다! (필요: {price:,} C / 현재: {coins:,} C)", ephemeral=True)
         
+        # 에너지 드링크는 즉시 사용 (인벤토리 저장 대신 체력 회복)
+        if 아이템.value == "에너지 드링크 ⚡":
+            heal_amount = 50 * 수량
+            await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id = ?", (price, interaction.user.id))
+            await db.execute("UPDATE user_data SET stamina = MIN(max_stamina, stamina + ?) WHERE user_id = ?", (heal_amount, interaction.user.id))
+            await db.commit()
+            async with db.conn.execute("SELECT stamina, max_stamina FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+                st_res = await cursor.fetchone()
+            return await interaction.response.send_message(f"⚡ 에너지 드링크를 {수량}개 마셨습니다! 체력 +{heal_amount}⚡ (현재: {st_res[0]}/{st_res[1]}⚡)")
+        
+        # 가속 포션/특수 떡밥은 버프로 적용
+        import datetime
+        from fishing_core.shared import kst
+        
+        if 아이템.value == "가속 포션 💨":
+            await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id = ?", (price, interaction.user.id))
+            end_time = datetime.datetime.now(kst) + datetime.timedelta(minutes=30 * 수량)
+            end_time_str = end_time.strftime('%Y-%m-%d %H:%M:%S')
+            await db.execute("INSERT OR REPLACE INTO active_buffs (user_id, buff_type, end_time) VALUES (?, ?, ?)", 
+                             (interaction.user.id, "fishing_speed_up", end_time_str))
+            await db.commit()
+            return await interaction.response.send_message(f"💨 가속 포션을 사용했습니다! **{30*수량}분** 동안 낚시 대기 시간이 단축됩니다. (남은 코인: `{coins - price:,} C`)")
+        
+        if 아이템.value == "특수 떡밥 🎣":
+            await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id = ?", (price, interaction.user.id))
+            end_time = datetime.datetime.now(kst) + datetime.timedelta(minutes=30 * 수량)
+            end_time_str = end_time.strftime('%Y-%m-%d %H:%M:%S')
+            await db.execute("INSERT OR REPLACE INTO active_buffs (user_id, buff_type, end_time) VALUES (?, ?, ?)", 
+                             (interaction.user.id, "rare_boost", end_time_str))
+            await db.commit()
+            return await interaction.response.send_message(f"🎣 특수 떡밥을 뿌렸습니다! **{30*수량}분** 동안 희귀 이상 어종 확률이 1.5배 증가합니다. (남은 코인: `{coins - price:,} C`)")
+        
+        # 나머지 아이템은 인벤토리 저장 (미끼, 레이드 작살)
         await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id = ?", (price, interaction.user.id))
         await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, ?) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?", (interaction.user.id, 아이템.value, 수량, 수량))
         await db.commit()
         
-        await interaction.response.send_message(f"🛍️ **{아이템.value}** {수량}개를 구매했습니다! (남은 코인: `{coins - price} C`)")
+        await interaction.response.send_message(f"🛍️ **{아이템.value}** {수량}개를 구매했습니다! (남은 코인: `{coins - price:,} C`)")
 
     @app_commands.command(name="잠금", description="특정 물고기나 아이템을 일괄 판매 대상에서 제외하고 배틀용으로 보호합니다.")
     @app_commands.autocomplete(물고기=inv_autocomplete)
@@ -173,6 +244,49 @@ class MarketCog(commands.Cog):
         await db.execute("UPDATE inventory SET is_locked=0 WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기))
         await db.commit()
         await interaction.response.send_message(f"🔓 **{물고기}**의 잠금을 해제했습니다! 이제 판매할 수 있습니다.")
+
+    @app_commands.command(name="칭호상점", description="어마어마한 코인을 지불하여 명예로운 칭호를 구매합니다. (엔드게임 콘텐츠)")
+    async def 칭호상점(self, interaction: discord.Interaction):
+        embed = discord.Embed(title="🎖️ 명예의 전당 - 칭호 상점", color=0xe67e22)
+        embed.description = "부와 명예를 모두 가진 자만이 달 수 있는 특별한 칭호들입니다."
+        embed.add_field(name="[갑부] 💰", value="가격: `1,000,000 C`", inline=False)
+        embed.add_field(name="[강태공] 🎣", value="가격: `5,000,000 C`", inline=False)
+        embed.add_field(name="[바다의 왕] 🔱", value="가격: `20,000,000 C`", inline=False)
+        embed.add_field(name="[해신] 🌊", value="가격: `100,000,000 C`", inline=False)
+        embed.set_footer(text="💡 구매 즉시 해당 칭호가 적용됩니다.")
+        
+        view = TitleShopView()
+        await interaction.response.send_message(embed=embed, view=view)
+
+class TitleShopView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=60)
+
+    @discord.ui.select(placeholder="구매할 칭호를 선택하세요", options=[
+        discord.SelectOption(label="[갑부] 💰", value="갑부", description="1,000,000 C"),
+        discord.SelectOption(label="[강태공] 🎣", value="강태공", description="5,000,000 C"),
+        discord.SelectOption(label="[바다의 왕] 🔱", value="바다의 왕", description="20,000,000 C"),
+        discord.SelectOption(label="[해신] 🌊", value="해신", description="100,000,000 C"),
+    ])
+    async def select_title(self, interaction: discord.Interaction, select: discord.ui.Select):
+        title_prices = {
+            "갑부": 1000000,
+            "강태공": 5000000,
+            "바다의 왕": 20000000,
+            "해신": 100000000
+        }
+        
+        selected = select.values[0]
+        price = title_prices[selected]
+        
+        coins, _, _ = await db.get_user_data(interaction.user.id)
+        if coins < price:
+            return await interaction.response.send_message(f"❌ 코인이 부족합니다! (필요: {price:,} C / 현재: {coins:,} C)", ephemeral=True)
+            
+        await db.execute("UPDATE user_data SET coins = coins - ?, title = ? WHERE user_id=?", (price, f"[{selected}]", interaction.user.id))
+        await db.commit()
+        
+        await interaction.response.send_message(f"🎊 축하합니다! `{price:,} C`를 지불하고 **[{selected}]** 칭호를 획득했습니다!")
 
 async def setup(bot):
     await bot.add_cog(MarketCog(bot))

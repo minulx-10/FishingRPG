@@ -49,7 +49,7 @@ def check_boat_tier(min_tier: int):
         
         tier = res[0] if res else 1
         if tier < min_tier:
-            tier_names = {1: "나룻배 🛶", 2: "어선 🚤", 3: "쇄빙선 🛳️", 4: "잠수함 ⛴️"}
+            tier_names = {1: "나룻배 🛶", 2: "어선 🚤", 3: "쇄빙선 🛳️", 4: "전투함 ⚓", 5: "잠수함 ⛴️", 6: "차원함선 🛸"}
             req_name = tier_names.get(min_tier, f"Lv.{min_tier}")
             current_name = tier_names.get(tier, f"Lv.{tier}")
             

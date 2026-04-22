@@ -66,7 +66,7 @@ class BattleCog(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="수산대전", description="다른 유저를 지목하여 마라맛 PvP 배틀(약탈)을 겁니다!")
-    @check_boat_tier(4)
+    @check_boat_tier(5)
     async def 수산대전(self, interaction: discord.Interaction, 상대: discord.Member):
         try:
             if interaction.user == 상대:
@@ -84,10 +84,56 @@ class BattleCog(commands.Cog):
             await db.execute("UPDATE user_data SET stamina = stamina - 20 WHERE user_id=?", (interaction.user.id,))
             await db.get_user_data(상대.id)
             
+            # 평화모드 체크
             async with db.conn.execute("SELECT peace_mode FROM user_data WHERE user_id=?", (상대.id,)) as cursor:
                 res = await cursor.fetchone()
             if res and res[0] == 1:
                 return await interaction.response.send_message(f"❌ '{상대.name}'님은 현재 **평화 모드** 🕊️ 상태입니다. (약탈 불가)", ephemeral=True)
+
+            # === Phase 1: PvP 양학 방지 시스템 ===
+            import datetime as dt
+            kst_tz = dt.timezone(dt.timedelta(hours=9))
+            now = dt.datetime.now(kst_tz)
+            today_str = now.strftime('%Y-%m-%d')
+            
+            # 1) RP 차이 제한 (500 이상 차이나면 하위 유저 공격 불가)
+            async with db.conn.execute("SELECT rating FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+                my_rp = (await cursor.fetchone())[0]
+            async with db.conn.execute("SELECT rating FROM user_data WHERE user_id=?", (상대.id,)) as cursor:
+                target_rp = (await cursor.fetchone())[0]
+            
+            if my_rp - target_rp > 500:
+                return await interaction.response.send_message(
+                    f"❌ 상대방과의 RP 격차가 너무 큽니다! (나: {my_rp} / 상대: {target_rp})\n"
+                    f"⚖️ 비슷한 실력의 유저에게만 수산대전을 걸 수 있습니다. (최대 차이: 500 RP)",
+                    ephemeral=True
+                )
+            
+            # 2) 방어자 보호막 (하루 3회까지만 약탈당함)
+            async with db.conn.execute("SELECT pvp_shield_count, pvp_shield_date FROM user_data WHERE user_id=?", (상대.id,)) as cursor:
+                shield_res = await cursor.fetchone()
+            shield_count = shield_res[0] if shield_res else 3
+            shield_date = shield_res[1] if shield_res else ""
+            
+            # 날짜가 바뀌면 보호막 리셋
+            if shield_date != today_str:
+                shield_count = 3
+                await db.execute("UPDATE user_data SET pvp_shield_count=3, pvp_shield_date=? WHERE user_id=?", (today_str, 상대.id))
+            
+            if shield_count <= 0:
+                return await interaction.response.send_message(
+                    f"🛡️ '{상대.name}'님은 오늘 이미 3회 약탈당해 **보호막**이 발동 중입니다.\n"
+                    f"다른 상대를 찾거나 내일 다시 도전하세요!",
+                    ephemeral=True
+                )
+            
+            # 3) 공격자 평화모드 강제 해제 + 6시간 쿨타임
+            cooldown_until = (now + dt.timedelta(hours=6)).isoformat()
+            await db.execute("UPDATE user_data SET peace_mode=0, peace_cooldown=? WHERE user_id=?", (cooldown_until, interaction.user.id))
+            
+            # 방어자 보호막 1회 차감
+            await db.execute("UPDATE user_data SET pvp_shield_count = pvp_shield_count - 1, pvp_shield_date=? WHERE user_id=?", (today_str, 상대.id))
+            await db.commit()
 
             async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (interaction.user.id,)) as cursor:
                 items1 = await cursor.fetchall()
@@ -129,23 +175,49 @@ class BattleCog(commands.Cog):
             tb = traceback.format_exc()
             await interaction.response.send_message(f"❌ 수산대전 실행 중 오류 발생:\n```py\n{tb[:1900]}\n```", ephemeral=True)
 
-    @app_commands.command(name="평화모드", description="수산대전(PvP) 약탈을 거부하는 평화 모드를 켜거나 끕니다.")
+    @app_commands.command(name="평화모드", description="수산대전(PvP) 약탈을 거부하는 평화 모드를 켜거나 끕니다. (전환 쿨타임: 24시간)")
     async def 평화모드(self, interaction: discord.Interaction):
-        async with db.conn.execute("SELECT peace_mode FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+        await db.get_user_data(interaction.user.id)
+        async with db.conn.execute("SELECT peace_mode, peace_cooldown FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
             res = await cursor.fetchone()
         
         current_mode = res[0] if res else 0
+        peace_cooldown = res[1] if res and res[1] else ""
+        
+        # 쿨타임 체크 (24시간)
+        import datetime as dt
+        now = dt.datetime.now(dt.timezone(dt.timedelta(hours=9)))
+        if peace_cooldown:
+            try:
+                cooldown_end = dt.datetime.fromisoformat(peace_cooldown)
+                if now < cooldown_end:
+                    remaining = cooldown_end - now
+                    hours = int(remaining.total_seconds() // 3600)
+                    minutes = int((remaining.total_seconds() % 3600) // 60)
+                    return await interaction.response.send_message(
+                        f"⏳ 평화 모드 전환 쿨타임 중입니다! (`{hours}시간 {minutes}분` 후 전환 가능)\n"
+                        f"💡 수산대전을 걸면 쿨타임이 추가로 부여됩니다.",
+                        ephemeral=True
+                    )
+            except (ValueError, TypeError):
+                pass
+        
         new_mode = 1 if current_mode == 0 else 0
         status_text = "켜졌습니다 🕊️ (이제 다른 유저가 나를 약탈할 수 없습니다)" if new_mode == 1 else "꺼졌습니다 ⚔️ (이제 다른 유저와 PvP 전투가 가능합니다)"
         
-        await db.execute("UPDATE user_data SET peace_mode=? WHERE user_id=?", (new_mode, interaction.user.id))
+        # 24시간 쿨타임 설정
+        cooldown_until = (now + dt.timedelta(hours=24)).isoformat()
+        
+        await db.execute("UPDATE user_data SET peace_mode=?, peace_cooldown=? WHERE user_id=?", (new_mode, cooldown_until, interaction.user.id))
         await db.commit()
         
-        await interaction.response.send_message(f"✅ 평화 모드가 **{status_text}**")
+        await interaction.response.send_message(f"✅ 평화 모드가 **{status_text}**\n⏳ *다음 전환까지 24시간 쿨타임이 적용됩니다.*")
 
-    @app_commands.command(name="레이드", description="서버 전체 유저들과 힘을 합쳐 월드 보스(1,000,000 HP)를 토벌합니다! (체력 25 소모, 30분 쿨타임)")
+    @app_commands.command(name="레이드", description="서버 전체 유저들과 힘을 합쳐 월드 보스를 토벌합니다! (체력 25 소모, 30분 쿨타임)")
     @app_commands.checks.cooldown(1, 1800, key=lambda i: i.user.id)
     async def 레이드(self, interaction: discord.Interaction):
+        import json
+        
         # 체력 체크 (레이드는 25 소모)
         await db.get_user_data(interaction.user.id)
         async with db.conn.execute("SELECT stamina FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
@@ -154,13 +226,25 @@ class BattleCog(commands.Cog):
             return await interaction.response.send_message(f"❌ 행동력(체력)이 부족합니다! (필요: 25⚡ / 현재: {st[0]}⚡)\n💡 `/출석`이나 `/휴식`으로 체력을 회복하세요.", ephemeral=True)
         await db.execute("UPDATE user_data SET stamina = stamina - 25 WHERE user_id=?", (interaction.user.id,))
 
+        # 보스 레벨 로드 (동적 스케일링)
+        async with db.conn.execute("SELECT value FROM server_state WHERE key='RAID_BOSS_LEVEL'") as cursor:
+            lvl_res = await cursor.fetchone()
+        boss_level = int(lvl_res[0]) if lvl_res else 1
+        
+        # 보스 최대 HP = 기본 100만 × 1.2^(레벨-1)
+        boss_max_hp = int(1000000 * (1.2 ** (boss_level - 1)))
+
         async with db.conn.execute("SELECT value FROM server_state WHERE key='RAID_BOSS_HP'") as cursor:
             res = await cursor.fetchone()
         
-        boss_hp = int(res[0]) if res else 1000000
+        boss_hp = int(res[0]) if res else boss_max_hp
         if boss_hp <= 0:
-            boss_hp = 1000000 
-            await interaction.channel.send("📢 **[시스템]** 새로운 월드 보스 **'공허의 파괴자, 아포칼립스 🌌'**가 심연에서 깨어났습니다!")
+            boss_level += 1
+            boss_max_hp = int(1000000 * (1.2 ** (boss_level - 1)))
+            boss_hp = boss_max_hp
+            await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_BOSS_LEVEL', ?)", (str(boss_level),))
+            await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_DAMAGE_LOG', ?)", ('{}',))
+            await interaction.channel.send(f"📢 **[시스템]** Lv.{boss_level} 월드 보스 **'공허의 파괴자, 아포칼립스 🌌'**가 더 강해져서 깨어났습니다! (HP: {boss_max_hp:,})")
 
         async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (interaction.user.id,)) as cursor:
             items = await cursor.fetchall()
@@ -180,25 +264,67 @@ class BattleCog(commands.Cog):
         is_crit = random.random() < 0.2
         if is_crit: dmg *= 2
         
+        # 레이드 작살 아이템 체크 (2배 데미지)
+        async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name='레이드 작살 🔱'", (interaction.user.id,)) as cursor:
+            harpoon = await cursor.fetchone()
+        harpoon_used = False
+        if harpoon and harpoon[0] > 0:
+            dmg *= 2
+            harpoon_used = True
+            await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name='레이드 작살 🔱'", (interaction.user.id,))
+        
         new_hp = max(0, boss_hp - dmg)
         
         await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_BOSS_HP', ?)", (str(new_hp),))
+        
+        # 딜량 누적 기록
+        async with db.conn.execute("SELECT value FROM server_state WHERE key='RAID_DAMAGE_LOG'") as cursor:
+            log_res = await cursor.fetchone()
+        damage_log = json.loads(log_res[0]) if log_res and log_res[0] else {}
+        user_id_str = str(interaction.user.id)
+        damage_log[user_id_str] = damage_log.get(user_id_str, 0) + dmg
+        await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_DAMAGE_LOG', ?)", (json.dumps(damage_log),))
         
         reward = int(dmg * 1.5)
         await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (reward, interaction.user.id))
         await db.commit()
         
         crit_txt = "💥 **크리티컬 히트!!** " if is_crit else ""
-        embed = discord.Embed(title="🌌 월드 보스 레이드", color=0x9932cc)
-        embed.description = f"{interaction.user.mention}님의 가장 강한 전사가 보스를 향해 일격을 날립니다!\n\n{crit_txt}**{dmg:,}** 의 피해를 입혔습니다!\n💰 보상: `{reward:,} C` 지급 완료."
+        harpoon_txt = "\n🔱 **레이드 작살** 효과로 데미지 2배!" if harpoon_used else ""
+        embed = discord.Embed(title=f"🌌 월드 보스 레이드 (Lv.{boss_level})", color=0x9932cc)
+        embed.description = f"{interaction.user.mention}님의 가장 강한 전사가 보스를 향해 일격을 날립니다!\n\n{crit_txt}**{dmg:,}** 의 피해를 입혔습니다!{harpoon_txt}\n💰 보상: `{reward:,} C` 지급 완료."
         
-        bar = "🟥" * int((new_hp / 1000000) * 10) + "⬛" * (10 - int((new_hp / 1000000) * 10))
-        embed.add_field(name="공허의 파괴자, 아포칼립스", value=f"남은 체력: {new_hp:,} / 1,000,000\n{bar}", inline=False)
+        hp_ratio = new_hp / boss_max_hp
+        bar = "🟥" * int(hp_ratio * 10) + "⬛" * (10 - int(hp_ratio * 10))
+        embed.add_field(name="공허의 파괴자, 아포칼립스", value=f"남은 체력: {new_hp:,} / {boss_max_hp:,}\n{bar}", inline=False)
+        
+        # 누적 딜량 표시
+        my_total_dmg = damage_log.get(user_id_str, 0)
+        embed.add_field(name="📊 내 누적 딜량", value=f"`{my_total_dmg:,}` 데미지", inline=True)
         
         await interaction.response.send_message(embed=embed)
         
         if new_hp <= 0:
-            await interaction.channel.send(f"🎉 **[월드 레이드 토벌 성공]** {interaction.user.mention}님이 월드 보스의 숨통을 끊었습니다!! 전 서버에 평화가 찾아왔습니다.")
+            # 딜량 순위별 추가 보상
+            sorted_damage = sorted(damage_log.items(), key=lambda x: x[1], reverse=True)
+            bonus_msg = f"🎉 **[월드 레이드 토벌 성공]** Lv.{boss_level} 보스가 쓰러졌습니다!!\n\n📊 **딜량 랭킹 및 추가 보상:**\n"
+            
+            rank_rewards = [0.30, 0.20, 0.10]  # 1등 30%, 2등 20%, 3등 10% (보스 기본가 기준)
+            base_bonus = boss_max_hp // 10  # 기본 보너스 풀
+            
+            for idx, (uid, total_dmg) in enumerate(sorted_damage[:3]):
+                bonus = int(base_bonus * rank_rewards[idx])
+                await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (bonus, int(uid)))
+                medal = ["🥇", "🥈", "🥉"][idx]
+                bonus_msg += f"{medal} <@{uid}>: `{total_dmg:,}` 딜 → 보너스 `+{bonus:,} C`\n"
+            
+            await db.commit()
+            
+            # 다음 보스 준비
+            await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_DAMAGE_LOG', ?)", ('{}',))
+            await db.commit()
+            
+            await interaction.channel.send(bonus_msg)
 
     @레이드.error
     async def 레이드_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):

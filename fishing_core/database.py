@@ -24,11 +24,11 @@ class DBManager:
             )
         ''')
         await self.conn.execute('''
-            CREATE TABLE IF NOT EXISTS bucket (
+            CREATE TABLE IF NOT EXISTS active_buffs (
                 user_id INTEGER,
-                item_name TEXT,
-                amount INTEGER DEFAULT 0,
-                PRIMARY KEY (user_id, item_name)
+                buff_type TEXT,
+                end_time TEXT,
+                PRIMARY KEY (user_id, buff_type)
             )
         ''')
         await self.conn.execute('''
@@ -36,14 +36,6 @@ class DBManager:
                 user_id INTEGER,
                 item_name TEXT,
                 PRIMARY KEY (user_id, item_name)
-            )
-        ''')
-        await self.conn.execute('''
-            CREATE TABLE IF NOT EXISTS active_buffs (
-                user_id INTEGER,
-                buff_type TEXT,
-                end_time TEXT,
-                PRIMARY KEY (user_id, buff_type)
             )
         ''')
         await self.conn.execute('''
@@ -132,9 +124,30 @@ class DBManager:
         except aiosqlite.OperationalError:
             pass
 
-        # 통 (bucket) 마이그레이션 로직
+        # Phase 1: 평화모드 쿨타임 (ISO 형식 타임스탬프)
         try:
-            # bucket 테이블이 존재하는지 확인
+            await self.conn.execute("ALTER TABLE user_data ADD COLUMN peace_cooldown TEXT DEFAULT ''")
+        except aiosqlite.OperationalError:
+            pass
+
+        # Phase 1: 일일 무료 휴식 날짜
+        try:
+            await self.conn.execute("ALTER TABLE user_data ADD COLUMN last_free_rest TEXT DEFAULT ''")
+        except aiosqlite.OperationalError:
+            pass
+
+        # Phase 1: PvP 보호막 (하루 약탈당하는 횟수 제한)
+        try:
+            await self.conn.execute("ALTER TABLE user_data ADD COLUMN pvp_shield_count INTEGER DEFAULT 3")
+            await self.conn.execute("ALTER TABLE user_data ADD COLUMN pvp_shield_date TEXT DEFAULT ''")
+        except aiosqlite.OperationalError:
+            pass
+
+        # Phase 3: 도감 보상 수령 현황 (JSON 형식)
+        try:
+            await self.conn.execute("ALTER TABLE user_data ADD COLUMN dex_rewards TEXT DEFAULT '{}'")
+        except aiosqlite.OperationalError:
+            pass
             await self.conn.execute("SELECT 1 FROM bucket LIMIT 1")
             
             # 버킷에 있는 물고기를 인벤토리로 이동시키며 is_locked = 1 로 설정

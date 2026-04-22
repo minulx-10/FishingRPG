@@ -15,8 +15,25 @@ class FishActionView(View):
     @discord.ui.button(label="가방에 보관 (판매용)", style=discord.ButtonStyle.primary, emoji="🎒")
     async def btn_inv(self, interaction: discord.Interaction, button: Button):
         if interaction.user != self.user or self.action_taken: return
-        self.action_taken = True
         
+        # 인벤토리 용량 체크
+        async with db.conn.execute("SELECT boat_tier FROM user_data WHERE user_id=?", (self.user.id,)) as cursor:
+            res = await cursor.fetchone()
+        tier = res[0] if res else 1
+        
+        capacity_map = {1: 30, 2: 50, 3: 80, 4: 120, 5: 200, 6: 9999}
+        max_species = capacity_map.get(tier, 30)
+        
+        async with db.conn.execute("SELECT COUNT(*) FROM inventory WHERE user_id=?", (self.user.id,)) as cursor:
+            current_species = (await cursor.fetchone())[0]
+            
+        async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (self.user.id, self.target_fish)) as cursor:
+            has_fish = await cursor.fetchone()
+            
+        if not has_fish and current_species >= max_species:
+            return await interaction.response.send_message(f"🚫 가방이 가득 찼습니다! (현재: {current_species}/{max_species}종)\n어종 수를 줄이거나 선박을 개조하세요.", ephemeral=True)
+
+        self.action_taken = True
         await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (self.user.id, self.target_fish))
         await db.commit()
         await interaction.response.edit_message(content=f"🎒 **{self.target_fish}**를 가방에 안전하게 넣었습니다!", view=None)
@@ -24,8 +41,25 @@ class FishActionView(View):
     @discord.ui.button(label="잠금 보관 (배틀용)", style=discord.ButtonStyle.success, emoji="🔒")
     async def btn_bucket(self, interaction: discord.Interaction, button: Button):
         if interaction.user != self.user or self.action_taken: return
-        self.action_taken = True
         
+        # 인벤토리 용량 체크
+        async with db.conn.execute("SELECT boat_tier FROM user_data WHERE user_id=?", (self.user.id,)) as cursor:
+            res = await cursor.fetchone()
+        tier = res[0] if res else 1
+        
+        capacity_map = {1: 30, 2: 50, 3: 80, 4: 120, 5: 200, 6: 9999}
+        max_species = capacity_map.get(tier, 30)
+        
+        async with db.conn.execute("SELECT COUNT(*) FROM inventory WHERE user_id=?", (self.user.id,)) as cursor:
+            current_species = (await cursor.fetchone())[0]
+            
+        async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (self.user.id, self.target_fish)) as cursor:
+            has_fish = await cursor.fetchone()
+            
+        if not has_fish and current_species >= max_species:
+            return await interaction.response.send_message(f"🚫 가방이 가득 찼습니다! (현재: {current_species}/{max_species}종)\n어종 수를 줄이거나 선박을 개조하세요.", ephemeral=True)
+
+        self.action_taken = True
         await db.execute("INSERT INTO inventory (user_id, item_name, amount, is_locked) VALUES (?, ?, 1, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1, is_locked = 1", (self.user.id, self.target_fish))
         await db.commit()
         await interaction.response.edit_message(content=f"🔒 **{self.target_fish}**를 잠금 보관했습니다! 판매에서 보호되며 배틀에 출전할 수 있습니다.", view=None)

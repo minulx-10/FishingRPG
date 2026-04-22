@@ -591,5 +591,59 @@ class QuestCog(commands.Cog):
         
         await interaction.response.send_message(f"♻️ 교환 성공! 낡은 교환원이 **{target_piece}** 3개를 받고 **{reward_piece}** 1개를 주었습니다!")
 
+    @app_commands.command(name="도감보상", description="수집한 어종 수에 따른 특별 보상을 수령합니다.")
+    async def 도감보상(self, interaction: discord.Interaction):
+        import json
+        from fishing_core.shared import FISH_DATA
+        
+        async with db.conn.execute("SELECT COUNT(*) FROM fish_dex WHERE user_id=?", (interaction.user.id,)) as cursor:
+            dex_count = (await cursor.fetchone())[0]
+            
+        async with db.conn.execute("SELECT dex_rewards FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+            res = await cursor.fetchone()
+        claimed = json.loads(res[0]) if res and res[0] else {}
+        
+        milestones = [
+            {"count": 20, "reward_c": 5000, "title": "신입 어부", "id": "20"},
+            {"count": 50, "reward_c": 20000, "title": "어부의 혼", "id": "50"},
+            {"count": 100, "reward_c": 100000, "title": "바다의 지배자", "id": "100"},
+            {"count": 150, "reward_c": 500000, "title": "용왕의 친구", "id": "150"},
+        ]
+        
+        total_species = len(FISH_DATA)
+        milestones.append({"count": total_species, "reward_c": 1000000, "title": "전설의 낚시꾼", "id": "full"})
+        
+        embed = discord.Embed(title="📜 어종 도감 수집 보상", color=0x3498db)
+        embed.description = f"현재 수집한 어종: **{dex_count} / {total_species}** 종\n\n"
+        
+        can_claim = False
+        new_rewards = []
+        
+        for m in milestones:
+            is_claimed = claimed.get(m["id"], False)
+            if not is_claimed and dex_count >= m["count"]:
+                # 보상 지급 대상
+                claimed[m["id"]] = True
+                await db.execute("UPDATE user_data SET coins = coins + ?, title = ? WHERE user_id=?", (m["reward_c"], f"[{m['title']}]", interaction.user.id))
+                can_claim = True
+                new_rewards.append(f"• {m['count']}종 달성 보상: `{m['reward_c']:,} C` + 칭호 `[{m['title']}]` ✅")
+                status = "🎁 수령 완료!"
+            else:
+                status = "✅ 수령 완료" if is_claimed else (f"🔒 미달성 (목표: {m['count']}종)" if dex_count < m["count"] else "🎁 수령 가능")
+            
+            embed.add_field(
+                name=f"{m['count']}종 달성 보상",
+                value=f"• 보상: `{m['reward_c']:,} C` + 칭호 `[{m['title']}]` \n• 상태: **{status}**",
+                inline=False
+            )
+            
+        if can_claim:
+            await db.execute("UPDATE user_data SET dex_rewards = ? WHERE user_id=?", (json.dumps(claimed), interaction.user.id))
+            await db.commit()
+            reward_txt = "\n".join(new_rewards)
+            await interaction.response.send_message(f"🎉 **축하합니다! 새로운 보상을 수령했습니다!**\n{reward_txt}", embed=embed)
+        else:
+            await interaction.response.send_message("💡 아직 수령할 수 있는 새로운 보상이 없습니다. 더 많은 물고기를 낚아보세요!", embed=embed, ephemeral=True)
+
 async def setup(bot):
     await bot.add_cog(QuestCog(bot))

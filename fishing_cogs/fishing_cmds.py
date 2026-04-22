@@ -103,14 +103,16 @@ class FishingCog(commands.Cog):
                 if grade in ["에픽", "레전드", "신화"]:
                     base_prob *= (1 + (rod_tier * 0.1))
 
-                # 날씨 연동 글로벌 확률 펌핑 (핫타임)
+                # 날씨 연동 글로벌 확률 펌핑 (핫타임) - 밸런스 조정됨
                 current_weather = env_state["CURRENT_WEATHER"]
-                if current_weather == "🌧️ 비" and grade == "에픽":
-                    base_prob *= 2.0
+                if current_weather == "☀️ 맑음" and grade in ["일반", "희귀"]:
+                    base_prob *= 1.3  # 맑은 날: 일반/희귀 어종 확률 증가 (안정적 수입)
+                elif current_weather == "🌧️ 비" and grade == "에픽":
+                    base_prob *= 1.5  # 비: 에픽 확률 소폭 증가 (기존 2.0 → 1.5)
                 elif current_weather == "🌫️ 안개" and grade == "레전드":
-                    base_prob *= 3.0
+                    base_prob *= 2.0  # 안개: 레전드 확률 증가 (기존 3.0 → 2.0)
                 elif current_weather == "🌩️ 폭풍우" and grade in ["신화", "태고", "환상", "미스터리"]:
-                    base_prob *= 5.0
+                    base_prob *= 2.0  # 폭풍우: 최고급 확률 증가 (기존 5.0 → 2.0)
 
                 candidates.append(fish)
                 weights.append(base_prob)
@@ -175,7 +177,7 @@ class FishingCog(commands.Cog):
         async with db.conn.execute("SELECT boat_tier FROM user_data WHERE user_id=?", (target.id,)) as cursor:
             res = await cursor.fetchone()
         current_tier = res[0] if res else 1
-        tier_names = {1: "나룻배 🛶", 2: "어선 🚤", 3: "쇄빙선 🛳️", 4: "잠수함 ⛴️"}
+        tier_names = {1: "나룻배 🛶", 2: "어선 🚤", 3: "쇄빙선 🛳️", 4: "전투함 ⚓", 5: "잠수함 ⛴️", 6: "차원함선 🛸"}
         boat_str = tier_names.get(current_tier, f"Lv.{current_tier}")
 
         async with db.conn.execute("SELECT item_name, amount FROM inventory WHERE user_id=? AND amount > 0", (target.id,)) as cursor:
@@ -206,25 +208,39 @@ class FishingCog(commands.Cog):
         
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="휴식", description="여관에서 3,000 코인을 지불하고 행동력(체력)을 즉시 전부 회복합니다.")
+    @app_commands.command(name="휴식", description="여관에서 코인을 지불하고 행동력(체력)을 즉시 전부 회복합니다. (일일 1회 무료!)")
     async def 휴식(self, interaction: discord.Interaction):
         coins, _, _ = await db.get_user_data(interaction.user.id)
         
-        async with db.conn.execute("SELECT stamina, max_stamina FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+        async with db.conn.execute("SELECT stamina, max_stamina, boat_tier, last_free_rest FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
             res = await cursor.fetchone()
-        stamina, max_stamina = res if res else (100, 100)
+        stamina = res[0] if res else 100
+        max_stamina = res[1] if res else 100
+        boat_tier = res[2] if res else 1
+        last_free_rest = res[3] if res else ""
         
         if stamina >= max_stamina:
             return await interaction.response.send_message("✨ 체력이 이미 가득 차 있습니다! 휴식이 필요하지 않습니다.", ephemeral=True)
-            
-        cost = 3000
-        if coins < cost:
-            return await interaction.response.send_message(f"❌ 코인이 부족합니다. (필요: `{cost:,} C` / 현재: `{coins:,} C`)\n💡 시간이 지나면 10분마다 15씩 지속적으로 자연 회복됩니다.", ephemeral=True)
-            
-        await db.execute("UPDATE user_data SET coins = coins - ?, stamina = max_stamina WHERE user_id=?", (cost, interaction.user.id))
-        await db.commit()
         
-        await interaction.response.send_message(f"🛌 `{cost:,} C`를 지불하고 여관에서 푹 쉬었습니다! (체력 {max_stamina}⚡ 전부 회복 완료)")
+        # 일일 1회 무료 휴식 체크
+        today = datetime.datetime.now(kst).strftime('%Y-%m-%d')
+        is_free = (last_free_rest != today)
+        
+        # 선박 티어별 차등 비용
+        tier_costs = {1: 500, 2: 1500, 3: 3000, 4: 5000, 5: 8000}
+        cost = tier_costs.get(boat_tier, 3000)
+        
+        if is_free:
+            await db.execute("UPDATE user_data SET stamina = max_stamina, last_free_rest = ? WHERE user_id=?", (today, interaction.user.id))
+            await db.commit()
+            await interaction.response.send_message(f"🛌 오늘의 **무료 휴식**을 사용했습니다! (체력 {max_stamina}⚡ 전부 회복 완료)\n💡 *내일 다시 무료 휴식이 충전됩니다.*")
+        else:
+            if coins < cost:
+                return await interaction.response.send_message(f"❌ 코인이 부족합니다. (필요: `{cost:,} C` / 현재: `{coins:,} C`)\n💡 오늘의 무료 휴식은 이미 사용했습니다. 시간이 지나면 10분마다 자연 회복됩니다.", ephemeral=True)
+            
+            await db.execute("UPDATE user_data SET coins = coins - ?, stamina = max_stamina WHERE user_id=?", (cost, interaction.user.id))
+            await db.commit()
+            await interaction.response.send_message(f"🛌 `{cost:,} C`를 지불하고 여관에서 푹 쉬었습니다! (체력 {max_stamina}⚡ 전부 회복 완료)")
 
     @app_commands.command(name="바다", description="현재 바다의 시간대와 날씨 환경을 확인합니다.")
     async def 바다(self, interaction: discord.Interaction):
