@@ -282,78 +282,108 @@ class QuestCog(commands.Cog):
             return await interaction.followup.send(embed=embed)
             
         try:
-            # 수족관 배경 생성 (바다색)
-            img = Image.new("RGBA", (800, 600), (10, 30, 60, 255))
+            # --- 1. 배경 및 조명 효과 (그라데이션 + 빛줄기) ---
+            width, height = 800, 600
+            img = Image.new("RGBA", (width, height), (10, 30, 60, 255))
             draw = ImageDraw.Draw(img)
             
-            # 폰트 로드 (윈도우 맑은고딕 굵게 기준)
-            try:
-                font = ImageFont.truetype("malgunbd.ttf", 24)
-                small_font = ImageFont.truetype("malgun.ttf", 16)
-            except:
-                try:
-                    # Linux: Noto Sans CJK (한글 지원 폰트)
-                    font = ImageFont.truetype("/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc", 24)
-                    small_font = ImageFont.truetype("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc", 16)
-                except:
-                    try:
-                        font = ImageFont.truetype("/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc", 24)
-                        small_font = ImageFont.truetype("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", 16)
-                    except:
-                        font = ImageFont.load_default()
-                        small_font = font
+            # 수직 그라데이션 (LightSeaGreen -> MidnightBlue)
+            for y in range(height):
+                r = int(32 + (25 - 32) * (y / height))
+                g = int(178 + (25 - 178) * (y / height))
+                b = int(170 + (112 - 170) * (y / height))
+                draw.line([(0, y), (width, y)], fill=(r, g, b, 255))
+
+            # 햇살 효과 (God Rays)
+            for i in range(6):
+                ray_x = random.randint(-100, width)
+                ray_width = random.randint(40, 120)
+                alpha = random.randint(10, 25) # 더 투명하게 조정
+                points = [
+                    (ray_x, 0), 
+                    (ray_x + ray_width, 0),
+                    (ray_x + ray_width - 200, height),
+                    (ray_x - 200, height)
+                ]
+                draw.polygon(points, fill=(255, 255, 255, alpha))
+
+            # 장식용 물방울
+            for _ in range(30):
+                x, y = random.randint(0, 800), random.randint(0, 530)
+                r = random.randint(2, 6)
+                draw.ellipse([x-r, y-r, x+r, y+r], outline=(255, 255, 255, 80), width=1)
+
+            # 바닥 모래 (텍스처 느낌을 위해 약간의 노이즈 추가)
+            draw.rectangle([0, 530, 800, 600], fill=(194, 178, 128, 255))
+            for _ in range(500):
+                sx, sy = random.randint(0, 799), random.randint(530, 599)
+                draw.point((sx, sy), fill=(160, 140, 100, 255))
+
+            # --- 2. 물고기 배치 로직 (충돌 감지 랜덤) ---
+            placed_coords = []
+            min_dist = 110 # 물고기간 최소 거리
+            
+            fish_to_draw = []
+            for (name,) in items:
+                grade = FISH_DATA[name]["grade"]
+                parts = name.split(" ")
+                emoji = parts[-1] if len(parts) > 1 and len(parts[-1]) <= 2 else "🐟"
                 
+                # 좌표 찾기 (최대 100번 시도)
+                found_spot = False
+                for _ in range(100):
+                    x = random.randint(80, 720)
+                    y = random.randint(80, 480) # 모래 위쪽
+                    if all(((x-px)**2 + (y-py)**2)**0.5 > min_dist for px, py in placed_coords):
+                        placed_coords.append((x, y))
+                        fish_to_draw.append({"name": name, "emoji": emoji, "grade": grade, "x": x, "y": y})
+                        found_spot = True
+                        break
+                if not found_spot: # 공간 부족 시 겹치더라도 배치
+                    x, y = random.randint(80, 720), random.randint(80, 480)
+                    fish_to_draw.append({"name": name, "emoji": emoji, "grade": grade, "x": x, "y": y})
+
+            # --- 3. 렌더링 ---
+            try:
+                # 윈도우/리눅스 폰트 경로 호환성
+                font_paths = ["malgunbd.ttf", "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc", "arial.ttf"]
+                font = None
+                for path in font_paths:
+                    try:
+                        font = ImageFont.truetype(path, 60)
+                        break
+                    except: continue
+                if not font: font = ImageFont.load_default()
+            except:
+                font = ImageFont.load_default()
+
             grade_colors = {
                 "일반": (200, 200, 200), "희귀": (100, 200, 255), "초희귀": (200, 100, 255), 
                 "에픽": (255, 100, 100), "레전드": (255, 200, 0), "신화": (255, 50, 50), "히든": (255, 255, 255)
             }
-            
-            # 장식용 물방울
-            for _ in range(20):
-                x, y = random.randint(0, 800), random.randint(0, 600)
-                r = random.randint(2, 8)
-                draw.ellipse([x-r, y-r, x+r, y+r], outline=(255, 255, 255, 100), width=1)
-                
-            # 바닥 모래
-            draw.rectangle([0, 550, 800, 600], fill=(210, 180, 140, 255))
-            
-            # 수조 배치 로직 (격자 배열)
-            cols = 4
-            cell_width = 800 // cols
-            cell_height = 500 // ((len(items) - 1) // cols + 1)
-            if cell_height > 150: cell_height = 150
-            
+
             with Pilmoji(img) as pilmoji:
-                for idx, (name,) in enumerate(items):
-                    grade = FISH_DATA[name]["grade"]
-                    color = grade_colors.get(grade, (255,255,255))
+                for fish in fish_to_draw:
+                    cx, cy = fish["x"], fish["y"]
+                    color = grade_colors.get(fish["grade"], (255, 255, 255))
                     
-                    col = idx % cols
-                    row = idx // cols
+                    # [에픽] 이상 또는 특정 등급만 발광 효과
+                    if fish["grade"] in ["에픽", "레전드", "신화", "히든", "태고", "환상", "미스터리", "해신(海神)"]:
+                        for r in range(60, 0, -10):
+                            alpha = int(40 * (r / 60)) # 더 은은하게 조정
+                            draw.ellipse([cx-r, cy-r, cx+r, cy+r], fill=(color[0], color[1], color[2], alpha))
                     
-                    cx = col * cell_width + cell_width // 2
-                    cy = row * cell_height + cell_height // 2 + 30
-                    
-                    # 물고기 주변 은은한 빛
-                    for r in range(30, 0, -5):
-                        alpha = int(50 * (r / 30))
-                        draw.ellipse([cx-r, cy-r, cx+r, cy+r], fill=(color[0], color[1], color[2], alpha))
-                        
-                    # 물고기 텍스트/이모지 렌더링
-                    parts = name.split(" ")
-                    emoji = parts[-1] if len(parts) > 1 and len(parts[-1]) <= 2 else "🐟" # 간단한 이모지 추출
-                    name_text = " ".join(parts[:-1]) if emoji != "🐟" else name
-                    
-                    pilmoji.text((cx-30, cy-40), emoji, fill=(255, 255, 255), font=font)
-                    
-                    # 이름 렌더링
-                    w = draw.textlength(name_text, font=small_font)
-                    draw.text((cx - w/2, cy + 10), name_text, fill=color, font=small_font)
-                    
-                    # 등급 렌더링
-                    gw = draw.textlength(f"[{grade}]", font=small_font)
-                    draw.text((cx - gw/2, cy + 30), f"[{grade}]", fill=color, font=small_font)
-                    
+                    # 물고기 이모지 렌더링
+                    pilmoji.text((cx-35, cy-35), fish["emoji"], fill=(255, 255, 255), font=font)
+
+            # 임베드 설명 구성 (이미지 내부 텍스트 대신 임베드로 이동)
+            fish_list_str = ""
+            for (name,) in items:
+                grade = FISH_DATA[name]["grade"]
+                fish_list_str += f"• **{name}** `[{grade}]` \n"
+            
+            embed.description = f"🌊 **수족관에 전시된 물고기들**\n\n{fish_list_str}"
+            
             buf = io.BytesIO()
             img.save(buf, format='PNG')
             buf.seek(0)
