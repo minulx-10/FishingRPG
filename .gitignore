@@ -1,6 +1,7 @@
 *.pem
 *.db
-*.txt
+# *.txt (requirements.txt를 위해 제거)
+cmd_log.txt
 __pycache__/
 .env
 bot.py
