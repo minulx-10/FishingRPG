@@ -1,30 +1,32 @@
 import json
-import datetime
-import random
 import os
-from typing import Dict, Any
+import random
+from datetime import timedelta, timezone
+
 import aiofiles
+
 from fishing_core.logger import logger
 
-kst = datetime.timezone(datetime.timedelta(hours=9))
+kst = timezone(timedelta(hours=9))
 SUPER_ADMIN_IDS = [
-    771274777443696650,  
-    861106310439632896,  
+    771274777443696650,
+    861106310439632896,
     1478295213389774920,
-    673900043912085536
+    673900043912085536,
 ]
 
-ADMIN_LOG_CHANNEL_ID = int(os.getenv("ADMIN_LOG_CHANNEL_ID", 0))
+ADMIN_LOG_CHANNEL_ID = int(os.getenv("ADMIN_LOG_CHANNEL_ID", "0"))
 
 # 전역 데이터 컨테이너
-FISH_DATA: Dict[str, Any] = {}
-MARKET_PRICES: Dict[str, int] = {}
-RECIPES: Dict[str, Any] = {}
+FISH_DATA: dict[str, any] = {}
+MARKET_PRICES: dict[str, int] = {}
+RECIPES: dict[str, any] = {}
 
-async def load_json_async(file_path: str) -> Dict[str, Any]:
+
+async def load_json_async(file_path: str) -> dict[str, any]:
     """파일을 비동기적으로 읽어서 JSON으로 반환합니다."""
     try:
-        async with aiofiles.open(file_path, mode='r', encoding='utf-8') as f:
+        async with aiofiles.open(file_path, encoding='utf-8') as f:
             content = await f.read()
             return json.loads(content)
     except FileNotFoundError:
@@ -36,8 +38,6 @@ async def load_json_async(file_path: str) -> Dict[str, Any]:
 
 async def init_shared_data():
     """봇 시작 시 데이터를 초기화합니다."""
-    global FISH_DATA, MARKET_PRICES, RECIPES
-    
     # 1. 어종 데이터 로드
     base_fish = await load_json_async('fish_data.json')
     if not base_fish:
@@ -79,9 +79,14 @@ def update_weather_randomly():
     return new_weather
 
 def get_element_multiplier(atk_elem, def_elem):
-    if atk_elem == "무속성" or def_elem == "무속성": return 1.0
-    if atk_elem == "표층" and def_elem == "심해": return 1.5
-    if atk_elem == "심해" and def_elem == "암초": return 1.5
-    if atk_elem == "암초" and def_elem == "표층": return 1.5
-    if atk_elem == def_elem: return 1.0
+    if atk_elem == "무속성" or def_elem == "무속성":
+        return 1.0
+    if atk_elem == "표층" and def_elem == "심해":
+        return 1.5
+    if atk_elem == "심해" and def_elem == "암초":
+        return 1.5
+    if atk_elem == "암초" and def_elem == "표층":
+        return 1.5
+    if atk_elem == def_elem:
+        return 1.0
     return 0.8

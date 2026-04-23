@@ -135,10 +135,7 @@ class FishingCog(commands.Cog):
                 candidates.append(fish)
                 weights.append(base_prob)
 
-        if not candidates:
-            target_fish = "낡은 장화 🥾"
-        else:
-            target_fish = random.choices(candidates, weights=weights, k=1)[0]
+        target_fish = "낡은 장화 🥾" if not candidates else random.choices(candidates, weights=weights, k=1)[0]
 
         now_hour = datetime.datetime.now(kst).hour
         if target_fish == "바다의 원혼, 우미보즈 🌑" and not (0 <= now_hour < 4):
@@ -210,7 +207,7 @@ class FishingCog(commands.Cog):
 
             msg = await interaction.edit_original_response(content=None, embed=embed, view=view)
             view.message = msg
-        except:
+        except Exception:
             pass
 
     @app_commands.command(name="인벤토리", description="나 또는 특정 유저의 가방과 스탯을 확인합니다.")
@@ -296,8 +293,9 @@ class FishingCog(commands.Cog):
                 target_image = filename
                 break
 
+        from pathlib import Path
         file = None
-        if target_image and os.path.exists(f"assets/weather/{target_image}"):
+        if target_image and Path(f"assets/weather/{target_image}").exists():
             file = discord.File(f"assets/weather/{target_image}", filename="weather.png")
             bg_url = "attachment://weather.png"
         else:
@@ -309,17 +307,22 @@ class FishingCog(commands.Cog):
             else:
                 bg_url = "https://images.unsplash.com/photo-1494948141550-9a3b2bc87860?w=800"
 
-            if "폭풍우" in weather: bg_url = "https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=800"
-            elif "비" in weather: bg_url = "https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=800"
+            if "폭풍우" in weather:
+                bg_url = "https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=800"
+            elif "비" in weather:
+                bg_url = "https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=800"
 
         embed = discord.Embed(title="🌊 현재 바다 상황", color=0x3498db)
         embed.add_field(name="현재 시간대", value=f"**{time_str}** (`{now_hour}시`)", inline=True)
         embed.add_field(name="현재 날씨", value=f"**{weather}**", inline=True)
 
         hints = ""
-        if 0 <= now_hour < 4: hints += "- ⚠️ [신화] 우미보즈가 출몰할 수 있는 으스스한 시간입니다.\n"
-        if weather in ["🌧️ 비", "🌫️ 안개"]: hints += "- ⚠️ [미스터리] 네시가 활동하기 좋은 날씨입니다.\n"
-        if not hints: hints = "- 평화로운 바다입니다. 낚시하기 딱 좋네요!"
+        if 0 <= now_hour < 4:
+            hints += "- ⚠️ [신화] 우미보즈가 출몰할 수 있는 으스스한 시간입니다.\n"
+        if weather in ["🌧️ 비", "🌫️ 안개"]:
+            hints += "- ⚠️ [미스터리] 네시가 활동하기 좋은 날씨입니다.\n"
+        if not hints:
+            hints = "- 평화로운 바다입니다. 낚시하기 딱 좋네요!"
 
         embed.add_field(name="생태계 정보", value=hints, inline=False)
         embed.set_image(url=bg_url)

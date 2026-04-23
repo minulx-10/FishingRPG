@@ -2,7 +2,6 @@ import logging
 import logging.handlers
 import os
 import sys
-from typing import Optional
 
 # 로그 파일 저장 경로 설정
 LOG_DIR = "logs"

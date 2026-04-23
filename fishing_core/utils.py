@@ -1,38 +1,38 @@
+import contextlib
 import datetime
 
 import discord
 from discord import app_commands
 
 from .database import db
-from .shared import ADMIN_LOG_CHANNEL_ID, FISH_DATA, RECIPES, SUPER_ADMIN_IDS
+from .logger import logger
+from .shared import ADMIN_LOG_CHANNEL_ID, FISH_DATA, RECIPES, SUPER_ADMIN_IDS, kst
 
 
 async def log_admin_action(bot, admin_user, target_user, action_name, detail):
     """관리자 행동을 특정 채널에 로그로 남깁니다."""
     if not ADMIN_LOG_CHANNEL_ID:
-        print(f"[Admin Log] {admin_user.name} -> {target_user.name if target_user else 'N/A'}: {action_name} ({detail})")
+        logger.info(f"[Admin Log] {admin_user.name} -> {target_user.name if target_user else 'N/A'}: {action_name} ({detail})")
         return
 
     channel = bot.get_channel(ADMIN_LOG_CHANNEL_ID)
     if not channel:
         return
 
-    embed = discord.Embed(title="🛡️ 관리자 작업 로그", color=0xe74c3c, timestamp=datetime.datetime.now())
+    embed = discord.Embed(title="🛡️ 관리자 작업 로그", color=0xe74c3c, timestamp=datetime.datetime.now(kst))
     embed.add_field(name="실행자", value=f"{admin_user.mention} ({admin_user.id})", inline=True)
     if target_user:
         embed.add_field(name="대상", value=f"{target_user.mention} ({target_user.id})", inline=True)
     embed.add_field(name="명령어", value=f"`/{action_name}`", inline=False)
     embed.add_field(name="상세 내용", value=detail, inline=False)
 
-    try:
+    with contextlib.suppress(Exception):
         await channel.send(embed=embed)
-    except:
-        pass
 
 async def bait_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
     baits = ["고급 미끼 🪱", "자석 미끼 🧲"]
     query = f"SELECT item_name FROM inventory WHERE user_id=? AND item_name IN ({','.join(['?']*len(baits))}) AND amount > 0"
-    async with db.conn.execute(query, [interaction.user.id] + baits) as cursor:
+    async with db.conn.execute(query, [interaction.user.id, *baits]) as cursor:
         items = await cursor.fetchall()
     choices = [app_commands.Choice(name="미끼 없음 (기본)", value="none")]
     for row in items:
@@ -41,7 +41,7 @@ async def bait_autocomplete(interaction: discord.Interaction, current: str) -> l
     return choices[:25]
 
 async def fish_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-    choices = [app_commands.Choice(name=fish, value=fish) for fish in FISH_DATA.keys() if current.lower() in fish.lower()]
+    choices = [app_commands.Choice(name=fish, value=fish) for fish in FISH_DATA if current.lower() in fish.lower()]
     return choices[:25]
 
 async def inv_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
@@ -60,7 +60,7 @@ async def locked_autocomplete(interaction: discord.Interaction, current: str) ->
     return [app_commands.Choice(name=row[0], value=row[0]) for row in items if current.lower() in row[0].lower()][:25]
 
 async def recipe_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-    return [app_commands.Choice(name=r, value=r) for r in RECIPES.keys() if current.lower() in r.lower()][:25]
+    return [app_commands.Choice(name=r, value=r) for r in RECIPES if current.lower() in r.lower()][:25]
 
 
 def is_developer():

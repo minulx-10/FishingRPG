@@ -106,7 +106,8 @@ class BattleCog(commands.Cog):
                 target_rp = (await cursor.fetchone())[0]
 
             rp_gap_limit = 500
-            if my_rp > 2000: rp_gap_limit = 1000 
+            if my_rp > 2000:
+                rp_gap_limit = 1000
 
             if my_rp - target_rp > rp_gap_limit:
                 return await interaction.response.send_message(
@@ -172,13 +173,15 @@ class BattleCog(commands.Cog):
                 new_p2_deck = []
                 for f_name, f_pwr in p2_deck:
                     if f_name == p2_guard:
-                        new_p2_deck.append((f_name, int(f_pwr * 1.15))) 
+                        new_p2_deck.append((f_name, int(f_pwr * 1.15)))
                     else:
                         new_p2_deck.append((f_name, f_pwr))
                 p2_deck = new_p2_deck
 
-            if not p1_deck: return await interaction.response.send_message("❌ 출전 가능한 유효한 물고기가 없습니다!", ephemeral=True)
-            if not p2_deck: return await interaction.response.send_message(f"❌ 상대방({상대.name})에게 유효한 배틀 물고기가 없습니다!", ephemeral=True)
+            if not p1_deck:
+                return await interaction.response.send_message("❌ 출전 가능한 유효한 물고기가 없습니다!", ephemeral=True)
+            if not p2_deck:
+                return await interaction.response.send_message(f"❌ 상대방({상대.name})에게 유효한 배틀 물고기가 없습니다!", ephemeral=True)
 
             offline_msg = "\n⚠️ **[오프라인 보호]** 상대가 장기 미접속 중입니다. 승리 시 약탈 금액이 감소합니다." if is_p2_offline else ""
             guard_msg = f"\n🛡️ **[호위 발동]** 상대의 **{p2_guard}**(이)가 방어 태세를 갖추고 있습니다!" if p2_guard and any(f[0] == p2_guard for f in p2_deck) else ""
@@ -187,7 +190,7 @@ class BattleCog(commands.Cog):
             display_name1 = f"{title_str} {interaction.user.name}" if title_str else interaction.user.name
 
             view = PvPBattleView(interaction.user, 상대, p1_deck, p2_deck)
-            view.is_offline_target = is_p2_offline 
+            view.is_offline_target = is_p2_offline
 
             await interaction.response.send_message(
                 f"⚔️ {상대.mention}! **{display_name1}**님이 3v3 릴레이 수산대전을 걸어왔습니다!{offline_msg}{guard_msg}",
@@ -272,7 +275,8 @@ class BattleCog(commands.Cog):
             dmg = int(dmg * 1.5)
 
         is_crit = random.random() < 0.2
-        if is_crit: dmg *= 2
+        if is_crit:
+            dmg *= 2
 
         async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name='레이드 작살 🔱'", (interaction.user.id,)) as cursor:
             harpoon = await cursor.fetchone()

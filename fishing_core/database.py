@@ -1,6 +1,9 @@
+import contextlib
 from typing import Any
 
 import aiosqlite
+
+from .logger import logger
 
 
 class DBManager:
@@ -132,26 +135,22 @@ class DBManager:
         ]
 
         for query in alter_queries:
-            try:
+            with contextlib.suppress(aiosqlite.OperationalError):
                 await self.conn.execute(query)
-            except aiosqlite.OperationalError:
-                pass
 
         # 통 (bucket) 마이그레이션 로직
-        try:
+        with contextlib.suppress(aiosqlite.OperationalError):
             await self.conn.execute("SELECT 1 FROM bucket LIMIT 1")
             await self.conn.execute('''
                 INSERT INTO inventory (user_id, item_name, amount, is_locked)
                 SELECT user_id, item_name, amount, 1 FROM bucket
                 WHERE 1
-                ON CONFLICT(user_id, item_name) DO UPDATE SET 
-                    amount = inventory.amount + excluded.amount, 
+                ON CONFLICT(user_id, item_name) DO UPDATE SET
+                    amount = inventory.amount + excluded.amount,
                     is_locked = 1
             ''')
             await self.conn.execute("DROP TABLE bucket")
-            print("✅ 마이그레이션 성공: 통(bucket) 데이터가 inventory로 안전하게 병합되었습니다.")
-        except aiosqlite.OperationalError:
-            pass
+            logger.info("✅ 마이그레이션 성공: 통(bucket) 데이터가 inventory로 안전하게 병합되었습니다.")
 
         await self.conn.commit()
 

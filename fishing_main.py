@@ -87,5 +87,5 @@ if __name__ == "__main__":
     TOKEN = os.getenv('DISCORD_TOKEN') 
     if not TOKEN:
         logger.critical("DISCORD_TOKEN이 .env 파일에 설정되어 있지 않습니다!")
-        exit(1)
+        sys.exit(1)
     bot.run(TOKEN)
