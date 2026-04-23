@@ -2,6 +2,8 @@ import datetime
 import os
 import sys
 
+# Trigger deployment for JSON fix
+
 import discord
 from discord import app_commands
 from discord.ext import commands

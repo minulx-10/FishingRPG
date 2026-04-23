@@ -59,7 +59,11 @@ async def init_shared_data():
     RECIPES.clear()
     RECIPES.update(recipes)
     
-    logger.info("비동기 데이터 초기화 완료")
+    if len(FISH_DATA) < 100:
+        logger.error(f"어종 데이터가 너무 적습니다 ({len(FISH_DATA)}종). 로드 과정에 문제가 있을 수 있습니다.")
+        # 치명적 오류지만 봇은 실행하되 경고를 남김
+    
+    logger.info(f"비동기 데이터 초기화 완료 (총 {len(FISH_DATA)}종)")
 
 async def reload_data_async():
     """데이터를 비동기적으로 다시 로드합니다."""
