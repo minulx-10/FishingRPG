@@ -303,7 +303,7 @@ class QuestCog(commands.Cog):
                 draw.line([(0, y), (width, y)], fill=(r, g, b, 255))
 
             # 햇살 효과 (God Rays)
-            for i in range(6):
+            for _ in range(6):
                 ray_x = random.randint(-100, width)
                 ray_width = random.randint(40, 120)
                 alpha = random.randint(10, 25) # 더 투명하게 조정
