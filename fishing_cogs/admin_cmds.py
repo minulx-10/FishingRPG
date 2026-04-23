@@ -1,11 +1,14 @@
 import asyncio
+import os
+import re
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
 from fishing_core.database import db
-from fishing_core.shared import reload_data
+from fishing_core.logger import logger
+from fishing_core.shared import FISH_DATA, MARKET_PRICES, reload_data
 from fishing_core.utils import is_developer, log_admin_action
 
 
@@ -69,7 +72,6 @@ class AdminCog(commands.Cog):
     @app_commands.command(name="시세조작", description="[관리자 전용] 특정 물고기의 현재 시세를 강제로 고정시킵니다.")
     @is_developer()
     async def 시세조작(self, interaction: discord.Interaction, 어종명: str, 가격: int):
-        from fishing_core.shared import FISH_DATA, MARKET_PRICES
         if 어종명 not in FISH_DATA:
             return await interaction.response.send_message(f"❌ 데이터베이스에 없는 어종입니다: {어종명}", ephemeral=True)
 
@@ -81,10 +83,8 @@ class AdminCog(commands.Cog):
     @is_developer()
     async def 웹대시보드(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
-        import os
-        import re
 
-        port = int(os.getenv("WEB_PORT", 8888))
+        port = int(os.getenv("WEB_PORT", "8888"))
 
         try:
             if hasattr(self.bot, 'tunnel_proc') and self.bot.tunnel_proc and self.bot.tunnel_proc.returncode is None:
@@ -108,9 +108,10 @@ class AdminCog(commands.Cog):
                 while True:
                     try:
                         line = await process.stdout.readline()
-                        if not line: break
+                        if not line:
+                            break
                         line = line.decode('utf-8').strip()
-                        print(f"[SSH Tunnel] {line}") # 디버그용 출력
+                        logger.info(f"[SSH Tunnel] {line}")  # 디버그용 출력
 
                         if not tunnel_url:
                             # localhost.run은 접속 시 https://xxxx.lhr.life 형태의 주소를 뱉음
@@ -119,7 +120,7 @@ class AdminCog(commands.Cog):
                                 tunnel_url = match.group(0)
                                 is_ready = True
 
-                    except:
+                    except Exception:
                         break
 
             # 백그라운드에서 로그를 계속 읽어 파이프가 막히지 않게 함
@@ -127,7 +128,8 @@ class AdminCog(commands.Cog):
 
             # URL과 연결 준비 완료 대기 (최대 15초)
             for _ in range(15):
-                if tunnel_url and is_ready: break
+                if tunnel_url and is_ready:
+                    break
                 await asyncio.sleep(1.0)
 
             if tunnel_url:
@@ -150,7 +152,7 @@ class AdminCog(commands.Cog):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await process.communicate()
+            stdout, _ = await process.communicate()
 
             # 디코딩 처리
             stdout_text = stdout.decode('utf-8')

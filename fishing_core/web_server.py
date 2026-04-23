@@ -29,7 +29,6 @@ class DashboardServer:
     def __init__(self, bot):
         self.bot = bot
         self.app = web.Application()
-        self.USER_CACHE = {} # 외부 통신 부하를 줄이기 위한 임시 캐시
         self.app.add_routes([
             web.post('/api/login', self.api_login),
             web.get('/api/stats', self.api_stats),
@@ -241,7 +240,7 @@ class DashboardServer:
         return web.json_response({"error": "Invalid weather"}, status=400)
 
 async def start_web_server(bot):
-    port = int(os.getenv("WEB_PORT", 8888))
+    port = int(os.getenv("WEB_PORT", "8888"))
 
     # 서버 기동 시 DB에서 날씨 상태 복구
     async with db.conn.execute("SELECT value FROM server_state WHERE key='CURRENT_WEATHER'") as cursor:

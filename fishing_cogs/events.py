@@ -89,8 +89,8 @@ class EventCog(commands.Cog):
         """자정마다 특별 효과(요르문간드 축복 등)를 처리합니다."""
         try:
             await db.execute("""
-                UPDATE user_data 
-                SET coins = CAST(coins * 1.05 AS INTEGER) 
+                UPDATE user_data
+                SET coins = CAST(coins * 1.05 AS INTEGER)
                 WHERE user_id IN (
                     SELECT user_id FROM inventory WHERE item_name = '세계를 감싼 뱀, 요르문간드 🐍' AND amount > 0
                 )
@@ -99,9 +99,6 @@ class EventCog(commands.Cog):
             logger.info("요르문간드의 축복: 코인 5% 증가 처리 완료.")
         except Exception as e:
             logger.error(f"자정 태스크 에러: {e}")
-
-async def setup(bot):
-    await bot.add_cog(EventCog(bot))
 
 async def setup(bot):
     await bot.add_cog(EventCog(bot))

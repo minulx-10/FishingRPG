@@ -8,9 +8,9 @@ from discord import app_commands
 from discord.ext import commands
 
 from fishing_core.database import db
-from fishing_core.shared import FISH_DATA, env_state, kst
+from fishing_core.shared import FISH_DATA, WEATHER_TYPES, env_state, kst
 from fishing_core.utils import bait_autocomplete
-from fishing_core.views import FishingView
+from fishing_core.views import FishingView, InventoryView
 
 
 class FishingCog(commands.Cog):
@@ -39,11 +39,11 @@ class FishingCog(commands.Cog):
     @app_commands.checks.cooldown(1, 3.0, key=lambda i: i.user.id)
     @app_commands.autocomplete(사용할미끼=bait_autocomplete)
     async def 낚시(self, interaction: discord.Interaction, 사용할미끼: str = "none"):
-        coins, rod_tier, rating = await db.get_user_data(interaction.user.id)
+        _, rod_tier, _ = await db.get_user_data(interaction.user.id)
 
-        async with db.conn.execute("SELECT stamina, max_stamina, title, boat_tier FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+        async with db.conn.execute("SELECT stamina, title, boat_tier FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
             stamina_res = await cursor.fetchone()
-        current_stamina, max_stamina, title, current_tier = stamina_res if stamina_res else (100, 100, "", 1)
+        current_stamina, title, current_tier = stamina_res if stamina_res else (100, "", 1)
         display_name = f"{title} {interaction.user.name}" if title else interaction.user.name
 
         if current_stamina < 10:
@@ -112,9 +112,9 @@ class FishingCog(commands.Cog):
 
                 # 2. [신규] 버프 효과 체크 (가속 포션, 특수 떡밥)
                 async with db.conn.execute("SELECT buff_type FROM active_buffs WHERE user_id=? AND end_time > datetime('now', '+9 hours')", (interaction.user.id,)) as cursor:
-                    active_buffs = [row[0] for row in await cursor.fetchall()]
+                    active_buffs_inner = [row[0] for row in await cursor.fetchall()]
 
-                if "rare_boost" in active_buffs and grade not in ["일반", "희귀"]:
+                if "rare_boost" in active_buffs_inner and grade not in ["일반", "희귀"]:
                     base_prob *= 1.5  # 특수 떡밥: 희귀 이상 확률 1.5배
 
                 # 3. 날씨 연동 글로벌 확률 펌핑 (핫타임) - 밸런스 조정됨
@@ -196,7 +196,7 @@ class FishingCog(commands.Cog):
         await asyncio.sleep(wait_time)
 
         view.is_bite = True
-        view.start_time = datetime.datetime.now().timestamp()
+        view.start_time = datetime.datetime.now(kst).timestamp()
 
         for item in view.children:
             item.label = "지금 챔질하세요!!!!"
@@ -232,7 +232,6 @@ class FishingCog(commands.Cog):
         title = await db.get_user_title(target.id)
         stats = (coins, rod_tier, rating, boat_str, stamina, max_stamina, title)
 
-        from fishing_core.views import InventoryView
         view = InventoryView(interaction.user, target, items, stats)
         await interaction.response.send_message(embed=view.make_embed(), view=view)
 
@@ -339,7 +338,6 @@ class FishingCog(commands.Cog):
         await db.execute("UPDATE user_data SET coins = coins - 3000 WHERE user_id=?", (interaction.user.id,))
         await db.commit()
 
-        from fishing_core.shared import WEATHER_TYPES
         # 현재 시간 기준으로 1시간, 2시간, 3시간 뒤 날씨를 시뮬레이션 (랜덤이지만 유저에게는 예측으로 보여줌)
         # 실제 시스템은 1시간마다 weather_update_loop가 돌며 변경하므로,
         # 이 예측을 실제 적용하기 위해선 env_state에 큐를 쌓아두는 것이 좋음.

@@ -1,13 +1,31 @@
 [tool.ruff]
-# 린트 규칙 설정
-select = ["E", "F", "I", "N", "W", "UP", "B", "A", "COM", "C4", "DTZ", "T20", "RET", "SIM", "PTH", "ERA", "PL", "RUF"]
-ignore = ["E501"] # 라인 길이 제한은 유연하게 적용
-
-# 파이썬 버전 설정
 target-version = "py310"
+line-length = 120
 
-# 소스 디렉토리 설정
-src = ["."]
+[tool.ruff.lint]
+# 린트 규칙 설정
+select = [
+    "E", "F", "I", "N", "W", "UP", "B", "A", "COM", "C4", 
+    "DTZ", "T20", "RET", "SIM", "PTH", "ERA", "PL", "RUF"
+]
+ignore = [
+    "E501",    # 라인 길이 제한 (이미 line-length로 제어)
+    "PLC2401", # 비ASCII 문자 포함 (한글 명령어/변수 사용을 위해 허용)
+    "N802",    # 함수명 대문자 포함 (한글 함수명 오판 방지)
+    "N803",    # 인자명 대문자 포함 (한글 인자명 오판 방지)
+    "N999",    # 모듈명 규칙 (프로젝트 루트명 등 오판 방지)
+    "RET503",  # 명시적 return 누락 (Discord 명령 핸들러 특성상 불필요)
+    "PLR0912", # 분기문 너무 많음 (게임 로직 특성상 복잡성 허용)
+    "PLR0915", # 문장 너무 많음 (게임 로직 특성상 복잡성 허용)
+    "PLR0911", # return 문 너무 많음
+    "PLR2004", # Magic value 사용 (게임 수치 조정을 위해 허용)
+    "PLC0415", # 로컬 import (순환 참조 방지 등을 위해 필요한 경우 허용)
+    "RUF006",  # asyncio.create_task 결과 미저장 (백그라운드 태스크 허용)
+]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+known-first-party = ["fishing_core", "fishing_cogs"]
 
 [tool.ruff.format]
 quote-style = "double"
