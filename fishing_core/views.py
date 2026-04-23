@@ -7,14 +7,14 @@ from .shared import FISH_DATA, MARKET_PRICES, get_element_multiplier
 
 class FishActionView(View):
     def __init__(self, user, target_fish):
-        super().__init__(timeout=30)
+        super().__init__(timeout=60)
         self.user = user
         self.target_fish = target_fish
         self.action_taken = False 
+        self.message = None 
 
-    @discord.ui.button(label="가방에 보관 (판매용)", style=discord.ButtonStyle.primary, emoji="🎒")
-    async def btn_inv(self, interaction: discord.Interaction, button: Button):
-        if interaction.user != self.user or self.action_taken: return
+    async def _add_to_inventory(self, lock=None):
+        if self.action_taken: return None
         
         # 인벤토리 용량 체크
         async with db.conn.execute("SELECT boat_tier FROM user_data WHERE user_id=?", (self.user.id,)) as cursor:
@@ -31,46 +31,57 @@ class FishActionView(View):
             has_fish = await cursor.fetchone()
             
         if not has_fish and current_species >= max_species:
-            return await interaction.response.send_message(f"🚫 가방이 가득 찼습니다! (현재: {current_species}/{max_species}종)\n어종 수를 줄이거나 선박을 개조하세요.", ephemeral=True)
+            return "capacity_full"
 
         self.action_taken = True
         fish_grade = FISH_DATA.get(self.target_fish, {}).get("grade", "일반")
         grade_order = {"일반": 1, "희귀": 2, "초희귀": 3, "에픽": 4, "레전드": 5, "태고": 6, "환상": 7, "미스터리": 8, "신화": 9}
         
-        # 에픽 등급 이상은 자동 잠금 처리
-        is_high_grade = grade_order.get(fish_grade, 0) >= 4
-        lock_val = 1 if is_high_grade else 0
-        lock_msg = " (🔒 자동 잠금됨)" if is_high_grade else ""
-
+        if lock is None:
+            # 에픽 등급 이상은 자동 잠금 처리
+            is_high_grade = grade_order.get(fish_grade, 0) >= 4
+            lock_val = 1 if is_high_grade else 0
+        else:
+            lock_val = 1 if lock else 0
+            
         await db.execute("INSERT INTO inventory (user_id, item_name, amount, is_locked) VALUES (?, ?, 1, ?) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1, is_locked = MAX(is_locked, ?)", (self.user.id, self.target_fish, lock_val, lock_val))
         await db.commit()
-        await interaction.response.edit_message(content=f"🎒 **{self.target_fish}**를 가방에 안전하게 넣었습니다!{lock_msg}", view=None)
+        
+        lock_msg = " (🔒 자동 잠금됨)" if lock_val else ""
+        return f"**{self.target_fish}**를 가방에 안전하게 넣었습니다!{lock_msg}"
+
+    async def on_timeout(self):
+        if self.action_taken: return
+        
+        result = await self._add_to_inventory()
+        if self.message:
+            try:
+                if result == "capacity_full":
+                    await self.message.edit(content=f"⏰ 시간 초과! 가방이 가득 차서 **{self.target_fish}**를 놓쳐버렸습니다...", view=None)
+                elif result:
+                    await self.message.edit(content=f"⏰ 시간 초과로 **{self.target_fish}**가 자동으로 가방에 보관되었습니다.", view=None)
+            except:
+                pass
+
+    @discord.ui.button(label="가방에 보관 (판매용)", style=discord.ButtonStyle.primary, emoji="🎒")
+    async def btn_inv(self, interaction: discord.Interaction, button: Button):
+        if interaction.user != self.user: return
+        
+        result = await self._add_to_inventory()
+        if result == "capacity_full":
+            return await interaction.response.send_message(f"🚫 가방이 가득 찼습니다! 어종 수를 줄이거나 선박을 개조하세요.", ephemeral=True)
+        elif result:
+            await interaction.response.edit_message(content=f"🎒 {result}", view=None)
 
     @discord.ui.button(label="잠금 보관 (배틀용)", style=discord.ButtonStyle.success, emoji="🔒")
     async def btn_bucket(self, interaction: discord.Interaction, button: Button):
-        if interaction.user != self.user or self.action_taken: return
+        if interaction.user != self.user: return
         
-        # 인벤토리 용량 체크
-        async with db.conn.execute("SELECT boat_tier FROM user_data WHERE user_id=?", (self.user.id,)) as cursor:
-            res = await cursor.fetchone()
-        tier = res[0] if res else 1
-        
-        capacity_map = {1: 30, 2: 50, 3: 80, 4: 120, 5: 200, 6: 9999}
-        max_species = capacity_map.get(tier, 30)
-        
-        async with db.conn.execute("SELECT COUNT(*) FROM inventory WHERE user_id=?", (self.user.id,)) as cursor:
-            current_species = (await cursor.fetchone())[0]
-            
-        async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (self.user.id, self.target_fish)) as cursor:
-            has_fish = await cursor.fetchone()
-            
-        if not has_fish and current_species >= max_species:
-            return await interaction.response.send_message(f"🚫 가방이 가득 찼습니다! (현재: {current_species}/{max_species}종)\n어종 수를 줄이거나 선박을 개조하세요.", ephemeral=True)
-
-        self.action_taken = True
-        await db.execute("INSERT INTO inventory (user_id, item_name, amount, is_locked) VALUES (?, ?, 1, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1, is_locked = 1", (self.user.id, self.target_fish))
-        await db.commit()
-        await interaction.response.edit_message(content=f"🔒 **{self.target_fish}**를 잠금 보관했습니다! 판매에서 보호되며 배틀에 출전할 수 있습니다.", view=None)
+        result = await self._add_to_inventory(lock=True)
+        if result == "capacity_full":
+            return await interaction.response.send_message(f"🚫 가방이 가득 찼습니다! 어종 수를 줄이거나 선박을 개조하세요.", ephemeral=True)
+        elif result:
+            await interaction.response.edit_message(content=f"🔒 {result}", view=None)
 
     @discord.ui.button(label="바로 판매", style=discord.ButtonStyle.danger, emoji="💰")
     async def btn_sell(self, interaction: discord.Interaction, button: Button):
@@ -91,7 +102,7 @@ class FishActionView(View):
 
 class FishingView(View):
     def __init__(self, user, target_fish, rod_tier):
-        super().__init__(timeout=15) 
+        super().__init__(timeout=30) 
         self.user = user
         self.target_fish = target_fish
         self.rod_tier = rod_tier 
@@ -227,6 +238,7 @@ class FishingView(View):
             
             action_view = FishActionView(self.user, self.target_fish)
             await interaction.response.edit_message(content="🎊 앗, 낚았습니다! 이 물고기를 어떻게 할까요?", embed=embed, view=action_view)
+            action_view.message = await interaction.original_response()
         except Exception as e:
             import traceback
             tb = traceback.format_exc()
@@ -306,7 +318,7 @@ class FishingView(View):
 
 class TensionFishingView(View):
     def __init__(self, user, target_fish, rod_tier, grade, parent_view, elapsed):
-        super().__init__(timeout=20)
+        super().__init__(timeout=40)
         self.user = user
         self.target_fish = target_fish
         self.rod_tier = rod_tier
