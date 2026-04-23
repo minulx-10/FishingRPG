@@ -5,6 +5,9 @@ import random
 import datetime
 import asyncio
 
+import io
+import os
+
 from fishing_core.database import db
 from fishing_core.shared import FISH_DATA, kst, env_state
 from fishing_core.views import FishingView
@@ -272,17 +275,41 @@ class FishingCog(commands.Cog):
         
         if 6 <= now_hour < 18: 
             time_str = "☀️ 낮"
-            bg_url = "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800"
         elif 18 <= now_hour < 24: 
             time_str = "🌙 밤"
-            bg_url = "https://images.unsplash.com/photo-1500417148159-aa994266934d?w=800"
         else: 
             time_str = "🌑 새벽"
-            bg_url = "https://images.unsplash.com/photo-1494948141550-9a3b2bc87860?w=800"
 
-        # 날씨에 따른 이미지 교체 (우선순위: 폭풍우 > 비 > 나머지)
-        if "폭풍우" in weather: bg_url = "https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=800"
-        elif "비" in weather: bg_url = "https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=800"
+        # 날씨 이미지 매핑 (로컬 파일 우선)
+        weather_images = {
+            "맑음": "clear.png",
+            "흐림": "cloudy.png",
+            "비": "rain.png",
+            "폭풍우": "storm.png",
+            "안개": "fog.png"
+        }
+        
+        target_image = None
+        for key, filename in weather_images.items():
+            if key in weather:
+                target_image = filename
+                break
+        
+        file = None
+        if target_image and os.path.exists(f"assets/weather/{target_image}"):
+            file = discord.File(f"assets/weather/{target_image}", filename="weather.png")
+            bg_url = "attachment://weather.png"
+        else:
+            # 로컬 파일이 없을 경우 기존 Unsplash URL 유지
+            if 6 <= now_hour < 18: 
+                bg_url = "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800"
+            elif 18 <= now_hour < 24: 
+                bg_url = "https://images.unsplash.com/photo-1500417148159-aa994266934d?w=800"
+            else: 
+                bg_url = "https://images.unsplash.com/photo-1494948141550-9a3b2bc87860?w=800"
+
+            if "폭풍우" in weather: bg_url = "https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=800"
+            elif "비" in weather: bg_url = "https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=800"
 
         embed = discord.Embed(title="🌊 현재 바다 상황", color=0x3498db)
         embed.add_field(name="현재 시간대", value=f"**{time_str}** (`{now_hour}시`)", inline=True)
@@ -296,7 +323,10 @@ class FishingCog(commands.Cog):
         embed.add_field(name="생태계 정보", value=hints, inline=False)
         embed.set_image(url=bg_url)
         
-        await interaction.response.send_message(embed=embed)
+        if file:
+            await interaction.response.send_message(embed=embed, file=file)
+        else:
+            await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="기상예측", description="기상청의 위성 자료를 분석하여 향후 3시간의 날씨 변화를 예측합니다. (비용: 3,000 C)")
     async def 기상예측(self, interaction: discord.Interaction):
