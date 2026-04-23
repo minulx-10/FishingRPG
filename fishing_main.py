@@ -1,3 +1,4 @@
+# Deployment Trigger: Manual fix for JSON corruption.
 import discord
 from discord.ext import commands
 import os
