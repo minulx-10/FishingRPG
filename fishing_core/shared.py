@@ -2,6 +2,7 @@ import json
 import os
 import random
 from datetime import timedelta, timezone
+from typing import Any
 
 import aiofiles
 
@@ -18,12 +19,12 @@ SUPER_ADMIN_IDS = [
 ADMIN_LOG_CHANNEL_ID = int(os.getenv("ADMIN_LOG_CHANNEL_ID", "0"))
 
 # 전역 데이터 컨테이너
-FISH_DATA: dict[str, any] = {}
+FISH_DATA: dict[str, Any] = {}
 MARKET_PRICES: dict[str, int] = {}
-RECIPES: dict[str, any] = {}
+RECIPES: dict[str, Any] = {}
 
 
-async def load_json_async(file_path: str) -> dict[str, any]:
+async def load_json_async(file_path: str) -> dict[str, Any]:
     """파일을 비동기적으로 읽어서 JSON으로 반환합니다."""
     try:
         async with aiofiles.open(file_path, encoding='utf-8') as f:
