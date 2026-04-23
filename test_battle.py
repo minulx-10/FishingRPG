@@ -1,7 +1,8 @@
 import asyncio
-import sqlite3
+
 from fishing_core.database import db
 from fishing_core.shared import FISH_DATA
+
 
 class DummyUser:
     def __init__(self, uid, name, bot=False):
@@ -63,11 +64,11 @@ async def test_susan_daejeon():
 
     from fishing_core.views import PvPBattleView
     view = PvPBattleView(interaction.user, target, p1_deck, p2_deck)
-    
+
     await interaction.response.send_message(
-        f"⚔️ {target.mention}! **{display_name1}**님이 3v3 릴레이 수산대전을 걸어왔습니다!", 
-        embed=view.generate_embed(), 
-        view=view
+        f"⚔️ {target.mention}! **{display_name1}**님이 3v3 릴레이 수산대전을 걸어왔습니다!",
+        embed=view.generate_embed(),
+        view=view,
     )
     print("SUCCESS")
 

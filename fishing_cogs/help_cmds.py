@@ -1,14 +1,16 @@
 import discord
-from discord.ext import commands
 from discord import app_commands
+from discord.ext import commands
+
 from fishing_core.shared import SUPER_ADMIN_IDS
+
 
 class HelpView(discord.ui.View):
     def __init__(self, user, is_admin=False):
         super().__init__(timeout=120)
         self.user = user
         self.is_admin = is_admin
-        
+
         # 관리자 권한에 따라 옵션 필터링
         options = [
             discord.SelectOption(label="메인 메뉴", description="도움말 처음으로 돌아갑니다.", emoji="🏠", value="main"),
@@ -20,10 +22,10 @@ class HelpView(discord.ui.View):
             discord.SelectOption(label="강화 및 개조", description="낚싯대 강화 및 선박 티어 업그레이드", emoji="🛠️", value="upgrade"),
             discord.SelectOption(label="아이템 및 기타", description="보물상자 감정, 지도 합성 및 기타 유틸리티", emoji="📦", value="misc"),
         ]
-        
+
         if self.is_admin:
             options.append(discord.SelectOption(label="관리자 전용", description="서버 관리 및 데이터 제어 명령어", emoji="🛡️", value="admin"))
-            
+
         self.add_item(HelpSelect(options))
 
 class HelpSelect(discord.ui.Select):
@@ -33,7 +35,7 @@ class HelpSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.view.user.id:
             return await interaction.response.send_message("❌ 이 도움말 메뉴는 명령어를 입력한 본인만 조작할 수 있습니다.", ephemeral=True)
-            
+
         category = self.values[0]
         embed = self.get_embed(category)
         await interaction.response.edit_message(embed=embed, view=self.view)
@@ -53,7 +55,7 @@ class HelpSelect(discord.ui.Select):
                                                       "• **📦 기타**: 보물상자 및 유틸리티")
             return embed
 
-        elif category == "fishing":
+        if category == "fishing":
             embed = discord.Embed(title="🎣 낚시 및 바다 명령어", color=0x3498db)
             embed.add_field(name="`/낚시 [미끼]`", value="찌를 던져 물고기를 낚습니다. 타이밍 판정에 성공해야 합니다.\n(체력 10 소모 / 뉴비 5 소모)", inline=False)
             embed.add_field(name="`/미끼장착 [미끼이름]`", value="자동으로 소모할 미끼를 장착하거나 해제합니다.", inline=False)
@@ -63,7 +65,7 @@ class HelpSelect(discord.ui.Select):
             embed.add_field(name="`/바다기도 [제물]`", value="심연의 바다에 제물을 바쳐 전설 속의 신수를 부릅니다.", inline=False)
             return embed
 
-        elif category == "market":
+        if category == "market":
             embed = discord.Embed(title="💰 상점 및 시세 명령어", color=0xf1c40f)
             embed.add_field(name="`/시세 [어종]`", value="현재 수산시장의 실시간 글로벌 시세를 확인합니다.", inline=False)
             embed.add_field(name="`/판매 [제외...] [등급필터]`", value="가방 속 물고기를 일괄 판매합니다. 특정 아이템을 보호할 수 있습니다.", inline=False)
@@ -73,7 +75,7 @@ class HelpSelect(discord.ui.Select):
             embed.add_field(name="`/칭호상점`", value="어마어마한 코인을 지불하여 명예로운 칭호를 획득합니다.", inline=False)
             return embed
 
-        elif category == "inventory":
+        if category == "inventory":
             embed = discord.Embed(title="🎒 가방 및 보호 명령어", color=0x2ecc71)
             embed.add_field(name="`/인벤토리 [유저]`", value="가방 내용물, 코인, 선박, 강화 레벨, 체력을 확인합니다.", inline=False)
             embed.add_field(name="`/잠금 [아이템]` / `/잠금해제`", value="특정 아이템을 일괄 판매에서 제외하고 배틀용으로 보호합니다.", inline=False)
@@ -83,7 +85,7 @@ class HelpSelect(discord.ui.Select):
             embed.add_field(name="`/휴식`", value="여관에서 푹 쉬어 체력을 즉시 회복합니다. (일 1회 무료)", inline=False)
             return embed
 
-        elif category == "battle":
+        if category == "battle":
             embed = discord.Embed(title="⚔️ 전투 및 레이드 명령어", color=0xe74c3c)
             embed.add_field(name="`/배틀`", value="잠금된 전사 중 가장 강한 물고기로 NPC와 턴제 전투를 벌입니다.", inline=False)
             embed.add_field(name="`/수산대전 [상대]`", value="다른 유저와 3v3 릴레이 PvP 배틀을 벌여 코인과 RP를 약탈합니다.", inline=False)
@@ -92,7 +94,7 @@ class HelpSelect(discord.ui.Select):
             embed.add_field(name="`/호위설정 [물고기]`", value="오프라인 상태에서 나를 지켜줄 호위 전사를 지정합니다.", inline=False)
             return embed
 
-        elif category == "quest":
+        if category == "quest":
             embed = discord.Embed(title="📜 도감 및 의뢰 명령어", color=0x9b59b6)
             embed.add_field(name="`/도감 [유저]`", value="지금까지 발견한 어종 기록과 수집률, 월척 기록을 확인합니다.", inline=False)
             embed.add_field(name="`/도감보상`", value="수집한 어종 수에 따라 코인과 특별 칭호를 수령합니다.", inline=False)
@@ -103,14 +105,14 @@ class HelpSelect(discord.ui.Select):
             embed.add_field(name="`/수족관확장`", value="코인을 지불하여 수족관 전시 슬롯을 추가합니다.", inline=False)
             return embed
 
-        elif category == "upgrade":
+        if category == "upgrade":
             embed = discord.Embed(title="🛠️ 강화 및 개조 명령어", color=0x95a5a6)
             embed.add_field(name="`/강화`", value="낚싯대 레벨을 올립니다. 레벨이 높을수록 대물과 희귀종 확률이 증가합니다.", inline=False)
             embed.add_field(name="`/선박개조`", value="배를 업그레이드하여 최대 체력을 늘리고 새로운 기능을 해금합니다.", inline=False)
             embed.set_footer(text="💡 Lv.50 강화부터는 레벨 하락 위험이 있는 '초월 강화'가 시작됩니다.")
             return embed
 
-        elif category == "misc":
+        if category == "misc":
             embed = discord.Embed(title="📦 아이템 및 기타 명령어", color=0x7f8c8d)
             embed.add_field(name="`/감정`", value="'가라앉은 보물상자 🧰'를 열어 대박 아이템을 노립니다.", inline=False)
             embed.add_field(name="`/지도합성 [수량]`", value="찢어진 지도 조각(A,B,C,D) 4종을 모아 보물지도를 완성합니다.", inline=False)
@@ -120,7 +122,7 @@ class HelpSelect(discord.ui.Select):
             embed.add_field(name="`/한강물`", value="실시간 한강 수온 정보를 확인합니다. (응? 🎣)", inline=False)
             return embed
 
-        elif category == "admin":
+        if category == "admin":
             embed = discord.Embed(title="🛡️ 관리자 전용 명령어", color=0xff0000)
             embed.add_field(name="`/코인지급` / `/아이템지급` / `/회수`", value="유저의 재화나 아이템을 관리합니다.", inline=False)
             embed.add_field(name="`/유저스탯변경`", value="선박 티어, 낚싯대 레벨, RP 등을 강제 설정합니다.", inline=False)
@@ -138,7 +140,7 @@ class HelpCog(commands.Cog):
     async def 도움말(self, interaction: discord.Interaction):
         is_admin = interaction.user.id in SUPER_ADMIN_IDS
         view = HelpView(interaction.user, is_admin)
-        
+
         embed = discord.Embed(title="🎣 수산시장 RPG 도움말 센터", color=0x3498db)
         embed.description = "아래 드롭다운 메뉴를 클릭하여 카테고리별 명령어 설명을 확인하세요!\n\n" \
                             "💡 **팁**: 모든 명령어는 슬래시(`/`)로 시작합니다.\n" \
@@ -150,10 +152,10 @@ class HelpCog(commands.Cog):
                                                   "• **📜 도감**: 수집, 요리, 의뢰, 수족관\n"
                                                   "• **🛠️ 강화**: 스펙업의 핵심, 강화와 개조\n"
                                                   "• **📦 기타**: 보물상자 및 유틸리티")
-        
+
         if is_admin:
             embed.set_footer(text="🛡️ 관리자 권한이 감지되었습니다. 전용 카테고리가 활성화되었습니다.")
-        
+
         await interaction.response.send_message(embed=embed, view=view)
 
 async def setup(bot):

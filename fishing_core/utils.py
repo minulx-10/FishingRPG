@@ -1,8 +1,11 @@
+import datetime
+
 import discord
 from discord import app_commands
-from .shared import SUPER_ADMIN_IDS, FISH_DATA, RECIPES, ADMIN_LOG_CHANNEL_ID
+
 from .database import db
-import datetime
+from .shared import ADMIN_LOG_CHANNEL_ID, FISH_DATA, RECIPES, SUPER_ADMIN_IDS
+
 
 async def log_admin_action(bot, admin_user, target_user, action_name, detail):
     """관리자 행동을 특정 채널에 로그로 남깁니다."""
@@ -20,7 +23,7 @@ async def log_admin_action(bot, admin_user, target_user, action_name, detail):
         embed.add_field(name="대상", value=f"{target_user.mention} ({target_user.id})", inline=True)
     embed.add_field(name="명령어", value=f"`/{action_name}`", inline=False)
     embed.add_field(name="상세 내용", value=detail, inline=False)
-    
+
     try:
         await channel.send(embed=embed)
     except:
@@ -59,7 +62,6 @@ async def locked_autocomplete(interaction: discord.Interaction, current: str) ->
 async def recipe_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
     return [app_commands.Choice(name=r, value=r) for r in RECIPES.keys() if current.lower() in r.lower()][:25]
 
-from .database import db
 
 def is_developer():
     return app_commands.check(lambda i: i.user.id in SUPER_ADMIN_IDS)
@@ -69,13 +71,13 @@ def check_boat_tier(min_tier: int):
         await db.execute("INSERT OR IGNORE INTO user_data (user_id) VALUES (?)", (interaction.user.id,))
         async with db.conn.execute("SELECT boat_tier FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
             res = await cursor.fetchone()
-        
+
         tier = res[0] if res else 1
         if tier < min_tier:
             tier_names = {1: "나룻배 🛶", 2: "어선 🚤", 3: "쇄빙선 🛳️", 4: "전투함 ⚓", 5: "잠수함 ⛴️", 6: "차원함선 🛸"}
             req_name = tier_names.get(min_tier, f"Lv.{min_tier}")
             current_name = tier_names.get(tier, f"Lv.{tier}")
-            
+
             embed = discord.Embed(title="🚫 탑승 권한 부족!", description=f"이 명령어를 사용하려면 **[{req_name}]** 이상이 필요합니다.\n(현재 선박: **{current_name}**)", color=0xe74c3c)
             embed.set_footer(text="💡 '/선박개조' 명령어를 통해 배를 업그레이드하세요!")
             await interaction.response.send_message(embed=embed, ephemeral=True)

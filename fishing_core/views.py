@@ -1,58 +1,61 @@
-import discord
-from discord.ui import View, Button
-import random
 import datetime
+import random
+
+import discord
+from discord.ui import Button, View
+
 from .database import db
 from .shared import FISH_DATA, MARKET_PRICES, get_element_multiplier
+
 
 class FishActionView(View):
     def __init__(self, user, target_fish):
         super().__init__(timeout=60)
         self.user = user
         self.target_fish = target_fish
-        self.action_taken = False 
-        self.message = None 
+        self.action_taken = False
+        self.message = None
 
     async def _add_to_inventory(self, lock=None):
         if self.action_taken: return None
-        
+
         # 인벤토리 용량 체크
         async with db.conn.execute("SELECT boat_tier FROM user_data WHERE user_id=?", (self.user.id,)) as cursor:
             res = await cursor.fetchone()
         tier = res[0] if res else 1
-        
+
         capacity_map = {1: 30, 2: 50, 3: 80, 4: 120, 5: 200, 6: 9999}
         max_species = capacity_map.get(tier, 30)
-        
+
         async with db.conn.execute("SELECT COUNT(*) FROM inventory WHERE user_id=?", (self.user.id,)) as cursor:
             current_species = (await cursor.fetchone())[0]
-            
+
         async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (self.user.id, self.target_fish)) as cursor:
             has_fish = await cursor.fetchone()
-            
+
         if not has_fish and current_species >= max_species:
             return "capacity_full"
 
         self.action_taken = True
         fish_grade = FISH_DATA.get(self.target_fish, {}).get("grade", "일반")
         grade_order = {"일반": 1, "희귀": 2, "초희귀": 3, "에픽": 4, "레전드": 5, "태고": 6, "환상": 7, "미스터리": 8, "신화": 9}
-        
+
         if lock is None:
             # 에픽 등급 이상은 자동 잠금 처리
             is_high_grade = grade_order.get(fish_grade, 0) >= 4
             lock_val = 1 if is_high_grade else 0
         else:
             lock_val = 1 if lock else 0
-            
+
         await db.execute("INSERT INTO inventory (user_id, item_name, amount, is_locked) VALUES (?, ?, 1, ?) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1, is_locked = MAX(is_locked, ?)", (self.user.id, self.target_fish, lock_val, lock_val))
         await db.commit()
-        
+
         lock_msg = " (🔒 자동 잠금됨)" if lock_val else ""
         return f"**{self.target_fish}**를 가방에 안전하게 넣었습니다!{lock_msg}"
 
     async def on_timeout(self):
         if self.action_taken: return
-        
+
         result = await self._add_to_inventory()
         if self.message:
             try:
@@ -65,32 +68,32 @@ class FishActionView(View):
 
     @discord.ui.button(label="가방에 보관 (판매용)", style=discord.ButtonStyle.primary, emoji="🎒")
     async def btn_inv(self, interaction: discord.Interaction, button: Button):
-        if interaction.user != self.user: return
-        
+        if interaction.user != self.user: return None
+
         result = await self._add_to_inventory()
         if result == "capacity_full":
-            return await interaction.response.send_message(f"🚫 가방이 가득 찼습니다! 어종 수를 줄이거나 선박을 개조하세요.", ephemeral=True)
-        elif result:
+            return await interaction.response.send_message("🚫 가방이 가득 찼습니다! 어종 수를 줄이거나 선박을 개조하세요.", ephemeral=True)
+        if result:
             await interaction.response.edit_message(content=f"🎒 {result}", view=None)
 
     @discord.ui.button(label="잠금 보관 (배틀용)", style=discord.ButtonStyle.success, emoji="🔒")
     async def btn_bucket(self, interaction: discord.Interaction, button: Button):
-        if interaction.user != self.user: return
-        
+        if interaction.user != self.user: return None
+
         result = await self._add_to_inventory(lock=True)
         if result == "capacity_full":
-            return await interaction.response.send_message(f"🚫 가방이 가득 찼습니다! 어종 수를 줄이거나 선박을 개조하세요.", ephemeral=True)
-        elif result:
+            return await interaction.response.send_message("🚫 가방이 가득 찼습니다! 어종 수를 줄이거나 선박을 개조하세요.", ephemeral=True)
+        if result:
             await interaction.response.edit_message(content=f"🔒 {result}", view=None)
 
     @discord.ui.button(label="바로 판매", style=discord.ButtonStyle.danger, emoji="💰")
     async def btn_sell(self, interaction: discord.Interaction, button: Button):
-        if interaction.user != self.user or self.action_taken: return
+        if interaction.user != self.user or self.action_taken: return None
         self.action_taken = True
-        
+
         fish_grade = FISH_DATA.get(self.target_fish, {}).get("grade", "일반")
         grade_order = {"일반": 1, "희귀": 2, "초희귀": 3, "에픽": 4, "레전드": 5, "태고": 6, "환상": 7, "미스터리": 8, "신화": 9}
-        
+
         if grade_order.get(fish_grade, 0) >= 4:
             return await interaction.response.send_message(f"⚠️ **{fish_grade}** 등급 이상의 물고기는 '바로 판매'가 불가능합니다. 실수 방지를 위해 가방에 보관 후 개별 판매하거나 잠금을 해제하세요.", ephemeral=True)
 
@@ -102,23 +105,23 @@ class FishActionView(View):
 
 class FishingView(View):
     def __init__(self, user, target_fish, rod_tier):
-        super().__init__(timeout=30) 
+        super().__init__(timeout=30)
         self.user = user
         self.target_fish = target_fish
-        self.rod_tier = rod_tier 
-        self.is_bite = False  
+        self.rod_tier = rod_tier
+        self.is_bite = False
         self.start_time = 0
-        self.message = None 
+        self.message = None
 
         fish_info = FISH_DATA.get(self.target_fish, {"base_window": 2.0, "grade": "일반"})
         base_window = fish_info["base_window"]
-        bonus_time = (self.rod_tier - 1) * 0.2 
+        bonus_time = (self.rod_tier - 1) * 0.2
         self.limit_time = max(1.0, base_window + bonus_time)
 
     async def on_timeout(self):
         for child in self.children:
             child.disabled = True
-            
+
         if self.message:
             try:
                 await self.message.edit(content="⏰ 낚시 시간이 초과되어 낚싯대를 거두었습니다.", view=self)
@@ -129,25 +132,25 @@ class FishingView(View):
     async def fish_button(self, interaction: discord.Interaction, button: Button):
         if interaction.user != self.user:
             return await interaction.response.send_message("남의 낚싯대입니다! 🚫", ephemeral=True)
-        
-        self.stop() 
-        
+
+        self.stop()
+
         if not self.is_bite:
             return await interaction.response.edit_message(content="🎣 앗! 너무 일찍 챘습니다. 물고기가 도망갔어요! 💨", view=None)
-        
+
         # 입질 시 임베드 색상 변경 (심미성 개선)
         embed = discord.Embed(title="❗ 챔질 성공!", color=0xffd700) # 황금색
         embed.description = "물고기가 바늘에 걸렸습니다! 힘껏 당기는 중..."
-        
+
         try:
             elapsed = datetime.datetime.now().timestamp() - self.start_time
             fish_info = FISH_DATA.get(self.target_fish, {"grade": "보물"})
             grade = fish_info["grade"]
-            
+
             if elapsed <= self.limit_time:
                 if grade in ["에픽", "레전드", "신화", "태고", "환상", "미스터리"]:
                     tension_view = TensionFishingView(self.user, self.target_fish, self.rod_tier, grade, self, elapsed)
-                    await interaction.response.edit_message(content=f"❗ 거대한 물고기가 걸렸습니다! 힘겨루기 시작!", embed=tension_view.get_embed(), view=tension_view)
+                    await interaction.response.edit_message(content="❗ 거대한 물고기가 걸렸습니다! 힘겨루기 시작!", embed=tension_view.get_embed(), view=tension_view)
                 else:
                     await self.on_bite_success(interaction, elapsed, grade)
             else:
@@ -156,7 +159,7 @@ class FishingView(View):
                     if random.random() < 0.5:
                         await db.execute("UPDATE user_data SET rod_tier = rod_tier - 1 WHERE user_id = ?", (self.user.id,))
                         fail_msg += "\n\n💥 **[치명적 손상]** 괴수의 힘을 이기지 못하고 **낚싯대가 부러졌습니다!** (낚싯대 레벨 1 하락)"
-                
+
                 if self.target_fish == "둔클레오스테우스 🦖":
                     async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=0", (self.user.id,)) as cursor:
                         items = await cursor.fetchall()
@@ -164,10 +167,10 @@ class FishingView(View):
                         most_exp = max(items, key=lambda x: FISH_DATA.get(x[0], {}).get("price", 0))[0]
                         await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (self.user.id, most_exp))
                         fail_msg += f"\n\n🦖 **[강철의 턱]** 둔클레오스테우스가 도망치며 당신의 가방을 찢어 가장 비싼 물고기(**{most_exp}**)를 먹어치웠습니다!"
-                
+
                 await db.commit()
                 await interaction.response.edit_message(content=fail_msg, view=None)
-        except Exception as e:
+        except Exception:
             import traceback
             tb = traceback.format_exc()
             try:
@@ -178,14 +181,14 @@ class FishingView(View):
     async def on_bite_success(self, interaction, elapsed, grade):
         try:
             await db.execute("INSERT OR IGNORE INTO fish_dex (user_id, item_name) VALUES (?, ?)", (self.user.id, self.target_fish))
-            
+
             # 개체값(크기) 생성
             power = FISH_DATA.get(self.target_fish, {}).get("power", 10)
             fish_size = round(random.uniform(max(power * 1.5, 0.1), max(power * 2.5, 0.5)), 2)
-            
+
             async with db.conn.execute("SELECT max_size FROM fish_records WHERE user_id=? AND item_name=?", (self.user.id, self.target_fish)) as cursor:
                 record_res = await cursor.fetchone()
-                
+
             is_new_record = False
             if not record_res:
                 await db.execute("INSERT INTO fish_records (user_id, item_name, max_size) VALUES (?, ?, ?)", (self.user.id, self.target_fish, fish_size))
@@ -193,32 +196,32 @@ class FishingView(View):
             elif fish_size > record_res[0]:
                 await db.execute("UPDATE fish_records SET max_size=? WHERE user_id=? AND item_name=?", (fish_size, self.user.id, self.target_fish))
                 is_new_record = True
-                
+
             await db.commit()
-            
+
             grade_color = {
-                "일반": 0x95a5a6, "희귀": 0x3498db, "초희귀": 0x9b59b6, 
-                "에픽": 0xe67e22, "레전드": 0xe74c3c, "태고": 0x8b4513, 
-                "환상": 0x9932cc, "미스터리": 0x2f4f4f, "신화": 0xff0000
+                "일반": 0x95a5a6, "희귀": 0x3498db, "초희귀": 0x9b59b6,
+                "에픽": 0xe67e22, "레전드": 0xe74c3c, "태고": 0x8b4513,
+                "환상": 0x9932cc, "미스터리": 0x2f4f4f, "신화": 0xff0000,
             }
-            
+
             embed = discord.Embed(
-                title=f"🎉 낚시 성공! [{grade}]", 
-                description=f"**{self.target_fish}**를 낚았습니다!", 
-                color=grade_color.get(grade, 0x00ff00)
+                title=f"🎉 낚시 성공! [{grade}]",
+                description=f"**{self.target_fish}**를 낚았습니다!",
+                color=grade_color.get(grade, 0x00ff00),
             )
-            
+
             # 에픽 이상 화려한 이미지 연출 (예시 이미지 사용)
             if grade in ["레전드", "신화", "태고", "환상", "미스터리"]:
                 # 실제 이미지 URL이나 파일 경로가 있다면 여기에 추가
                 # 여기서는 임시로 Placeholder 사용 가능 (추후 asset 교체)
                 if "크라켄" in self.target_fish:
                     embed.set_thumbnail(url="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/l41lTfuxV5RWRsBPO/giphy.gif")
-            
+
             record_mark = " 🆕 **[최대 크기 신기록!]**" if is_new_record else ""
             embed.add_field(name="측정 크기", value=f"`{fish_size} cm`{record_mark}", inline=True)
             embed.add_field(name="반응 속도", value=f"`{elapsed:.3f}초` (한도: {self.limit_time:.2f}s)", inline=True)
-            
+
             if random.random() < 0.05:
                 piece = random.choice(["찢어진 지도 조각 A 🧩", "찢어진 지도 조각 B 🧩", "찢어진 지도 조각 C 🧩", "찢어진 지도 조각 D 🧩"])
                 await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (self.user.id, piece))
@@ -228,25 +231,25 @@ class FishingView(View):
             if self.target_fish == "심해의 파멸, 크라켄 🦑":
                 async with db.conn.execute("SELECT user_id, coins FROM user_data WHERE user_id != ? AND coins > 1000 AND peace_mode=0 ORDER BY RANDOM() LIMIT 1", (self.user.id,)) as cursor:
                     target = await cursor.fetchone()
-                
+
                 if target:
                     stolen_amount = int(target[1] * 0.1)
                     await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id = ?", (stolen_amount, target[0]))
                     await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (stolen_amount, self.user.id))
                     await db.commit()
                     embed.add_field(name="🦑 크라켄의 촉수 발동!", value=f"심연에서 뻗어 나온 거대한 촉수가 누군가의 금고를 부수고 `{stolen_amount:,} C`를 훔쳐 당신에게 가져왔습니다!!", inline=False)
-            
+
             action_view = FishActionView(self.user, self.target_fish)
             await interaction.response.edit_message(content="🎊 앗, 낚았습니다! 이 물고기를 어떻게 할까요?", embed=embed, view=action_view)
             action_view.message = await interaction.original_response()
-        except Exception as e:
+        except Exception:
             import traceback
             tb = traceback.format_exc()
             try:
                 await interaction.response.edit_message(content=f"❌ 낚시 결과 처리 중 오류:\n```py\n{tb[:1800]}\n```", view=None)
             except:
                 await interaction.followup.send(f"❌ 낚시 결과 처리 중 오류:\n```py\n{tb[:1800]}\n```", ephemeral=True)
-        
+
         if grade in ["태고", "환상", "미스터리", "신화"]:
             alert_embed = None
             if self.target_fish == "메갈로돈 🦈":
@@ -332,12 +335,12 @@ class TensionFishingView(View):
     def get_embed(self):
         embed = discord.Embed(title="🎣 거대 괴수와 힘겨루기!", color=0x3498db)
         embed.description = f"물고기가 강하게 저항합니다! 텐션을 **20% ~ 80%** 사이로 유지하세요!\n(남은 턴: {self.max_turns - self.turn + 1})"
-        
+
         # 텐션 바 디자인 고도화 (그라데이션)
         # 0-20(빨강), 20-30(노랑), 30-70(초록), 70-80(노랑), 80-100(빨강)
         bar_count = 10
         filled_segments = int(self.tension / 10)
-        
+
         bar_str = ""
         for i in range(1, bar_count + 1):
             if i <= filled_segments:
@@ -346,10 +349,10 @@ class TensionFishingView(View):
                 else: bar_str += "🟩"
             else:
                 bar_str += "⬛"
-        
+
         status_emoji = "🟢" if 20 <= self.tension <= 80 else "🔴"
         status_text = "안전" if 20 <= self.tension <= 80 else "위험!"
-        
+
         embed.add_field(name=f"현재 텐션: {self.tension}%", value=f"{bar_str} ({status_emoji} {status_text})", inline=False)
         return embed
 
@@ -371,7 +374,7 @@ class TensionFishingView(View):
                     msg += "\n\n💥 **[치명적 손상]** 괴수의 힘을 이기지 못하고 **낚싯대가 부러졌습니다!** (레벨 1 하락)"
             else:
                 msg = f"💨 물고기가 바늘을 털고 도망갔습니다! (텐션 0% 미만)\n놓친 물고기: **{self.target_fish}**"
-                
+
             if self.target_fish == "둔클레오스테우스 🦖":
                 async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=0", (self.user.id,)) as cursor:
                     items = await cursor.fetchall()
@@ -380,7 +383,7 @@ class TensionFishingView(View):
                     most_exp = max(items, key=lambda x: FISH_DATA.get(x[0], {}).get("price", 0))[0]
                     await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (self.user.id, most_exp))
                     msg += f"\n\n🦖 **[강철의 턱]** 둔클레오스테우스가 도망치며 가장 비싼 물고기(**{most_exp}**)를 먹어치웠습니다!"
-            
+
             await db.commit()
             return await interaction.response.edit_message(content=msg, embed=None, view=None)
 
@@ -388,9 +391,8 @@ class TensionFishingView(View):
             if not (20 <= self.tension <= 80):
                 self.stop()
                 return await interaction.response.edit_message(content=f"💨 아깝게 놓쳤습니다! 마지막 텐션 조절에 실패했습니다.\n놓친 물고기: **{self.target_fish}**", embed=None, view=None)
-            else:
-                self.stop()
-                await self.parent_view.on_bite_success(interaction, self.elapsed, self.grade)
+            self.stop()
+            await self.parent_view.on_bite_success(interaction, self.elapsed, self.grade)
         else:
             self.turn += 1
             await interaction.response.edit_message(embed=self.get_embed(), view=self)
@@ -411,13 +413,13 @@ class BattleView(View):
         self.user = user
         self.my_fish = my_fish
         self.npc_fish = npc_fish
-        
+
         self.my_max_hp = self.my_hp = FISH_DATA[my_fish]["power"] * 10
         self.my_atk = FISH_DATA[my_fish]["power"]
         self.my_ap = 1
         self.my_elem = FISH_DATA[my_fish]["element"]
         self.is_my_defending = False
-        
+
         self.npc_max_hp = self.npc_hp = FISH_DATA[npc_fish]["power"] * 10
         self.npc_atk = FISH_DATA[npc_fish]["power"]
         self.npc_ap = 1
@@ -434,12 +436,12 @@ class BattleView(View):
         embed.add_field(name="VS", value="⚡", inline=True)
         npc_hp_bar = "🟥" * max(0, int((self.npc_hp / self.npc_max_hp) * 5)) + "⬛" * (5 - max(0, int((self.npc_hp / self.npc_max_hp) * 5)))
         embed.add_field(name=f"🔴 야생의 [{self.npc_elem}]", value=f"**{self.npc_fish}**\n체력: {self.npc_hp}/{self.npc_max_hp} {npc_hp_bar}\nAP: ⚡x{self.npc_ap}", inline=True)
-        
+
         # 최신 로그 강조
         logs = self.battle_log.strip().split("\n")
         latest = f"**> {logs[-1]}**" if logs else ""
         history = "\n".join(logs[-4:-1]) if len(logs) > 1 else ""
-        
+
         embed.add_field(name="📜 전투 로그", value=f"{history}\n{latest}", inline=False)
         return embed
 
@@ -450,10 +452,10 @@ class BattleView(View):
             mult = get_element_multiplier(self.my_elem, self.npc_elem)
             dmg = int(self.my_atk * self.my_ap * mult)
             if self.is_npc_defending: dmg //= 2
-            
+
             self.npc_hp -= dmg
             elem_txt = "(효과 발군!)" if mult > 1.0 else ("(효과 미미...)" if mult < 1.0 else "")
-            
+
             # [신규] 특수 스킬 적용
             skill_msg = ""
             fish_grade = FISH_DATA.get(self.my_fish, {}).get("grade", "일반")
@@ -469,8 +471,8 @@ class BattleView(View):
                 skill_msg += "\n💫 **[기절]** 상대 AP 제거!"
 
             self.battle_log += f"🔵 {self.my_fish}의 공격! 💥 {dmg} 피해! {elem_txt}{skill_msg}\n"
-            self.my_ap = 1 
-        else: 
+            self.my_ap = 1
+        else:
             self.is_my_defending = True
             self.my_ap += 1
             self.battle_log += f"🔵 {self.my_fish} 방어 태세! 피해 반감 & AP 1 회복.\n"
@@ -479,13 +481,13 @@ class BattleView(View):
             return await self.end_battle(interaction, is_win=True)
 
         npc_action = "attack" if (random.random() > 0.4 and self.npc_ap > 0) else "defend"
-        
+
         if npc_action == "attack":
             self.is_npc_defending = False
             mult = get_element_multiplier(self.npc_elem, self.my_elem)
             dmg = int(self.npc_atk * self.npc_ap * mult)
             if self.is_my_defending: dmg //= 2
-            
+
             self.my_hp -= dmg
             self.battle_log += f"🔴 {self.npc_fish}의 반격! 💥 {dmg} 피해!\n"
             self.npc_ap = 1
@@ -501,9 +503,9 @@ class BattleView(View):
         await interaction.response.edit_message(embed=self.generate_embed(), view=self)
 
     async def end_battle(self, interaction, is_win):
-        self.stop() 
+        self.stop()
         embed = self.generate_embed()
-        
+
         if is_win:
             reward_rp = random.randint(10, 30)
             reward_coin = FISH_DATA[self.npc_fish]["power"] * 5
@@ -537,13 +539,13 @@ class PvPBattleView(View):
         self.p2 = p2
         self.p1_deck = p1_deck
         self.p2_deck = p2_deck
-        
+
         self.p1_idx = 0
         self.p2_idx = 0
 
         self.p1_ap = 1
         self.p1_defending = False
-        
+
         self.p2_ap = 1
         self.p2_defending = False
 
@@ -553,17 +555,17 @@ class PvPBattleView(View):
         self.turn_count = 1
         self.current_turn_user = p1
         self.battle_log = f"⚔️ {p1.name}님이 {p2.name}님에게 3v3 수산대전을 걸었습니다!\n"
-        
+
         self.p1_title = ""
         self.p2_title = ""
-        self.bot = None 
+        self.bot = None
         self.is_offline_target = False
 
         # --- Phase 3 추가 사항 ---
         # 1. 속성 공명 (3마리 동일 속성 시 공격력 20% 증가)
         self.p1_resonance = False
         self.p2_resonance = False
-        
+
         p1_elements = [FISH_DATA.get(f[0], {}).get("element", "무속성") for f in p1_deck]
         if len(set(p1_elements)) == 1 and p1_elements[0] != "무속성":
             self.p1_resonance = True
@@ -604,19 +606,19 @@ class PvPBattleView(View):
 
         p1_hp_bar = get_hp_bar(self.p1_hp, self.p1_max_hp)
         p1_deck_status = "".join(["🟢" if i >= self.p1_idx else "🔴" for i in range(len(self.p1_deck))])
-        
+
         p2_hp_bar = get_hp_bar(self.p2_hp, self.p2_max_hp)
         p2_deck_status = "".join(["🟢" if i >= self.p2_idx else "🔴" for i in range(len(self.p2_deck))])
 
         embed.add_field(name=f"🔵 {self.p1.name} [{self.p1_elem}]", value=f"엔트리: {p1_deck_status}\n**{self.p1_fish}**\n체력: {self.p1_hp}/{self.p1_max_hp} {p1_hp_bar}\nAP: ⚡x{self.p1_ap}", inline=True)
         embed.add_field(name="VS", value="⚡", inline=True)
         embed.add_field(name=f"🔴 {self.p2.name} [{self.p2_elem}]", value=f"엔트리: {p2_deck_status}\n**{self.p2_fish}**\n체력: {self.p2_hp}/{self.p2_max_hp} {p2_hp_bar}\nAP: ⚡x{self.p2_ap}", inline=True)
-        
+
         # 최신 로그 강조
         logs = self.battle_log.strip().split("\n")
         latest = f"**> {logs[-1]}**" if logs else ""
         history = "\n".join(logs[-4:-1]) if len(logs) > 1 else ""
-        
+
         embed.add_field(name="📜 전투 로그", value=f"{history}\n{latest}", inline=False)
         return embed
 
@@ -626,7 +628,7 @@ class PvPBattleView(View):
 
         is_p1 = (interaction.user == self.p1)
         attacker_name = self.p1.name if is_p1 else self.p2.name
-        
+
         # 첫 턴에 칭호 정보 로드 (비동기 생성자가 불가능하므로 첫 실행 시점에 로드)
         if not self.p1_title:
             self.p1_title = await db.get_user_title(self.p1.id)
@@ -639,13 +641,13 @@ class PvPBattleView(View):
             attacker_elem = self.p1_elem if is_p1 else self.p2_elem
             defender_elem = self.p2_elem if is_p1 else self.p1_elem
             mult = get_element_multiplier(attacker_elem, defender_elem)
-            
+
             attacker_atk = self.p1_atk if is_p1 else self.p2_atk
             attacker_ap = self.p1_ap if is_p1 else self.p2_ap
             defender_defending = self.p2_defending if is_p1 else self.p1_defending
-            
+
             dmg = int(attacker_atk * attacker_ap * mult)
-            
+
             # 속성 공명 보너스 (20%)
             if (is_p1 and self.p1_resonance) or (not is_p1 and self.p2_resonance):
                 dmg = int(dmg * 1.2)
@@ -656,19 +658,19 @@ class PvPBattleView(View):
                 dmg = int(dmg * 1.1)
 
             if defender_defending: dmg //= 2
-            
+
             attacker_fish = self.p1_fish if is_p1 else self.p2_fish
             defender_fish = self.p2_fish if is_p1 else self.p1_fish
-            
+
             # 특수 스킬 적용 (고도화)
             skill_msg = ""
             fish_grade = FISH_DATA.get(attacker_fish, {}).get("grade", "일반")
-            
+
             # [연속 공격] 레전드 이상 20% 확률로 2회 공격
             if fish_grade in ["레전드", "신화", "태고", "환상", "미스터리"] and random.random() < 0.2:
                 dmg *= 2
                 skill_msg += f"\n⚔️ **[연속 공격]** {attacker_fish}(이)가 폭풍 같은 연타를 가합니다! (데미지 2배)"
-            
+
             # [흡혈] 신화 이상 데미지의 20% 체력 회복
             if fish_grade in ["신화", "태고", "환상", "미스터리"]:
                 heal = int(dmg * 0.2)
@@ -680,7 +682,7 @@ class PvPBattleView(View):
             if fish_grade in ["태고", "환상", "미스터리"] and random.random() < 0.15:
                 if is_p1: self.p2_ap = 0
                 else: self.p1_ap = 0
-                skill_msg += f"\n💫 **[기절]** 상대가 괴수의 위압감에 압도당해 행동력(AP)을 잃었습니다!"
+                skill_msg += "\n💫 **[기절]** 상대가 괴수의 위압감에 압도당해 행동력(AP)을 잃었습니다!"
 
             if attacker_fish == "리비아탄 멜빌레이 🐋" and "상어" in defender_fish:
                 dmg *= 2
@@ -704,7 +706,7 @@ class PvPBattleView(View):
             elem_txt = "(효과 발군!)" if mult > 1.0 else ("(효과 미미...)" if mult < 1.0 else "")
             self.battle_log += f"[{attacker_name}] {attacker_fish}의 공격! 💥 {dmg} 피해! {elem_txt}{skill_msg}\n"
 
-        else: 
+        else:
             if is_p1:
                 self.p1_defending = True
                 self.p1_ap += 1
@@ -719,7 +721,7 @@ class PvPBattleView(View):
             if self.p1_idx < len(self.p1_deck):
                 self._init_fish(1)
                 self.battle_log += f"🟢 {self.p1.name}님이 다음 전사로 {self.p1_fish}(을)를 꺼냈습니다!\n"
-        
+
         if self.p2_hp <= 0:
             self.battle_log += f"💀 {self.p2.name}님의 {self.p2_fish}(이)가 쓰러졌습니다!\n"
             self.p2_idx += 1
@@ -737,14 +739,14 @@ class PvPBattleView(View):
         await interaction.response.edit_message(embed=self.generate_embed(), view=self)
 
     async def end_battle(self, interaction, winner, loser):
-        self.stop() 
+        self.stop()
         embed = self.generate_embed()
-        
+
         # === Phase 3: 연속 공격 패널티 로직 ===
         async with db.conn.execute("SELECT pvp_last_target, pvp_consecutive_count FROM user_data WHERE user_id=?", (winner.id,)) as cursor:
             res = await cursor.fetchone()
         last_target, con_count = res if res else (0, 0)
-        
+
         penalty_msg = ""
         reward_rp = random.randint(15, 30)
         reward_coin = random.randint(500, 2000)
@@ -755,14 +757,14 @@ class PvPBattleView(View):
             if con_count == 2: reduction = 0.5
             elif con_count == 3: reduction = 0.1
             else: reduction = 0.0
-            
+
             if con_count >= 2:
                 reward_rp = max(1, int(reward_rp * reduction))
                 reward_coin = max(100, int(reward_coin * reduction))
                 penalty_msg = f"\n⚠️ **연속 공격 패널티!** ({con_count}회 연속) 보상이 {int((1-reduction)*100)}% 감소했습니다."
         else:
             con_count = 1
-        
+
         # 오프라인 보호 (추가 감면)
         if self.is_offline_target:
             reward_coin = int(reward_coin * 0.4) # 60% 감소
@@ -802,7 +804,7 @@ class MarketPaginationView(View):
         start = self.current_page * self.per_page
         end = start + self.per_page
         current_items = self.filtered_items[start:end]
-        
+
         embed = discord.Embed(title=f"📊 수산시장 시세표 ({self.grade_filter})", description=f"총 {len(self.filtered_items)}종의 물고기 시세입니다.", color=0xf1c40f)
         for fish, current_price in current_items:
             base = FISH_DATA.get(fish, {}).get("price", 100)
@@ -810,7 +812,7 @@ class MarketPaginationView(View):
             status = "📈 떡상" if ratio > 1.2 else ("📉 떡락" if ratio < 0.8 else "➖ 평범")
             grade = FISH_DATA.get(fish, {}).get("grade", "일반")
             embed.add_field(name=f"{fish} [{grade}]", value=f"현재가: **{current_price} C**\n({status})", inline=True)
-        
+
         max_page = max(1, (len(self.filtered_items)-1)//self.per_page + 1)
         embed.set_footer(text=f"페이지: {self.current_page + 1} / {max_page}")
         return embed
@@ -819,12 +821,12 @@ class MarketPaginationView(View):
         discord.SelectOption(label="전체 보기", value="전체"),
         discord.SelectOption(label="일반~초희귀", value="기본"),
         discord.SelectOption(label="에픽~레전드", value="고급"),
-        discord.SelectOption(label="태고~신화", value="특수")
+        discord.SelectOption(label="태고~신화", value="특수"),
     ])
     async def filter_grade(self, interaction: discord.Interaction, select: discord.ui.Select):
         self.grade_filter = select.values[0]
         self.current_page = 0
-        
+
         if self.grade_filter == "전체":
             self.filtered_items = self.all_items
         elif self.grade_filter == "기본":
@@ -833,7 +835,7 @@ class MarketPaginationView(View):
             self.filtered_items = [i for i in self.all_items if FISH_DATA.get(i[0], {}).get("grade") in ["에픽", "레전드"]]
         elif self.grade_filter == "특수":
             self.filtered_items = [i for i in self.all_items if FISH_DATA.get(i[0], {}).get("grade") in ["태고", "환상", "미스터리", "신화"]]
-            
+
         await interaction.response.edit_message(embed=self.make_embed(), view=self)
 
     @discord.ui.button(label="◀ 이전", style=discord.ButtonStyle.secondary)
@@ -860,25 +862,25 @@ class DragonKingBlessingView(View):
     @discord.ui.button(label="고개 조아리기", style=discord.ButtonStyle.success, emoji="🙇")
     async def bow_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await db.get_user_data(interaction.user.id)
-        
+
         if interaction.user.id in self.claimed_users:
             return await interaction.response.send_message("👑 용왕님: \"이미 축복을 내렸느니라. 과한 욕심은 화를 부르는 법이지.\"", ephemeral=True)
 
         self.claimed_users.add(interaction.user.id)
         rand_val = random.randint(1, 1000)
 
-        if rand_val == 1: 
+        if rand_val == 1:
             bonus_coin = 500000
             msg = "👑 **[전설적인 축복]** 용왕이 당신을 보며 파안대소합니다!\n"
             msg += f"💰 `{bonus_coin:,} C`를 하사받았습니다!\n\n"
             msg += "*\"허허, 마음에 쏙 드는구나! 혹시... 육지에 두고 왔다는 그 간도 나에게 줄 수 있겠느냐?\"*"
-        elif rand_val <= 30: 
+        elif rand_val <= 30:
             bonus_coin = random.randint(100000, 499999)
             msg = f"✨ **[특별한 시선]** 용왕이 당신을 눈여겨봅니다...\n💰 `{bonus_coin:,} C`를 하사받았습니다!"
-        elif rand_val <= 200: 
+        elif rand_val <= 200:
             bonus_coin = random.randint(10000, 99999)
             msg = f"🌊 용왕이 당신을 더욱 축복합니다.\n💰 `{bonus_coin:,} C`를 하사받았습니다."
-        else: 
+        else:
             bonus_coin = random.randint(500, 9999)
             msg = f"🐢 용왕의 소소한 축복이 닿았습니다.\n💰 `{bonus_coin:,} C`를 획득했습니다."
 
@@ -896,7 +898,7 @@ class QuestDeliveryView(View):
 
     @discord.ui.button(label="📦 의뢰 납품하기", style=discord.ButtonStyle.success)
     async def deliver_btn(self, interaction: discord.Interaction, button: Button):
-        if interaction.user != self.user: return
+        if interaction.user != self.user: return None
 
         async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (self.user.id, self.item)) as cursor:
             res = await cursor.fetchone()
@@ -923,7 +925,7 @@ class InventoryView(View):
         self.current_page = 0
         self.per_page = 15
         self.category = "전체" # 전체, 물고기, 아이템, 잠금
-        
+
         self.filtered_items = self.all_items
 
     def filter_items(self):
@@ -939,16 +941,16 @@ class InventoryView(View):
     def make_embed(self):
         coins, rod_tier, rating, boat_str, stamina, max_stamina, title = self.stats
         display_name = f"{title} {self.target_user.name}" if title else self.target_user.name
-        
+
         embed = discord.Embed(title=f"🎒 {display_name}의 인벤토리 ({self.category})", color=0x3498db)
         embed.add_field(name="🏆 레이팅", value=f"`{rating} RP`", inline=True)
         embed.add_field(name="💰 보유 코인", value=f"`{coins:,} C`", inline=True)
         embed.add_field(name="⛵ 선박", value=f"**{boat_str}**", inline=True)
-        
+
         start = self.current_page * self.per_page
         end = start + self.per_page
         page_items = self.filtered_items[start:end]
-        
+
         if page_items:
             item_str = ""
             for name, amt, locked in page_items:
@@ -957,7 +959,7 @@ class InventoryView(View):
             embed.add_field(name=f"내역 ({len(self.filtered_items)}종)", value=item_str, inline=False)
         else:
             embed.add_field(name="내역", value="해당 카테고리에 아이템이 없습니다.", inline=False)
-            
+
         max_page = max(1, (len(self.filtered_items) - 1) // self.per_page + 1)
         embed.set_footer(text=f"⚡ 체력: {stamina}/{max_stamina} | 페이지: {self.current_page + 1}/{max_page}")
         return embed
@@ -966,7 +968,7 @@ class InventoryView(View):
         discord.SelectOption(label="전체 보기", value="전체", emoji="📁"),
         discord.SelectOption(label="물고기만", value="물고기", emoji="🐟"),
         discord.SelectOption(label="기타 아이템", value="아이템", emoji="🛠️"),
-        discord.SelectOption(label="잠금 물품", value="잠금", emoji="🔒")
+        discord.SelectOption(label="잠금 물품", value="잠금", emoji="🔒"),
     ])
     async def select_category(self, interaction: discord.Interaction, select: discord.ui.Select):
         if interaction.user != self.user: return
