@@ -6,6 +6,7 @@
     <title>수산시장 전산 통제실 🌊</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <!-- 전역 알림(Toast) 컨테이너 -->
@@ -62,6 +63,18 @@
                         <p id="stat-weather">--</p>
                     </div>
                 </div>
+
+                <!-- 차트 영역 추가 -->
+                <div class="grid-2col" style="margin-top: 2rem;">
+                    <div class="glass-panel" style="padding: 1.5rem;">
+                        <h3>📈 주요 어종 시세 변동 (실시간)</h3>
+                        <canvas id="marketChart"></canvas>
+                    </div>
+                    <div class="glass-panel" style="padding: 1.5rem;">
+                        <h3>🪙 서버 경제 지표 (통화 유통량)</h3>
+                        <canvas id="economyChart"></canvas>
+                    </div>
+                </div>
             </section>
 
             <!-- 유저 관리 패널 -->
@@ -73,6 +86,7 @@
                     <table id="users-table">
                         <thead>
                             <tr>
+                                <th><input type="checkbox" id="check-all-users"></th>
                                 <th>유저ID</th>
                                 <th>이름</th>
                                 <th>레이팅 (RP)</th>
@@ -136,7 +150,16 @@
                         <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:1rem;">해당 기능은 봇이 등록된 <strong>모든 디스코드 서버</strong>에 긴급 알림(빨간색 공식 임베드)을 푸시합니다. 이벤트 시작이나 점검 안내에 사용하세요.</p>
                         <input type="text" id="noti-title" placeholder="공지 제목">
                         <textarea id="noti-content" rows="4" placeholder="공지 내용을 입력하세요 (디스코드 전역 송출)"></textarea>
-                        <button id="btn-send-noti" class="btn-danger">전역 시스템 공지 발송</button>
+                        
+                        <div style="margin-top: 15px;">
+                            <label style="font-size: 0.8rem; color: var(--text-muted);">실시간 Discord 미리보기</label>
+                            <div id="embed-preview" class="embed-preview">
+                                <div class="embed-title" id="preview-title">공지 제목이 여기에 표시됩니다</div>
+                                <div class="embed-description" id="preview-content">공지 내용 미리보기가 여기에 실시간으로 렌더링됩니다.</div>
+                            </div>
+                        </div>
+
+                        <button id="btn-send-noti" class="btn-danger" style="margin-top: 20px;">전역 시스템 공지 발송</button>
                     </div>
                     <div class="glass-panel">
                         <h2>🌡️ 극기상 조작기</h2>
@@ -193,6 +216,25 @@
             <div style="margin-top: 30px; display: flex; justify-content: flex-end; gap: 10px;">
                 <button id="btn-modal-close" class="btn-secondary">닫기</button>
                 <button id="btn-modal-save">변경사항 저장</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 일괄 처리 바 -->
+    <div id="bulk-action-bar" class="hidden">
+        <span id="bulk-count">0명 선택됨</span>
+        <button class="btn-success" id="btn-bulk-item" style="padding: 5px 15px; width: auto;">일괄 아이템 지급</button>
+        <button class="btn-danger" id="btn-bulk-delete" style="padding: 5px 15px; width: auto;">선택 해제</button>
+    </div>
+
+    <!-- 확인 모달 (Safety Net) -->
+    <div id="confirm-modal" class="modal-overlay hidden">
+        <div class="modal glass-panel" style="max-width: 400px; text-align: center;">
+            <h2 id="confirm-title">⚠️ 시스템 경고</h2>
+            <p id="confirm-msg" style="margin: 20px 0; color: var(--text-muted);">정말로 이 작업을 수행하시겠습니까?</p>
+            <div style="display: flex; gap: 10px; justify-content: center;">
+                <button id="btn-confirm-cancel" class="btn-secondary">취소</button>
+                <button id="btn-confirm-ok" class="btn-danger">진행하기</button>
             </div>
         </div>
     </div>

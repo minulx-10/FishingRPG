@@ -49,7 +49,23 @@ const DOM = {
 
     // Global
     toastContainer: document.getElementById('toast-container'),
-    fishListDatlist: document.getElementById('fish-list')
+    fishListDatlist: document.getElementById('fish-list'),
+    
+    // New Elements
+    checkAll: document.getElementById('check-all-users'),
+    bulkBar: document.getElementById('bulk-action-bar'),
+    bulkCount: document.getElementById('bulk-count'),
+    btnBulkItem: document.getElementById('btn-bulk-item'),
+    btnBulkDelete: document.getElementById('btn-bulk-delete'),
+    
+    confirmModal: document.getElementById('confirm-modal'),
+    confirmTitle: document.getElementById('confirm-title'),
+    confirmMsg: document.getElementById('confirm-msg'),
+    btnConfirmOk: document.getElementById('btn-confirm-ok'),
+    btnConfirmCancel: document.getElementById('btn-confirm-cancel'),
+    
+    previewTitle: document.getElementById('preview-title'),
+    previewContent: document.getElementById('preview-content')
 };
 
 let currentUserEditing = null;
@@ -88,6 +104,33 @@ async function apiCall(endpoint, method = 'GET', body = null) {
         throw new Error("Unauthorized");
     }
     return res.json();
+}
+
+/**
+ * Safety Net: 확인 모달 도우미
+ */
+function confirmAction(title, message) {
+    return new Promise((resolve) => {
+        DOM.confirmTitle.innerText = title;
+        DOM.confirmMsg.innerText = message;
+        DOM.confirmModal.classList.remove('hidden');
+        
+        const okHandler = () => {
+            DOM.confirmModal.classList.add('hidden');
+            DOM.btnConfirmOk.removeEventListener('click', okHandler);
+            DOM.btnConfirmCancel.removeEventListener('click', cancelHandler);
+            resolve(true);
+        };
+        const cancelHandler = () => {
+            DOM.confirmModal.classList.add('hidden');
+            DOM.btnConfirmOk.removeEventListener('click', okHandler);
+            DOM.btnConfirmCancel.removeEventListener('click', cancelHandler);
+            resolve(false);
+        };
+        
+        DOM.btnConfirmOk.addEventListener('click', okHandler);
+        DOM.btnConfirmCancel.addEventListener('click', cancelHandler);
+    });
 }
 
 function initAuth() {
@@ -136,9 +179,55 @@ function switchPanel(targetId) {
     document.querySelector(`[data-target="${targetId}"]`).classList.add('active');
     document.getElementById(targetId).classList.add('active');
     
-    if(targetId === 'panel-home') loadStats();
+    if(targetId === 'panel-home') {
+        loadStats();
+        initCharts();
+    }
     if(targetId === 'panel-users') loadUsers();
     if(targetId === 'panel-market') loadMarket();
+}
+
+let marketChart = null;
+let economyChart = null;
+
+async function initCharts() {
+    if (marketChart) marketChart.destroy();
+    if (economyChart) economyChart.destroy();
+
+    const ctxMarket = document.getElementById('marketChart').getContext('2d');
+    const ctxEconomy = document.getElementById('economyChart').getContext('2d');
+
+    // 통계 데이터 가져오기 (히스토리 지원 시)
+    const statsRes = await apiCall('/stats/history');
+    const chartData = statsRes.success ? statsRes.data : { labels: [], prices: [], coins: [] };
+
+    marketChart = new Chart(ctxMarket, {
+        type: 'line',
+        data: {
+            labels: chartData.labels,
+            datasets: [{
+                label: '주요 어종 평균 시세',
+                data: chartData.prices,
+                borderColor: 'cyan',
+                backgroundColor: 'rgba(0, 255, 255, 0.1)',
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: { responsive: true, plugins: { legend: { labels: { color: '#fff' } } }, scales: { y: { ticks: { color: '#aaa' } }, x: { ticks: { color: '#aaa' } } } }
+    });
+
+    economyChart = new Chart(ctxEconomy, {
+        type: 'doughnut',
+        data: {
+            labels: ['유통 중인 코인', '예비량'],
+            datasets: [{
+                data: [chartData.total_coins, chartData.total_coins * 0.2],
+                backgroundColor: ['magenta', '#333']
+            }]
+        },
+        options: { responsive: true, plugins: { legend: { labels: { color: '#fff' } } } }
+    });
 }
 
 async function loadStats() {
@@ -164,6 +253,7 @@ async function loadUsers() {
                 const tr = document.createElement('tr');
                 const avatar = u.avatar ? `<img src="${u.avatar}" class="user-avatar">` : `<div class="user-avatar" style="display:inline-block; background:#fff"></div>`;
                 tr.innerHTML = `
+                    <td><input type="checkbox" class="user-check" data-id="${u.user_id}"></td>
                     <td><code>${u.user_id}</code></td>
                     <td>${avatar} <b>${u.name}</b></td>
                     <td><span style="color:var(--warn)">${u.rating}</span> RP</td>
@@ -173,11 +263,60 @@ async function loadUsers() {
                 `;
                 DOM.usersTbody.appendChild(tr);
             });
+            updateBulkCount();
         } else {
             showToast("유저 목록 에러: " + res.error, "error");
         }
     } catch(e) { showToast("네트워크 오류: " + e.message, "error"); }
 }
+
+function updateBulkCount() {
+    const checked = document.querySelectorAll('.user-check:checked');
+    if (checked.length > 0) {
+        DOM.bulkBar.classList.remove('hidden');
+        DOM.bulkCount.innerText = `${checked.length}명 선택됨`;
+    } else {
+        DOM.bulkBar.classList.add('hidden');
+    }
+}
+
+DOM.usersTbody.addEventListener('change', (e) => {
+    if (e.target.classList.contains('user-check')) updateBulkCount();
+});
+
+DOM.checkAll.onclick = () => {
+    const checks = document.querySelectorAll('.user-check');
+    checks.forEach(c => c.checked = DOM.checkAll.checked);
+    updateBulkCount();
+};
+
+DOM.btnBulkDelete.onclick = () => {
+    document.querySelectorAll('.user-check').forEach(c => c.checked = false);
+    DOM.checkAll.checked = false;
+    updateBulkCount();
+};
+
+DOM.btnBulkItem.onclick = async () => {
+    const checked = document.querySelectorAll('.user-check:checked');
+    const ids = Array.from(checked).map(c => c.dataset.id);
+    
+    const itemName = prompt('지급할 아이템 이름을 입력하세요:');
+    if (!itemName) return;
+    const itemAmt = prompt('수량을 입력하세요:', '1');
+    if (!itemAmt) return;
+
+    if (await confirmAction('🎁 일괄 지급 확인', `선택한 ${ids.length}명에게 [${itemName}] ${itemAmt}개를 지급하시겠습니까?`)) {
+        try {
+            const res = await apiCall('/users/bulk/items', 'POST', {
+                user_ids: ids,
+                item_name: itemName,
+                amount: itemAmt
+            });
+            if (res.success) showToast(`성공: ${res.success_count}명에게 아이템을 지급했습니다.`);
+            else showToast(res.error, 'error');
+        } catch(e) { showToast(e.message, 'error'); }
+    }
+};
 
 function openModal(user) {
     currentUserEditing = user;
@@ -303,14 +442,16 @@ async function updateMarket() {
     const price = DOM.marketPrice.value;
     if(!fish || !price) return showToast('오류: 어종명과 가격을 입력하세요.', 'error');
     
-    try {
-        const res = await apiCall('/market', 'POST', {fish_name: fish, price: price});
-        if(res.success) {
-            showToast(`[시장 통제 알림] ${fish} 가격이 ${price}C 로 변동되었습니다.`, 'success');
-            loadMarket(); // 표 갱신
-        }
-        else showToast('데이터를 찾을 수 없습니다.', 'error');
-    } catch(e) { showToast(e.message, 'error'); }
+    if (await confirmAction('⚖️ 시장 가격 개입', `[${fish}]의 가격을 ${price}C로 강제 고정하시겠습니까?`)) {
+        try {
+            const res = await apiCall('/market', 'POST', {fish_name: fish, price: price});
+            if(res.success) {
+                showToast(`[시장 통제 알림] ${fish} 가격이 ${price}C 로 변동되었습니다.`, 'success');
+                loadMarket(); // 표 갱신
+            }
+            else showToast('데이터를 찾을 수 없습니다.', 'error');
+        } catch(e) { showToast(e.message, 'error'); }
+    }
 }
 
 async function sendBroadcast() {
@@ -318,22 +459,35 @@ async function sendBroadcast() {
     const content = DOM.notiContent.value;
     if(!title || !content) return showToast('오류: 제목과 내용을 작성하세요.', 'error');
     
-    try {
-        const res = await apiCall('/admin/broadcast', 'POST', {title, content});
-        if(res.success) {
-            showToast(`통신 완료: 총 ${res.channels_notified}개의 서버에 무전을 송출했습니다.`, 'success');
-            DOM.notiTitle.value = ''; DOM.notiContent.value = '';
-        } else showToast(res.error, 'error');
-    } catch(e) { showToast(e.message, 'error'); }
+    if (await confirmAction('📢 전역 공지 전송', '모든 디스코드 서버에 이 공지를 즉시 송출하시겠습니까?')) {
+        try {
+            const res = await apiCall('/admin/broadcast', 'POST', {title, content});
+            if(res.success) {
+                showToast(`통신 완료: 총 ${res.channels_notified}개의 서버에 무전을 송출했습니다.`, 'success');
+                DOM.notiTitle.value = ''; DOM.notiContent.value = '';
+                DOM.previewTitle.innerText = '공지 제목이 여기에 표시됩니다';
+                DOM.previewContent.innerText = '공지 내용 미리보기가 여기에 실시간으로 렌더링됩니다.';
+            } else showToast(res.error, 'error');
+        } catch(e) { showToast(e.message, 'error'); }
+    }
 }
+
+// 실시간 프리뷰
+DOM.notiTitle.oninput = () => DOM.previewTitle.innerText = DOM.notiTitle.value || '공지 제목이 여기에 표시됩니다';
+DOM.notiContent.oninput = () => DOM.previewContent.innerText = DOM.notiContent.value || '공지 내용 미리보기가 여기에 실시간으로 렌더링됩니다.';
 
 async function forceWeather() {
     const weather = DOM.weatherSelect.value;
-    try {
-        const res = await apiCall('/admin/weather', 'POST', {weather: weather});
-        if(res.success) showToast(`강제 기상 제어 완료: [${weather}]`, 'success');
-        else showToast(res.error, 'error');
-    } catch(e) { showToast(e.message, 'error'); }
+    if (await confirmAction('🌡️ 기상 강제 제어', `서버의 기상을 [${weather}]로 즉시 변경하시겠습니까?`)) {
+        try {
+            const res = await apiCall('/admin/weather', 'POST', {weather: weather});
+            if(res.success) {
+                showToast(`강제 기상 제어 완료: [${weather}]`, 'success');
+                loadStats();
+            }
+            else showToast(res.error, 'error');
+        } catch(e) { showToast(e.message, 'error'); }
+    }
 }
 
 // Events

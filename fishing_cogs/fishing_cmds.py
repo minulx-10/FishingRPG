@@ -167,8 +167,13 @@ class FishingCog(commands.Cog):
         if "fishing_speed_up" in active_buffs:
             effective_rod_tier += 2.0  # 낚시 속도 증가 버프 (난이도 하락)
             
+        # 낚시 대기 시각 효과 (찌 애니메이션)
         view = FishingView(interaction.user, target_fish, effective_rod_tier)
-        await interaction.response.send_message(f"🌊 **{display_name}**님이 찌를 던졌습니다... 조용히 기다리세요.{bait_text}\n(내 낚싯대: Lv.{rod_tier} / 체력: {current_stamina-10}⚡)", view=view)
+        embed = discord.Embed(title="🎣 찌를 던졌습니다!", description=f"**{display_name}**님이 미끼를 던지고 입질을 기다립니다...{bait_text}", color=0x3498db)
+        embed.set_image(url="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExOHJqZ3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/l41lTfuxV5RWRsBPO/giphy.gif") # 낚시 대기 GIF
+        embed.set_footer(text=f"내 낚싯대: Lv.{rod_tier} | 체력: {current_stamina-stamina_cost}⚡")
+        
+        await interaction.response.send_message(embed=embed, view=view)
         
         # 입질 대기 시간 계산
         if "fishing_speed_up" in active_buffs:
@@ -195,7 +200,11 @@ class FishingCog(commands.Cog):
             item.emoji = "‼️"
         
         try:
-            msg = await interaction.edit_original_response(content="❗ **찌가 격렬하게 흔들립니다! 지금 누르세요!!!**", view=view)
+            # 입질 시 메시지 업데이트 (시각적 피드백 강화)
+            embed = discord.Embed(title="❗ 입질 발생!!!!", description="**찌가 격렬하게 흔들립니다! 지금 당기세요!!!**", color=0xff0000)
+            embed.set_image(url="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/l41lTfuxV5RWRsBPO/giphy.gif") # 입질 GIF (동일한거 쓰거나 다른걸로 교체)
+            
+            msg = await interaction.edit_original_response(content=None, embed=embed, view=view)
             view.message = msg 
         except: 
             pass
@@ -205,39 +214,22 @@ class FishingCog(commands.Cog):
         target = 유저 or interaction.user
         coins, rod_tier, rating = await db.get_user_data(target.id)
         
-        async with db.conn.execute("SELECT boat_tier FROM user_data WHERE user_id=?", (target.id,)) as cursor:
+        async with db.conn.execute("SELECT boat_tier, stamina, max_stamina FROM user_data WHERE user_id=?", (target.id,)) as cursor:
             res = await cursor.fetchone()
-        current_tier = res[0] if res else 1
+        current_tier, stamina, max_stamina = res if res else (1, 100, 100)
+        
         tier_names = {1: "나룻배 🛶", 2: "어선 🚤", 3: "쇄빙선 🛳️", 4: "전투함 ⚓", 5: "잠수함 ⛴️", 6: "차원함선 🛸"}
         boat_str = tier_names.get(current_tier, f"Lv.{current_tier}")
 
-        async with db.conn.execute("SELECT item_name, amount FROM inventory WHERE user_id=? AND amount > 0", (target.id,)) as cursor:
+        async with db.conn.execute("SELECT item_name, amount, is_locked FROM inventory WHERE user_id=? AND amount > 0", (target.id,)) as cursor:
             items = await cursor.fetchall()
         
         title = await db.get_user_title(target.id)
-        display_name = f"{title} {target.name}" if title else target.name
+        stats = (coins, rod_tier, rating, boat_str, stamina, max_stamina, title)
         
-        embed = discord.Embed(title=f"🎒 {display_name}의 인벤토리", color=0x3498db)
-        embed.add_field(name="🏆 전투 레이팅", value=f"`{rating} RP`", inline=True)
-        embed.add_field(name="💰 보유 코인", value=f"`{coins:,} C`", inline=True)
-        embed.add_field(name="⛵ 선박 등급", value=f"**{boat_str}**", inline=True)
-        embed.add_field(name="🎣 낚싯대 레벨", value=f"`Lv.{rod_tier}`", inline=True)
-        
-        if items:
-            item_list = "\n".join([f"• {name}: {amt}개" for name, amt in items])
-            if len(item_list) > 1000:
-                item_list = "\n".join([f"• {name}: {amt}개" for name, amt in items[:20]])
-                item_list += f"\n... 외 {len(items) - 20}종 더 보유 중"
-            embed.add_field(name=f"🐟 보유 어종 ({len(items)}종)", value=item_list, inline=False)
-        else:
-            embed.add_field(name="🐟 보유 어종", value="텅 비었습니다...", inline=False)
-            
-        async with db.conn.execute("SELECT stamina, max_stamina FROM user_data WHERE user_id=?", (target.id,)) as cursor:
-            stamina_res = await cursor.fetchone()
-        stamina, max_stamina = stamina_res if stamina_res else (100, 100)
-        embed.set_footer(text=f"⚡ 남은 체력: {stamina} / {max_stamina}")
-        
-        await interaction.response.send_message(embed=embed)
+        from fishing_core.views import InventoryView
+        view = InventoryView(interaction.user, target, items, stats)
+        await interaction.response.send_message(embed=view.make_embed(), view=view)
 
     @app_commands.command(name="휴식", description="여관에서 코인을 지불하고 행동력(체력)을 즉시 전부 회복합니다. (일일 1회 무료!)")
     async def 휴식(self, interaction: discord.Interaction):
@@ -276,20 +268,34 @@ class FishingCog(commands.Cog):
     @app_commands.command(name="바다", description="현재 바다의 시간대와 날씨 환경을 확인합니다.")
     async def 바다(self, interaction: discord.Interaction):
         now_hour = datetime.datetime.now(kst).hour
-        if 6 <= now_hour < 18: time_str = "☀️ 낮"
-        elif 18 <= now_hour < 24: time_str = "🌙 밤"
-        else: time_str = "🌑 새벽"
+        weather = env_state['CURRENT_WEATHER']
+        
+        if 6 <= now_hour < 18: 
+            time_str = "☀️ 낮"
+            bg_url = "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800"
+        elif 18 <= now_hour < 24: 
+            time_str = "🌙 밤"
+            bg_url = "https://images.unsplash.com/photo-1500417148159-aa994266934d?w=800"
+        else: 
+            time_str = "🌑 새벽"
+            bg_url = "https://images.unsplash.com/photo-1494948141550-9a3b2bc87860?w=800"
+
+        # 날씨에 따른 이미지 교체 (우선순위: 폭풍우 > 비 > 나머지)
+        if "폭풍우" in weather: bg_url = "https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=800"
+        elif "비" in weather: bg_url = "https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=800"
 
         embed = discord.Embed(title="🌊 현재 바다 상황", color=0x3498db)
         embed.add_field(name="현재 시간대", value=f"**{time_str}** (`{now_hour}시`)", inline=True)
-        embed.add_field(name="현재 날씨", value=f"**{env_state['CURRENT_WEATHER']}**", inline=True)
+        embed.add_field(name="현재 날씨", value=f"**{weather}**", inline=True)
         
         hints = ""
         if 0 <= now_hour < 4: hints += "- ⚠️ [신화] 우미보즈가 출몰할 수 있는 으스스한 시간입니다.\n"
-        if env_state["CURRENT_WEATHER"] in ["🌧️ 비", "🌫️ 안개"]: hints += "- ⚠️ [미스터리] 네시가 활동하기 좋은 날씨입니다.\n"
+        if weather in ["🌧️ 비", "🌫️ 안개"]: hints += "- ⚠️ [미스터리] 네시가 활동하기 좋은 날씨입니다.\n"
         if not hints: hints = "- 평화로운 바다입니다. 낚시하기 딱 좋네요!"
         
         embed.add_field(name="생태계 정보", value=hints, inline=False)
+        embed.set_image(url=bg_url)
+        
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="기상예측", description="기상청의 위성 자료를 분석하여 향후 3시간의 날씨 변화를 예측합니다. (비용: 3,000 C)")

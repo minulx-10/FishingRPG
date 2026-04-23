@@ -124,6 +124,10 @@ class FishingView(View):
         if not self.is_bite:
             return await interaction.response.edit_message(content="🎣 앗! 너무 일찍 챘습니다. 물고기가 도망갔어요! 💨", view=None)
         
+        # 입질 시 임베드 색상 변경 (심미성 개선)
+        embed = discord.Embed(title="❗ 챔질 성공!", color=0xffd700) # 황금색
+        embed.description = "물고기가 바늘에 걸렸습니다! 힘껏 당기는 중..."
+        
         try:
             elapsed = datetime.datetime.now().timestamp() - self.start_time
             fish_info = FISH_DATA.get(self.target_fish, {"grade": "보물"})
@@ -181,17 +185,34 @@ class FishingView(View):
                 
             await db.commit()
             
-            embed = discord.Embed(title=f"🎉 낚시 성공! [{grade}]", description=f"**{self.target_fish}**를 낚았습니다!", color=0x00ff00)
+            grade_color = {
+                "일반": 0x95a5a6, "희귀": 0x3498db, "초희귀": 0x9b59b6, 
+                "에픽": 0xe67e22, "레전드": 0xe74c3c, "태고": 0x8b4513, 
+                "환상": 0x9932cc, "미스터리": 0x2f4f4f, "신화": 0xff0000
+            }
+            
+            embed = discord.Embed(
+                title=f"🎉 낚시 성공! [{grade}]", 
+                description=f"**{self.target_fish}**를 낚았습니다!", 
+                color=grade_color.get(grade, 0x00ff00)
+            )
+            
+            # 에픽 이상 화려한 이미지 연출 (예시 이미지 사용)
+            if grade in ["레전드", "신화", "태고", "환상", "미스터리"]:
+                # 실제 이미지 URL이나 파일 경로가 있다면 여기에 추가
+                # 여기서는 임시로 Placeholder 사용 가능 (추후 asset 교체)
+                if "크라켄" in self.target_fish:
+                    embed.set_thumbnail(url="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/l41lTfuxV5RWRsBPO/giphy.gif")
             
             record_mark = " 🆕 **[최대 크기 신기록!]**" if is_new_record else ""
-            embed.add_field(name="측정 크기", value=f"`{fish_size} cm`{record_mark}", inline=False)
-            embed.add_field(name="반응 속도", value=f"`{elapsed:.3f}초` (판정 한도: {self.limit_time:.2f}초)", inline=False)
+            embed.add_field(name="측정 크기", value=f"`{fish_size} cm`{record_mark}", inline=True)
+            embed.add_field(name="반응 속도", value=f"`{elapsed:.3f}초` (한도: {self.limit_time:.2f}s)", inline=True)
             
             if random.random() < 0.05:
                 piece = random.choice(["찢어진 지도 조각 A 🧩", "찢어진 지도 조각 B 🧩", "찢어진 지도 조각 C 🧩", "찢어진 지도 조각 D 🧩"])
                 await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (self.user.id, piece))
                 await db.commit()
-                embed.add_field(name="🗺️ 바다의 파편 발견!", value=f"물고기와 함께 **{piece}**가 딸려왔습니다! (4부위를 모아 합성하세요)", inline=False)
+                embed.add_field(name="🗺️ 바다의 파편 발견!", value=f"물고기와 함께 **{piece}**가 딸려왔습니다!", inline=False)
 
             if self.target_fish == "심해의 파멸, 크라켄 🦑":
                 async with db.conn.execute("SELECT user_id, coins FROM user_data WHERE user_id != ? AND coins > 1000 AND peace_mode=0 ORDER BY RANDOM() LIMIT 1", (self.user.id,)) as cursor:
@@ -300,11 +321,24 @@ class TensionFishingView(View):
         embed = discord.Embed(title="🎣 거대 괴수와 힘겨루기!", color=0x3498db)
         embed.description = f"물고기가 강하게 저항합니다! 텐션을 **20% ~ 80%** 사이로 유지하세요!\n(남은 턴: {self.max_turns - self.turn + 1})"
         
-        bars = int(self.tension / 10)
-        tension_str = "🟥" * bars + "⬛" * (10 - bars)
+        # 텐션 바 디자인 고도화 (그라데이션)
+        # 0-20(빨강), 20-30(노랑), 30-70(초록), 70-80(노랑), 80-100(빨강)
+        bar_count = 10
+        filled_segments = int(self.tension / 10)
         
-        status = "🟢 안전" if 20 <= self.tension <= 80 else "🔴 위험!"
-        embed.add_field(name=f"현재 텐션: {self.tension}%", value=f"{tension_str} ({status})", inline=False)
+        bar_str = ""
+        for i in range(1, bar_count + 1):
+            if i <= filled_segments:
+                if i <= 2 or i >= 9: bar_str += "🟥"
+                elif i == 3 or i == 8: bar_str += "🟨"
+                else: bar_str += "🟩"
+            else:
+                bar_str += "⬛"
+        
+        status_emoji = "🟢" if 20 <= self.tension <= 80 else "🔴"
+        status_text = "안전" if 20 <= self.tension <= 80 else "위험!"
+        
+        embed.add_field(name=f"현재 텐션: {self.tension}%", value=f"{bar_str} ({status_emoji} {status_text})", inline=False)
         return embed
 
     async def execute_turn(self, interaction, action):
@@ -388,7 +422,13 @@ class BattleView(View):
         embed.add_field(name="VS", value="⚡", inline=True)
         npc_hp_bar = "🟥" * max(0, int((self.npc_hp / self.npc_max_hp) * 5)) + "⬛" * (5 - max(0, int((self.npc_hp / self.npc_max_hp) * 5)))
         embed.add_field(name=f"🔴 야생의 [{self.npc_elem}]", value=f"**{self.npc_fish}**\n체력: {self.npc_hp}/{self.npc_max_hp} {npc_hp_bar}\nAP: ⚡x{self.npc_ap}", inline=True)
-        embed.add_field(name="📜 전투 로그", value=f"```\n{self.battle_log}\n```", inline=False)
+        
+        # 최신 로그 강조
+        logs = self.battle_log.strip().split("\n")
+        latest = f"**> {logs[-1]}**" if logs else ""
+        history = "\n".join(logs[-4:-1]) if len(logs) > 1 else ""
+        
+        embed.add_field(name="📜 전투 로그", value=f"{history}\n{latest}", inline=False)
         return embed
 
     async def execute_turn(self, interaction: discord.Interaction, action: str):
@@ -560,8 +600,12 @@ class PvPBattleView(View):
         embed.add_field(name="VS", value="⚡", inline=True)
         embed.add_field(name=f"🔴 {self.p2.name} [{self.p2_elem}]", value=f"엔트리: {p2_deck_status}\n**{self.p2_fish}**\n체력: {self.p2_hp}/{self.p2_max_hp} {p2_hp_bar}\nAP: ⚡x{self.p2_ap}", inline=True)
         
-        log_display = "\n".join(self.battle_log.split("\n")[-6:]) 
-        embed.add_field(name="📜 전투 로그", value=f"```\n{log_display}\n```", inline=False)
+        # 최신 로그 강조
+        logs = self.battle_log.strip().split("\n")
+        latest = f"**> {logs[-1]}**" if logs else ""
+        history = "\n".join(logs[-4:-1]) if len(logs) > 1 else ""
+        
+        embed.add_field(name="📜 전투 로그", value=f"{history}\n{latest}", inline=False)
         return embed
 
     async def execute_turn(self, interaction: discord.Interaction, action: str):
@@ -736,24 +780,49 @@ class PvPBattleView(View):
 class MarketPaginationView(View):
     def __init__(self, items, per_page=10):
         super().__init__(timeout=120)
-        self.items = list(items.items())
+        self.all_items = list(items.items())
+        self.filtered_items = self.all_items
         self.per_page = per_page
         self.current_page = 0
+        self.grade_filter = "전체"
 
     def make_embed(self):
         start = self.current_page * self.per_page
         end = start + self.per_page
-        current_items = self.items[start:end]
+        current_items = self.filtered_items[start:end]
         
-        embed = discord.Embed(title="📊 현재 수산시장 시세표", description=f"총 {len(self.items)}종의 물고기 시세입니다.", color=0xf1c40f)
+        embed = discord.Embed(title=f"📊 수산시장 시세표 ({self.grade_filter})", description=f"총 {len(self.filtered_items)}종의 물고기 시세입니다.", color=0xf1c40f)
         for fish, current_price in current_items:
-            base = FISH_DATA[fish]["price"]
+            base = FISH_DATA.get(fish, {}).get("price", 100)
             ratio = current_price / base
             status = "📈 떡상" if ratio > 1.2 else ("📉 떡락" if ratio < 0.8 else "➖ 평범")
-            embed.add_field(name=fish, value=f"현재가: **{current_price} C**\n({status})", inline=True)
+            grade = FISH_DATA.get(fish, {}).get("grade", "일반")
+            embed.add_field(name=f"{fish} [{grade}]", value=f"현재가: **{current_price} C**\n({status})", inline=True)
         
-        embed.set_footer(text=f"페이지: {self.current_page + 1} / {int((len(self.items)-1)/self.per_page) + 1}")
+        max_page = max(1, (len(self.filtered_items)-1)//self.per_page + 1)
+        embed.set_footer(text=f"페이지: {self.current_page + 1} / {max_page}")
         return embed
+
+    @discord.ui.select(placeholder="등급별 필터", options=[
+        discord.SelectOption(label="전체 보기", value="전체"),
+        discord.SelectOption(label="일반~초희귀", value="기본"),
+        discord.SelectOption(label="에픽~레전드", value="고급"),
+        discord.SelectOption(label="태고~신화", value="특수")
+    ])
+    async def filter_grade(self, interaction: discord.Interaction, select: discord.ui.Select):
+        self.grade_filter = select.values[0]
+        self.current_page = 0
+        
+        if self.grade_filter == "전체":
+            self.filtered_items = self.all_items
+        elif self.grade_filter == "기본":
+            self.filtered_items = [i for i in self.all_items if FISH_DATA.get(i[0], {}).get("grade") in ["일반", "희귀", "초희귀"]]
+        elif self.grade_filter == "고급":
+            self.filtered_items = [i for i in self.all_items if FISH_DATA.get(i[0], {}).get("grade") in ["에픽", "레전드"]]
+        elif self.grade_filter == "특수":
+            self.filtered_items = [i for i in self.all_items if FISH_DATA.get(i[0], {}).get("grade") in ["태고", "환상", "미스터리", "신화"]]
+            
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
 
     @discord.ui.button(label="◀ 이전", style=discord.ButtonStyle.secondary)
     async def prev_btn(self, interaction: discord.Interaction, button: Button):
@@ -765,7 +834,7 @@ class MarketPaginationView(View):
 
     @discord.ui.button(label="다음 ▶", style=discord.ButtonStyle.secondary)
     async def next_btn(self, interaction: discord.Interaction, button: Button):
-        if (self.current_page + 1) * self.per_page < len(self.items):
+        if (self.current_page + 1) * self.per_page < len(self.filtered_items):
             self.current_page += 1
             await interaction.response.edit_message(embed=self.make_embed(), view=self)
         else:
@@ -831,4 +900,84 @@ class QuestDeliveryView(View):
 
         embed = discord.Embed(title="🎉 의뢰 완료!", description=f"항구 촌장님께 **{self.item}** {self.amount}마리를 납품했습니다!\n보상으로 두둑한 `{self.reward:,} C`를 받았습니다!", color=0xf1c40f)
         await interaction.response.edit_message(embed=embed, view=None)
+
+class InventoryView(View):
+    def __init__(self, user, target_user, items, stats):
+        super().__init__(timeout=120)
+        self.user = user
+        self.target_user = target_user
+        self.all_items = items # List of (name, amt, is_locked)
+        self.stats = stats # (coins, rod_tier, rating, boat_str, stamina, max_stamina, title)
+        self.current_page = 0
+        self.per_page = 15
+        self.category = "전체" # 전체, 물고기, 아이템, 잠금
+        
+        self.filtered_items = self.all_items
+
+    def filter_items(self):
+        if self.category == "전체":
+            self.filtered_items = self.all_items
+        elif self.category == "물고기":
+            self.filtered_items = [i for i in self.all_items if i[0] in FISH_DATA]
+        elif self.category == "아이템":
+            self.filtered_items = [i for i in self.all_items if i[0] not in FISH_DATA]
+        elif self.category == "잠금":
+            self.filtered_items = [i for i in self.all_items if i[2] == 1] # is_locked
+
+    def make_embed(self):
+        coins, rod_tier, rating, boat_str, stamina, max_stamina, title = self.stats
+        display_name = f"{title} {self.target_user.name}" if title else self.target_user.name
+        
+        embed = discord.Embed(title=f"🎒 {display_name}의 인벤토리 ({self.category})", color=0x3498db)
+        embed.add_field(name="🏆 레이팅", value=f"`{rating} RP`", inline=True)
+        embed.add_field(name="💰 보유 코인", value=f"`{coins:,} C`", inline=True)
+        embed.add_field(name="⛵ 선박", value=f"**{boat_str}**", inline=True)
+        
+        start = self.current_page * self.per_page
+        end = start + self.per_page
+        page_items = self.filtered_items[start:end]
+        
+        if page_items:
+            item_str = ""
+            for name, amt, locked in page_items:
+                lock_icon = "🔒" if locked else "📦"
+                item_str += f"{lock_icon} **{name}**: {amt}개\n"
+            embed.add_field(name=f"내역 ({len(self.filtered_items)}종)", value=item_str, inline=False)
+        else:
+            embed.add_field(name="내역", value="해당 카테고리에 아이템이 없습니다.", inline=False)
+            
+        max_page = max(1, (len(self.filtered_items) - 1) // self.per_page + 1)
+        embed.set_footer(text=f"⚡ 체력: {stamina}/{max_stamina} | 페이지: {self.current_page + 1}/{max_page}")
+        return embed
+
+    @discord.ui.select(placeholder="카테고리 선택", options=[
+        discord.SelectOption(label="전체 보기", value="전체", emoji="📁"),
+        discord.SelectOption(label="물고기만", value="물고기", emoji="🐟"),
+        discord.SelectOption(label="기타 아이템", value="아이템", emoji="🛠️"),
+        discord.SelectOption(label="잠금 물품", value="잠금", emoji="🔒")
+    ])
+    async def select_category(self, interaction: discord.Interaction, select: discord.ui.Select):
+        if interaction.user != self.user: return
+        self.category = select.values[0]
+        self.current_page = 0
+        self.filter_items()
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
+
+    @discord.ui.button(label="◀ 이전", style=discord.ButtonStyle.secondary)
+    async def prev_page(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.user: return
+        if self.current_page > 0:
+            self.current_page -= 1
+            await interaction.response.edit_message(embed=self.make_embed(), view=self)
+        else:
+            await interaction.response.defer()
+
+    @discord.ui.button(label="다음 ▶", style=discord.ButtonStyle.secondary)
+    async def next_page(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.user: return
+        if (self.current_page + 1) * self.per_page < len(self.filtered_items):
+            self.current_page += 1
+            await interaction.response.edit_message(embed=self.make_embed(), view=self)
+        else:
+            await interaction.response.defer()
 
