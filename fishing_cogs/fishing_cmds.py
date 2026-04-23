@@ -280,10 +280,9 @@ class FishingCog(commands.Cog):
         else: 
             time_str = "🌑 새벽"
 
-        # 날씨 이미지 매핑 (로컬 파일 우선)
         weather_images = {
             "맑음": "clear.png",
-            "흐림": "cloudy.png",
+            "흐림": "cloudy.jpg",
             "비": "rain.png",
             "폭풍우": "storm.png",
             "안개": "fog.png"
