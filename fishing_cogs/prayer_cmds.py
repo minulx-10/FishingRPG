@@ -65,9 +65,9 @@ class PrayerCommands(commands.Cog):
 
     @app_commands.command(name="바다기도", description="심연의 바다에 제물을 바쳐 전설 속의 신수를 부릅니다.")
     @app_commands.choices(제물=[
-        app_commands.Choice(name="💰 40,000 코인 (기본 확률 3.6%)", value="gold"),
-        app_commands.Choice(name="🟣 에픽 어종 10마리 (+5% 확률 보너스)", value="epic"),
-        app_commands.Choice(name="🟡 전설 어종 3마리 (+10% 확률 보너스)", value="legend"),
+        app_commands.Choice(name="💰 100,000 코인 (기본 확률 3.6%)", value="gold"),
+        app_commands.Choice(name="🟣 에픽 어종 20마리 (+5% 확률 보너스)", value="epic"),
+        app_commands.Choice(name="🟡 전설 어종 7마리 (+10% 확률 보너스)", value="legend"),
         app_commands.Choice(name="🔴 태고 이상 어종 1마리 (+25% 확률 보너스)", value="ancient")
     ])
     async def pray_to_sea(self, interaction: discord.Interaction, 제물: app_commands.Choice[str]):
@@ -83,26 +83,26 @@ class PrayerCommands(commands.Cog):
             async with db.conn.execute("SELECT coins FROM user_data WHERE user_id = ?", (user_id,)) as cursor:
                 res = await cursor.fetchone()
             coins = res[0] if res else 0
-            if coins < 40000:
-                fail_reason = "❌ 코인이 부족합니다! (40,000 C 필요)"
+            if coins < 100000:
+                fail_reason = "❌ 코인이 부족합니다! (100,000 C 필요)"
             else:
-                await db.execute("UPDATE user_data SET coins = coins - 40000 WHERE user_id = ?", (user_id,))
+                await db.execute("UPDATE user_data SET coins = coins - 100000 WHERE user_id = ?", (user_id,))
                 sacrifice_success = True
                 bonus_chance = 0.0
 
         elif 제물.value == "epic":
-            if await self._sacrifice_fish_by_grade(user_id, "에픽", 10):
+            if await self._sacrifice_fish_by_grade(user_id, "에픽", 20):
                 sacrifice_success = True
                 bonus_chance = 0.05
             else:
-                fail_reason = "❌ 제물이 부족합니다! (잠금되지 않은 **에픽** 등급 물고기 10마리 필요)"
+                fail_reason = "❌ 제물이 부족합니다! (잠금되지 않은 **에픽** 등급 물고기 20마리 필요)"
 
         elif 제물.value == "legend":
-            if await self._sacrifice_fish_by_grade(user_id, "레전드", 3):
+            if await self._sacrifice_fish_by_grade(user_id, "레전드", 7):
                 sacrifice_success = True
                 bonus_chance = 0.10
             else:
-                fail_reason = "❌ 제물이 부족합니다! (잠금되지 않은 **레전드** 등급 물고기 3마리 필요)"
+                fail_reason = "❌ 제물이 부족합니다! (잠금되지 않은 **레전드** 등급 물고기 7마리 필요)"
 
         elif 제물.value == "ancient":
             if await self._sacrifice_ancient_plus(user_id):
