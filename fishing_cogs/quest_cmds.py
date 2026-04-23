@@ -360,9 +360,11 @@ class QuestCog(commands.Cog):
                     try:
                         font = ImageFont.truetype(path, 60)
                         break
-                    except: continue
-                if not font: font = ImageFont.load_default()
-            except:
+                    except Exception:
+                        continue
+                if not font:
+                    font = ImageFont.load_default()
+            except Exception:
                 font = ImageFont.load_default()
 
             grade_colors = {

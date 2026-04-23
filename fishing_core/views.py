@@ -63,7 +63,7 @@ class FishActionView(View):
                     await self.message.edit(content=f"⏰ 시간 초과! 가방이 가득 차서 **{self.target_fish}**를 놓쳐버렸습니다...", view=None)
                 elif result:
                     await self.message.edit(content=f"⏰ 시간 초과로 **{self.target_fish}**가 자동으로 가방에 보관되었습니다.", view=None)
-            except:
+            except Exception:
                 pass
 
     @discord.ui.button(label="가방에 보관 (판매용)", style=discord.ButtonStyle.primary, emoji="🎒")
@@ -125,7 +125,7 @@ class FishingView(View):
         if self.message:
             try:
                 await self.message.edit(content="⏰ 낚시 시간이 초과되어 낚싯대를 거두었습니다.", view=self)
-            except:
+            except Exception:
                 pass
 
     @discord.ui.button(label="대기 중...", style=discord.ButtonStyle.secondary, emoji="🎣", custom_id="fish_btn")
@@ -155,10 +155,9 @@ class FishingView(View):
                     await self.on_bite_success(interaction, elapsed, grade)
             else:
                 fail_msg = f"⏰ 너무 늦었습니다! `{elapsed:.3f}초` 걸림.\n(놓친 물고기: **{self.target_fish}** / 제한: {self.limit_time:.2f}초)"
-                if grade in ["레전드", "신화", "태고", "환상", "미스터리"] and self.rod_tier > 1:
-                    if random.random() < 0.5:
-                        await db.execute("UPDATE user_data SET rod_tier = rod_tier - 1 WHERE user_id = ?", (self.user.id,))
-                        fail_msg += "\n\n💥 **[치명적 손상]** 괴수의 힘을 이기지 못하고 **낚싯대가 부러졌습니다!** (낚싯대 레벨 1 하락)"
+                if grade in ["레전드", "신화", "태고", "환상", "미스터리"] and self.rod_tier > 1 and random.random() < 0.5:
+                    await db.execute("UPDATE user_data SET rod_tier = rod_tier - 1 WHERE user_id = ?", (self.user.id,))
+                    fail_msg += "\n\n💥 **[치명적 손상]** 괴수의 힘을 이기지 못하고 **낚싯대가 부러졌습니다!** (낚싯대 레벨 1 하락)"
 
                 if self.target_fish == "둔클레오스테우스 🦖":
                     async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=0", (self.user.id,)) as cursor:
@@ -175,7 +174,7 @@ class FishingView(View):
             tb = traceback.format_exc()
             try:
                 await interaction.response.edit_message(content=f"❌ 낚시 처리 중 오류:\n```py\n{tb[:1800]}\n```", view=None)
-            except:
+            except Exception:
                 await interaction.followup.send(f"❌ 낚시 처리 중 오류:\n```py\n{tb[:1800]}\n```", ephemeral=True)
 
     async def on_bite_success(self, interaction, elapsed, grade):
@@ -212,11 +211,8 @@ class FishingView(View):
             )
 
             # 에픽 이상 화려한 이미지 연출 (예시 이미지 사용)
-            if grade in ["레전드", "신화", "태고", "환상", "미스터리"]:
-                # 실제 이미지 URL이나 파일 경로가 있다면 여기에 추가
-                # 여기서는 임시로 Placeholder 사용 가능 (추후 asset 교체)
-                if "크라켄" in self.target_fish:
-                    embed.set_thumbnail(url="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/l41lTfuxV5RWRsBPO/giphy.gif")
+            if grade in ["레전드", "신화", "태고", "환상", "미스터리"] and "크라켄" in self.target_fish:
+                embed.set_thumbnail(url="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/l41lTfuxV5RWRsBPO/giphy.gif")
 
             record_mark = " 🆕 **[최대 크기 신기록!]**" if is_new_record else ""
             embed.add_field(name="측정 크기", value=f"`{fish_size} cm`{record_mark}", inline=True)
@@ -247,7 +243,7 @@ class FishingView(View):
             tb = traceback.format_exc()
             try:
                 await interaction.response.edit_message(content=f"❌ 낚시 결과 처리 중 오류:\n```py\n{tb[:1800]}\n```", view=None)
-            except:
+            except Exception:
                 await interaction.followup.send(f"❌ 낚시 결과 처리 중 오류:\n```py\n{tb[:1800]}\n```", ephemeral=True)
 
         if grade in ["태고", "환상", "미스터리", "신화"]:
@@ -345,7 +341,7 @@ class TensionFishingView(View):
         for i in range(1, bar_count + 1):
             if i <= filled_segments:
                 if i <= 2 or i >= 9: bar_str += "🟥"
-                elif i == 3 or i == 8: bar_str += "🟨"
+                elif i in {3, 8}: bar_str += "🟨"
                 else: bar_str += "🟩"
             else:
                 bar_str += "⬛"

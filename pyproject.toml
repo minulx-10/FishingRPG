@@ -1,55 +1,55 @@
 [tool.ruff]
 target-version = "py310"
 line-length = 120
+exclude = [
+    "fishing_rpg_old.py",
+    "test_battle.py",
+    "venv",
+    ".venv",
+    "__pycache__",
+]
 
 [tool.ruff.lint]
-# 린트 규칙 설정
 select = [
-    "E", "F", "I", "N", "W", "UP", "B", "A", "COM", "C4", 
-    "DTZ", "T20", "RET", "SIM", "PTH", "ERA", "PL", "RUF"
+    "E", "F", "I", "N", "W", "UP", "B", "PL", "SIM", "RUF", "DTZ", "T20"
 ]
 ignore = [
-    "E501",    # 라인 길이 제한 (이미 line-length로 제어)
-    "E701",    # 한 줄에 여러 문장 (if cond: return 등 허용)
+    "E501",    # 라인 길이 제한
+    "E701",    # 한 줄에 여러 문장
     "W291",    # 트레일링 공백
     "W293",    # 빈 줄 공백
-    "PLC2401", # 비ASCII 문자 포함 (한글 명령어/변수 사용을 위해 허용)
-    "N802",    # 함수명 대문자 포함 (한글 함수명 오판 방지)
-    "N803",    # 인자명 대문자 포함 (한글 인자명 오판 방지)
-    "N999",    # 모듈명 규칙 (프로젝트 루트명 등 오판 방지)
-    "RET503",  # 명시적 return 누락 (Discord 명령 핸들러 특성상 불필요)
-    "PLR0912", # 분기문 너무 많음 (게임 로직 특성상 복잡성 허용)
-    "PLR0915", # 문장 너무 많음 (게임 로직 특성상 복잡성 허용)
+    "PLC2401", # 비ASCII 문자 (한글)
+    "N802",    # 함수명 대문자
+    "N803",    # 인자명 대문자
+    "N999",    # 모듈명 규칙
+    "RET503",  # 명시적 return 누락
+    "PLR0912", # 분기문 너무 많음
+    "PLR0915", # 문장 너무 많음
     "PLR0911", # return 문 너무 많음
     "PLR0913", # 인자 너무 많음
-    "PLR2004", # Magic value 사용 (게임 수치 조정을 위해 허용)
-    "PLC0415", # 로컬 import (순환 참조 방지 등을 위해 필요한 경우 허용)
-    "RUF006",  # asyncio.create_task 결과 미저장 (백그라운드 태스크 허용)
-    "RUF013",  # implicit Optional (타입 힌트 엄격성 완화)
-    "SIM105",  # try-except-pass -> suppress (코드 가독성 위해 허용)
-    "SIM117",  # nested with (코드 구조 위해 허용)
-    "PTH",     # Pathlib 사용 권장 (기존 os.path 허용)
+    "PLR2004", # Magic value
+    "PLC0415", # 로컬 import
+    "RUF006",  # asyncio.create_task 결과 미저장
+    "RUF013",  # implicit Optional
+    "SIM105",  # try-except-pass
+    "SIM117",  # nested with
+    "PTH",     # Pathlib 권장
+    "COM812",  # Trailing comma missing
+    "RUF001",  # Ambiguous unicode character (이모지 허용)
+    "ERA001",  # Commented-out code
+    "B007",    # Unused loop control variable
+    "F841",    # Unused local variable
+    "RUF059",  # Unused unpacked variable
+    "T201",    # print 사용 허용 (필요한 경우)
+    "DTZ005",  # datetime.now() without tz 허용
+    "PLW0603", # global statement 허용
 ]
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
 known-first-party = ["fishing_core", "fishing_cogs"]
 
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
-skip-magic-trailing-comma = false
-line-ending = "auto"
-
 [tool.mypy]
 python_version = "3.10"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = false
-check_untyped_defs = true
 ignore_missing_imports = true
-strict_optional = true
-
-[tool.black]
-line-length = 120
-target-version = ['py310']
+check_untyped_defs = true

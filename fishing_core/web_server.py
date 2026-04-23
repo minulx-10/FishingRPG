@@ -5,8 +5,8 @@ import discord
 from aiohttp import web
 
 from .database import db
-from .shared import FISH_DATA, MARKET_PRICES, env_state
 from .logger import logger
+from .shared import FISH_DATA, MARKET_PRICES, env_state
 
 
 def require_auth(func):

@@ -1,14 +1,16 @@
-import discord
-from discord.ext import commands
-from discord import app_commands
-import os
 import datetime
+import os
+import sys
+
+import discord
+from discord import app_commands
+from discord.ext import commands
 from dotenv import load_dotenv
 
 from fishing_core.database import db
-from fishing_core.web_server import start_web_server
 from fishing_core.logger import logger
-from fishing_core.shared import kst, ADMIN_LOG_CHANNEL_ID, init_shared_data
+from fishing_core.shared import ADMIN_LOG_CHANNEL_ID, init_shared_data, kst
+from fishing_core.web_server import start_web_server
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix='!', intents=intents)
@@ -23,7 +25,7 @@ COGS = [
     "fishing_cogs.admin_cmds",
     "fishing_cogs.help_cmds",
     "fishing_cogs.prayer_cmds",
-    "fishing_cogs.events"
+    "fishing_cogs.events",
 ]
 
 @bot.event

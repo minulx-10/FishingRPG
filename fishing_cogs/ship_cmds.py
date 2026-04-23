@@ -98,7 +98,8 @@ class ShipCog(commands.Cog):
                 # 서버 알림
                 try:
                     await interaction.channel.send(f"📢 **[대속보]** {interaction.user.mention}님의 낚싯대가 **Lv.{new_level}**에 도달하는 기염을 토했습니다!!")
-                except: pass
+                except Exception:
+                    pass
 
             await interaction.response.send_message(msg)
         else:
