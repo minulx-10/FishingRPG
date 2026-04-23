@@ -557,43 +557,6 @@ class QuestCog(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="기도", description="심해의 지배자, 용왕님께 기도를 올립니다. (0.05% 확률로 강림!)")
-    @app_commands.checks.cooldown(1, 60.0, key=lambda i: i.user.id)
-    async def 기도(self, interaction: discord.Interaction):
-        success_chance = 0.00005
-        is_success = random.random() < success_chance
-
-        if is_success:
-            await interaction.response.send_message("🌊 심해에서 알 수 없는 거대한 진동이 시작됩니다...", ephemeral=True)
-            await asyncio.sleep(3) 
-
-            alert_embed = discord.Embed(
-                title="👑 [海神降臨 : 해신 강림] 찬란한 수궁의 문이 열렸습니다!",
-                description=f"{interaction.user.mention}님의 지극한 정성에 수궁의 주인이 응답하셨습니다.\n\n바다의 절대자, **용왕 👑🐉**께서 스스로 강림하여 당신을 선택하셨으니...\n\n**모두 고개를 조아리십시오... 위대한 용왕을 맞이할 시간입니다.**",
-                color=0xffd700
-            )
-            alert_embed.set_footer(text="바다의 모든 피조물들이 일제히 숨을 죽이고 고개를 조아립니다...")
-
-            await interaction.channel.send(content="@here", embed=alert_embed, view=DragonKingBlessingView())
-
-            await db.execute("INSERT OR IGNORE INTO fish_dex (user_id, item_name) VALUES (?, ?)", (interaction.user.id, "용왕 👑"))
-            await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id, "용왕 👑"))
-            await db.commit()
-
-        else:
-            fail_messages = [
-                "수면 위로 잔잔한 파도만이 일렁입니다.",
-                "바다는 대답이 없습니다. 기도가 부족한 듯합니다.",
-                "먼바다에서 전어 한 마리가 튀어 오르는 소리만 들려옵니다.",
-                "아직은 때가 아닌 듯합니다. 용왕님은 침묵을 지키고 계십니다."
-            ]
-            await interaction.response.send_message(f"✨ {random.choice(fail_messages)}")
-
-    @기도.error
-    async def 기도_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        if isinstance(error, app_commands.CommandOnCooldown):
-            await interaction.response.send_message(f"🙏 기도는 정성이 중요합니다. `{error.retry_after:.0f}초` 후에 다시 기도를 올려주세요.", ephemeral=True)
-
     @app_commands.command(name="조각교환", description="같은 지도 조각 3개를 다른 무작위 조각 1개로 교환합니다.")
     @app_commands.choices(조각=[
         app_commands.Choice(name="찢어진 지도 조각 A 🧩", value="찢어진 지도 조각 A 🧩"),

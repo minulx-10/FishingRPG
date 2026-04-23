@@ -60,7 +60,7 @@ class HelpSelect(discord.ui.Select):
             embed.add_field(name="`/바다`", value="현재 바다의 시간대와 날씨 환경을 확인합니다.", inline=False)
             embed.add_field(name="`/기상예측`", value="향후 3시간의 날씨 변화를 미리 확인합니다. (3,000 C 소모)", inline=False)
             embed.add_field(name="`/기우제 [기부금]`", value="유저들과 힘을 합쳐 날씨를 **🌩️ 폭풍우**로 변경합니다.", inline=False)
-            embed.add_field(name="`/기도`", value="심해의 지배자 용왕님께 기도를 올립니다. (낮은 확률로 강림)", inline=False)
+            embed.add_field(name="`/바다기도 [제물]`", value="심연의 바다에 제물을 바쳐 전설 속의 신수를 부릅니다.", inline=False)
             return embed
 
         elif category == "market":
