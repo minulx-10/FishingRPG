@@ -113,7 +113,8 @@ class HelpSelect(discord.ui.Select):
         elif category == "misc":
             embed = discord.Embed(title="📦 아이템 및 기타 명령어", color=0x7f8c8d)
             embed.add_field(name="`/감정`", value="'가라앉은 보물상자 🧰'를 열어 대박 아이템을 노립니다.", inline=False)
-            embed.add_field(name="`/지도합성` / `/조각교환`", value="찢어진 지도 조각들을 모아 보물지도를 완성하거나 교환합니다.", inline=False)
+            embed.add_field(name="`/지도합성 [수량]`", value="찢어진 지도 조각(A,B,C,D) 4종을 모아 보물지도를 완성합니다.", inline=False)
+            embed.add_field(name="`/조각교환 [조각]`", value="같은 지도 조각 3개를 다른 무작위 조각 1개로 교환합니다.", inline=False)
             embed.add_field(name="`/지도사용`", value="보물지도를 사용해 30분간 특수 해역(망자/심해/황금)을 개방합니다.", inline=False)
             embed.add_field(name="`/출석`", value="매일 한 번 출석체크하여 코인 보상과 체력 회복을 받습니다.", inline=False)
             embed.add_field(name="`/한강물`", value="실시간 한강 수온 정보를 확인합니다. (응? 🎣)", inline=False)

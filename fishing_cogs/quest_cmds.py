@@ -505,7 +505,7 @@ class QuestCog(commands.Cog):
         await db.commit()
         await interaction.edit_original_response(content=f"🧰 **녹슨 상자가 마침내 열렸습니다!**\n\n{reward_msg}")
 
-    @app_commands.command(name="지도합성", description="가방에 있는 찢어진 지도 조각(A, B, C, D)을 모아 '고대 해적의 보물지도'를 완성합니다.")
+    @app_commands.command(name="지도합성", description="찢어진 지도 조각(A,B,C,D) 4종을 모아 '고대 해적의 보물지도 🗺️'를 완성합니다. (수량 지정 가능)")
     async def 지도합성(self, interaction: discord.Interaction, 수량: int = 1):
         if 수량 < 1:
             return await interaction.response.send_message("❌ 최소 1개 이상 합성해야 합니다.", ephemeral=True)
@@ -549,11 +549,11 @@ class QuestCog(commands.Cog):
         await db.commit()
         
         if chosen_buff == "ghost_sea_open":
-            embed = discord.Embed(title="☠️ 망자의 해역 개방...", description="지도의 낡은 좌표를 따라 안개가 자욱한 해역에 도착했습니다.\n\n앞으로 **30분 동안**, 당신의 낚싯대에는 물고기 대신 **금화와 낡은 고철, 보물상자**만 걸려 올라올 것입니다!", color=0x2c3e50)
+            embed = discord.Embed(title="☠️ 망자의 해역 개방...", description="지도의 낡은 좌표를 따라 안개가 자욱한 해역에 도착했습니다.\n\n앞으로 **30분 동안**, 당신의 낚싯대에는 물고기 대신 **해적의 금화 🪙, 낡은 고철 ⚙️, 가라앉은 보물상자 🧰**만 걸려 올라올 것입니다!", color=0x2c3e50)
         elif chosen_buff == "deep_sea_rift":
             embed = discord.Embed(title="🌊 심해의 균열 발견!", description="지도가 가리킨 곳에서 바다가 갈라진 깊은 심연이 보입니다.\n\n앞으로 **30분 동안**, **[심해] 속성** 어종들의 낚시 등장 확률이 3배 상승합니다!", color=0x1abc9c)
         else:
-            embed = discord.Embed(title="✨ 황금 조류 발견!", description="지도를 따라가니 눈부시게 빛나는 따뜻한 해류를 만났습니다.\n\n앞으로 **30분 동안**, 낚시 타이밍 판정 시간이 매우 넉넉해져 물고기를 놓칠 확률이 극히 낮아집니다!", color=0xf1c40f)
+            embed = discord.Embed(title="✨ 황금 조류 발견!", description="지도를 따라가니 눈부시게 빛나는 따뜻한 해류를 만났습니다.\n\n앞으로 **30분 동안**, 낚시 타이밍 판정 시간이 매우 넉넉해져 물고기를 낚을 확률이 대폭 상승합니다!", color=0xf1c40f)
 
         await interaction.response.send_message(embed=embed)
 
