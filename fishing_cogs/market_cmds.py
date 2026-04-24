@@ -43,7 +43,7 @@ class MarketCog(commands.Cog):
         app_commands.Choice(name="일반만", value="일반"),
         app_commands.Choice(name="희귀이하", value="희귀"),
         app_commands.Choice(name="초희귀이하", value="초희귀"),
-        app_commands.Choice(name="에픽이하", value="에픽"),
+        app_commands.Choice(name="대형 포식자 이하", value="대형 포식자"),
         app_commands.Choice(name="레전드이하", value="레전드"),
         app_commands.Choice(name="태고이하", value="태고"),
         app_commands.Choice(name="전체 (추천 안함)", value="전체"),
@@ -59,7 +59,7 @@ class MarketCog(commands.Cog):
         user_excludes = [x for x in [제외1, 제외2, 제외3] if x is not None]
         protected_items.extend(user_excludes)
 
-        grade_order = {"일반": 1, "희귀": 2, "초희귀": 3, "에픽": 4, "레전드": 5, "태고": 6, "환상": 7, "미스터리": 8, "신화": 9}
+        grade_order = {"일반": 1, "희귀": 2, "초희귀": 3, "대형 포식자": 4, "레전드": 5, "태고": 6, "환상": 7, "미스터리": 8, "신화": 9}
         target_grade_lv = grade_order.get(등급필터, 10) # '전체'면 10으로 설정해 모든 등급 포함
 
         sellable_items = []

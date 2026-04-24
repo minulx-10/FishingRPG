@@ -124,8 +124,8 @@
     },
     "👑 전설의 해신탕 🍲": {
         "ingredients": {"전설의 흰수염고래 🐋": 1, "산갈치 🐉": 1, "다금바리 (자바리) 🐠": 1},
-        "description": "10분 동안, [에픽] 등급 어종 등장 확률이 5배로 폭증합니다.",
-        "buff_type": "epic_frenzy",
+        "description": "10분 동안, [대형 포식자] 등급 어종 등장 확률이 5배로 폭증합니다.",
+        "buff_type": "large_predator_frenzy",
         "duration": 10,
         "price": 25000
     },
@@ -156,8 +156,8 @@
     },
     "🔱 포세이돈의 만찬 🔱": {
         "ingredients": {"대왕고래 🐋": 1, "백상아리 🦈": 1, "범고래 🐋": 1},
-        "description": "30분간 [에픽] 등급 이하 모든 어종의 등장 확률이 동일해집니다! (전설 등급 제외)",
-        "buff_type": "epic_equalizer",
+        "description": "30분간 [대형 포식자] 등급 이하 모든 어종의 등장 확률이 동일해집니다! (전설 등급 제외)",
+        "buff_type": "large_predator_equalizer",
         "duration": 30,
         "price": 50000
     },
@@ -170,8 +170,8 @@
     },
     "💀 사신의 에픽 데스 소스 🌶️": {
         "ingredients": {"마귀상어 (고블린) 🦈": 1, "쿠키커터상어 🦈": 1, "바이퍼피쉬 🐟": 1},
-        "description": "15분 동안 [일반/희귀/초희귀] 등급이 아예 등장하지 않습니다! 오직 [에픽] 등급만 노립니다.",
-        "buff_type": "only_epic_mode",
+        "description": "15분 동안 [일반/희귀/초희귀] 등급이 아예 등장하지 않습니다! 오직 [대형 포식자] 등급만 노립니다.",
+        "buff_type": "only_large_predator_mode",
         "duration": 15,
         "price": 12000
     },
@@ -188,5 +188,19 @@
         "buff_type": "arctic_frenzy",
         "duration": 60,
         "price": 20000
+    },
+    "🍲 영양 가득 해물탕": {
+        "ingredients": {"*ANY_FISH*": 3},
+        "description": "아무 물고기나 넣고 끓인 실속 만점 해물탕입니다. 5분 동안 낚시 성공 확률이 소폭 상승합니다.",
+        "buff_type": "common_success_boost",
+        "duration": 5,
+        "price": 3000
+    },
+    "🌶️ 얼큰한 매운탕": {
+        "ingredients": {"*ANY_FISH*": 2, "낡은 고철 ⚙️": 1},
+        "description": "고철(?)을 넣고 끓인 기괴하지만 얼큰한 매운탕입니다. 10분 동안 행동력 소모량이 1 감소합니다.",
+        "buff_type": "stamina_save_1",
+        "duration": 10,
+        "price": 5000
     }
 }

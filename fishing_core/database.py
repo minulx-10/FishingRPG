@@ -52,6 +52,7 @@ class DBManager:
             CREATE TABLE IF NOT EXISTS aquarium (
                 user_id INTEGER,
                 item_name TEXT,
+                amount INTEGER DEFAULT 1,
                 PRIMARY KEY (user_id, item_name)
             )
         ''')
@@ -132,6 +133,8 @@ class DBManager:
             "ALTER TABLE user_data ADD COLUMN upgrade_pity INTEGER DEFAULT 0",
             "ALTER TABLE user_data ADD COLUMN last_active TEXT DEFAULT ''",
             "ALTER TABLE user_data ADD COLUMN guard_fish TEXT DEFAULT ''",
+            "ALTER TABLE aquarium ADD COLUMN amount INTEGER DEFAULT 1",
+            "ALTER TABLE user_data ADD COLUMN last_farm_harvest TEXT DEFAULT ''",
         ]
 
         for query in alter_queries:

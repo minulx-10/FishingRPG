@@ -298,6 +298,13 @@ class BattleCog(commands.Cog):
         await db.commit()
 
         embed = discord.Embed(title=f"🌌 월드 보스 레이드 (Lv.{boss_level})", color=0x9932cc)
+        
+        # 체력 바 생성
+        bar_len = 20
+        filled = int((new_hp / boss_max_hp) * bar_len) if boss_max_hp > 0 else 0
+        health_bar = "🟥" * filled + "⬛" * (bar_len - filled)
+        
+        embed.add_field(name="보스 체력", value=f"{health_bar}\n`{new_hp:,} / {boss_max_hp:,}`", inline=False)
         embed.description = f"**{dmg:,}** 피해를 입혔습니다! 💰 `{reward:,} C` 지급 완료."
         await interaction.response.send_message(embed=embed)
 

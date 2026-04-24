@@ -68,10 +68,6 @@ class FishingCog(commands.Cog):
             await db.commit()
             bait_text = f" ({bait_used} 사용됨!)"
 
-        # 뉴비 체력 소모 감소 (선박 티어 1인 경우 5소모, 그 외 10소모)
-        stamina_cost = 5 if current_tier == 1 else 10
-        await db.execute("UPDATE user_data SET stamina = stamina - ? WHERE user_id=?", (stamina_cost, interaction.user.id))
-
         now_str = datetime.datetime.now(kst).strftime('%Y-%m-%d %H:%M:%S')
         async with db.conn.execute("SELECT buff_type FROM active_buffs WHERE user_id=? AND end_time > ?", (interaction.user.id, now_str)) as cursor:
             active_buffs = [row[0] for row in await cursor.fetchall()]
@@ -106,26 +102,43 @@ class FishingCog(commands.Cog):
                     base_prob *= 2.0
 
                 # 1. 강화 레벨 보너스
-                if grade in ["에픽", "레전드", "신화"]:
+                if grade in ["대형 포식자", "포식자-상어", "포식자-고래", "레전드", "신화", "태고", "환상", "미스터리"]:
                     base_prob *= (1 + (rod_tier * 0.1))
 
-                # 2. [신규] 버프 효과 체크 (가속 포션, 특수 떡밥)
-                async with db.conn.execute("SELECT buff_type FROM active_buffs WHERE user_id=? AND end_time > datetime('now', '+9 hours')", (interaction.user.id,)) as cursor:
-                    active_buffs_inner = [row[0] for row in await cursor.fetchall()]
+                # 2. [신규] 버프 효과 체크
+                # 요리 버프 적용
+                if "large_predator_frenzy" in active_buffs and grade == "대형 포식자":
+                    base_prob *= 5.0
+                if "large_predator_equalizer" in active_buffs and grade not in ["레전드", "신화", "태고", "환상", "미스터리", "해신(海神)"]:
+                    base_prob = 10.0 # 확률 평준화
+                if "only_large_predator_mode" in active_buffs:
+                    if grade != "대형 포식자":
+                        base_prob = 0
+                if "skip_normal" in active_buffs and grade == "일반":
+                    base_prob = 0
+                if "deep_sea_sniper" in active_buffs:
+                    if data["element"] == "심해":
+                        base_prob *= 5.0
+                    if grade in ["일반", "희귀"]:
+                        base_prob = 0
+                if "reduce_freshwater" in active_buffs and data["element"] == "무속성":
+                    base_prob *= 0.5
 
-                if "rare_boost" in active_buffs_inner and grade not in ["일반", "희귀"]:
+                if "rare_boost" in active_buffs and grade not in ["일반", "희귀"]:
                     base_prob *= 1.5  # 특수 떡밥: 희귀 이상 확률 1.5배
+                if "high_risk_rare_boost" in active_buffs and grade == "초희귀":
+                    base_prob *= 3.0
 
                 # 3. 날씨 연동 글로벌 확률 펌핑 (핫타임) - 밸런스 조정됨
                 current_weather = env_state["CURRENT_WEATHER"]
                 if current_weather == "☀️ 맑음" and grade in ["일반", "희귀"]:
                     base_prob *= 1.3  # 맑은 날: 일반/희귀 어종 확률 증가 (안정적 수입)
-                elif current_weather == "🌧️ 비" and grade == "에픽":
-                    base_prob *= 1.5  # 비: 에픽 확률 소폭 증가 (기존 2.0 → 1.5)
+                elif current_weather == "🌧️ 비" and grade == "대형 포식자":
+                    base_prob *= 1.5  # 비: 대형 포식자 확률 소폭 증가
                 elif current_weather == "🌫️ 안개" and grade == "레전드":
-                    base_prob *= 2.0  # 안개: 레전드 확률 증가 (기존 3.0 → 2.0)
+                    base_prob *= 2.0  # 안개: 레전드 확률 증가
                 elif current_weather == "🌩️ 폭풍우" and grade in ["신화", "태고", "환상", "미스터리"]:
-                    base_prob *= 2.0  # 폭풍우: 최고급 확률 증가 (기존 5.0 → 2.0)
+                    base_prob *= 2.0  # 폭풍우: 최고급 확률 증가
 
                 # 4. [신규] 칭호 보너스 (해신: 신화/미스터리/태고 확률 1.3배)
                 if title == "[해신]" and grade in ["신화", "미스터리", "태고", "환상"]:
@@ -166,9 +179,33 @@ class FishingCog(commands.Cog):
 
         if "fishing_speed_up" in active_buffs:
             effective_rod_tier += 2.0  # 낚시 속도 증가 버프 (난이도 하락)
+            
+        if "common_success_boost" in active_buffs:
+            effective_rod_tier += 3.0
+        elif "premium_success_boost" in active_buffs:
+            effective_rod_tier += 8.0
+
+        # 행동력 차감 (요리 버프 및 선박 티어 반영)
+        stamina_cost = 5 if current_tier == 1 else 10
+        if "stamina_save_1" in active_buffs:
+            stamina_cost = max(1, stamina_cost - 1)
+        elif "stamina_save_2" in active_buffs:
+            stamina_cost = max(1, stamina_cost - 2)
+        
+        if current_stamina < stamina_cost:
+            return await interaction.response.send_message(f"❌ 행동력이 부족합니다! (필요: {stamina_cost}⚡ / 현재: {current_stamina}⚡)\n`/출석`을 하거나 상점에서 에너지 드링크를 구매하세요.", ephemeral=True)
+
+        await db.execute("UPDATE user_data SET stamina = stamina - ? WHERE user_id=?", (stamina_cost, interaction.user.id))
+
+        # 더블 캐치 확률 (요리 버프)
+        double_catch = False
+        if "double_catch_chance" in active_buffs:
+            if random.random() < 0.25: # 25% 확률로 더블 캐치
+                double_catch = True
 
         # 낚시 대기 시각 효과 (찌 애니메이션)
         view = FishingView(interaction.user, target_fish, effective_rod_tier)
+        view.double_catch = double_catch # FishingView에 전달
         embed = discord.Embed(title="🎣 찌를 던졌습니다!", description=f"**{display_name}**님이 미끼를 던지고 입질을 기다립니다...{bait_text}", color=0x3498db)
         embed.set_image(url="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExOHJqZ3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/l41lTfuxV5RWRsBPO/giphy.gif") # 낚시 대기 GIF
         embed.set_footer(text=f"내 낚싯대: Lv.{rod_tier} | 체력: {current_stamina-stamina_cost}⚡")

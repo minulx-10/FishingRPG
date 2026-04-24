@@ -38,7 +38,7 @@ class FishActionView(View):
 
         self.action_taken = True
         fish_grade = FISH_DATA.get(self.target_fish, {}).get("grade", "일반")
-        grade_order = {"일반": 1, "희귀": 2, "초희귀": 3, "에픽": 4, "레전드": 5, "태고": 6, "환상": 7, "미스터리": 8, "신화": 9}
+        grade_order = {"일반": 1, "희귀": 2, "초희귀": 3, "대형 포식자": 4, "레전드": 5, "태고": 6, "환상": 7, "미스터리": 8, "신화": 9}
 
         if lock is None:
             # 에픽 등급 이상은 자동 잠금 처리
@@ -92,7 +92,7 @@ class FishActionView(View):
         self.action_taken = True
 
         fish_grade = FISH_DATA.get(self.target_fish, {}).get("grade", "일반")
-        grade_order = {"일반": 1, "희귀": 2, "초희귀": 3, "에픽": 4, "레전드": 5, "태고": 6, "환상": 7, "미스터리": 8, "신화": 9}
+        grade_order = {"일반": 1, "희귀": 2, "초희귀": 3, "대형 포식자": 4, "레전드": 5, "태고": 6, "환상": 7, "미스터리": 8, "신화": 9}
 
         if grade_order.get(fish_grade, 0) >= 4:
             return await interaction.response.send_message(f"⚠️ **{fish_grade}** 등급 이상의 물고기는 '바로 판매'가 불가능합니다. 실수 방지를 위해 가방에 보관 후 개별 판매하거나 잠금을 해제하세요.", ephemeral=True)
@@ -148,7 +148,7 @@ class FishingView(View):
             grade = fish_info["grade"]
 
             if elapsed <= self.limit_time:
-                if grade in ["에픽", "레전드", "신화", "태고", "환상", "미스터리"]:
+                if grade in ["대형 포식자", "레전드", "신화", "태고", "환상", "미스터리"]:
                     tension_view = TensionFishingView(self.user, self.target_fish, self.rod_tier, grade, self, elapsed)
                     await interaction.response.edit_message(content="❗ 거대한 물고기가 걸렸습니다! 힘겨루기 시작!", embed=tension_view.get_embed(), view=tension_view)
                 else:
@@ -200,7 +200,7 @@ class FishingView(View):
 
             grade_color = {
                 "일반": 0x95a5a6, "희귀": 0x3498db, "초희귀": 0x9b59b6,
-                "에픽": 0xe67e22, "레전드": 0xe74c3c, "태고": 0x8b4513,
+                "대형 포식자": 0xe67e22, "레전드": 0xe74c3c, "태고": 0x8b4513,
                 "환상": 0x9932cc, "미스터리": 0x2f4f4f, "신화": 0xff0000,
             }
 
@@ -236,7 +236,14 @@ class FishingView(View):
                     embed.add_field(name="🦑 크라켄의 촉수 발동!", value=f"심연에서 뻗어 나온 거대한 촉수가 누군가의 금고를 부수고 `{stolen_amount:,} C`를 훔쳐 당신에게 가져왔습니다!!", inline=False)
 
             action_view = FishActionView(self.user, self.target_fish)
-            await interaction.response.edit_message(content="🎊 앗, 낚았습니다! 이 물고기를 어떻게 할까요?", embed=embed, view=action_view)
+            
+            # 더블 캐치 처리
+            double_msg = ""
+            if getattr(self, "double_catch", False):
+                await action_view._add_to_inventory() # 추가로 한 마리 더 넣음
+                double_msg = " (👯 **더블 캐치!** 요리 효과로 한 마리 더 낚았습니다!)"
+            
+            await interaction.response.edit_message(content=f"🎊 앗, 낚았습니다!{double_msg} 이 물고기를 어떻게 할까요?", embed=embed, view=action_view)
             action_view.message = await interaction.original_response()
         except Exception:
             import traceback
@@ -326,7 +333,7 @@ class TensionFishingView(View):
         self.elapsed = elapsed
         self.tension = 50
         self.turn = 1
-        self.max_turns = 3 if grade == "에픽" else (4 if grade == "레전드" else 5)
+        self.max_turns = 3 if grade == "대형 포식자" else (4 if grade == "레전드" else 5)
 
     def get_embed(self):
         embed = discord.Embed(title="🎣 거대 괴수와 힘겨루기!", color=0x3498db)

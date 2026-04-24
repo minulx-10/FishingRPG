@@ -156,13 +156,46 @@ class QuestCog(commands.Cog):
         if not recipe:
             return await interaction.response.send_message("❌ 존재하지 않는 레시피입니다.", ephemeral=True)
 
-        for item, amt in recipe["ingredients"].items():
-            async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, item)) as cursor:
-                res = await cursor.fetchone()
-                if not res or res[0] < amt:
-                    return await interaction.response.send_message(f"❌ 재료가 부족합니다! (필요: `{item}` {amt}마리)", ephemeral=True)
+        # 재료 확인 및 차감 로직
+        to_consume = [] # (item_name, amount)
 
         for item, amt in recipe["ingredients"].items():
+            if item == "*ANY_FISH*":
+                # 아무 물고기나 소모 (일반/희귀 등급 위주로 검색)
+                async with db.conn.execute("SELECT item_name, amount FROM inventory WHERE user_id=? AND amount > 0", (interaction.user.id,)) as cursor:
+                    all_items = await cursor.fetchall()
+                
+                # 물고기 데이터에서 등급이 '일반', '희귀'인 것들을 우선적으로 찾음
+                fish_candidates = []
+                for name, inv_amt in all_items:
+                    if name in FISH_DATA:
+                        grade = FISH_DATA[name].get("grade", "일반")
+                        if grade in ["일반", "희귀", "초희귀"]:
+                            fish_candidates.append([name, inv_amt, grade])
+                
+                # 등급 낮은 순으로 정렬
+                fish_candidates.sort(key=lambda x: {"일반": 0, "희귀": 1, "초희귀": 2}.get(x[2], 99))
+                
+                found_amt = 0
+                for candidate in fish_candidates:
+                    needed = amt - found_amt
+                    take = min(candidate[1], needed)
+                    to_consume.append((candidate[0], take))
+                    found_amt += take
+                    if found_amt >= amt:
+                        break
+                
+                if found_amt < amt:
+                    return await interaction.response.send_message(f"❌ 요리에 필요한 물고기가 부족합니다! (필요: 아무 물고기 {amt}마리 / 보유: {found_amt}마리)", ephemeral=True)
+            else:
+                async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, item)) as cursor:
+                    res = await cursor.fetchone()
+                    if not res or res[0] < amt:
+                        return await interaction.response.send_message(f"❌ 재료가 부족합니다! (필요: `{item}` {amt}개)", ephemeral=True)
+                to_consume.append((item, amt))
+
+        # 실제 차감
+        for item, amt in to_consume:
             await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name=?", (amt, interaction.user.id, item))
 
         if recipe["buff_type"] == "sell_only":
@@ -253,24 +286,32 @@ class QuestCog(commands.Cog):
             return await interaction.response.send_message(f"❌ 가방에 **{물고기}**가 없습니다!", ephemeral=True)
 
         await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기))
-        await db.execute("INSERT INTO aquarium (user_id, item_name) VALUES (?, ?)", (interaction.user.id, 물고기))
+        await db.execute("INSERT INTO aquarium (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id, 물고기))
         await db.commit()
 
         await interaction.response.send_message(f"✨ **{물고기}**을(를) 수족관에 멋지게 전시했습니다! (`/수족관`으로 확인해보세요!)")
 
     @app_commands.command(name="전시해제", description="수족관에 전시된 물고기를 다시 가방으로 되돌립니다.")
     @app_commands.autocomplete(물고기=aqua_autocomplete)
-    async def 전시해제(self, interaction: discord.Interaction, 물고기: str):
-        async with db.conn.execute("SELECT item_name FROM aquarium WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기)) as cursor:
-            res = await cursor.fetchone()
-        if not res:
-            return await interaction.response.send_message(f"❌ 수족관에 **{물고기}**가 없습니다!", ephemeral=True)
+    async def 전시해제(self, interaction: discord.Interaction, 물고기: str, 수량: int = 1):
+        if 수량 < 1:
+            return await interaction.response.send_message("❌ 최소 1마리 이상 해제해야 합니다.", ephemeral=True)
 
-        await db.execute("DELETE FROM aquarium WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기))
-        await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id, 물고기))
+        async with db.conn.execute("SELECT amount FROM aquarium WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기)) as cursor:
+            res = await cursor.fetchone()
+        if not res or res[0] < 수량:
+            return await interaction.response.send_message(f"❌ 수족관에 **{물고기}**가 부족합니다! (현재: {res[0] if res else 0}마리)", ephemeral=True)
+
+        new_amt = res[0] - 수량
+        if new_amt <= 0:
+            await db.execute("DELETE FROM aquarium WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기))
+        else:
+            await db.execute("UPDATE aquarium SET amount = ? WHERE user_id=? AND item_name=?", (new_amt, interaction.user.id, 물고기))
+            
+        await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, ?) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?", (interaction.user.id, 물고기, 수량, 수량))
         await db.commit()
 
-        await interaction.response.send_message(f"🎒 **{물고기}**을(를) 수족관에서 조심스럽게 꺼내 가방에 넣었습니다.")
+        await interaction.response.send_message(f"🎒 **{물고기}** {수량}마리를 수족관에서 조심스럽게 꺼내 가방에 넣었습니다.")
 
     @app_commands.command(name="수족관", description="나 또는 다른 유저의 수족관을 구경합니다. (이미지로 렌더링)")
     async def 수족관(self, interaction: discord.Interaction, 유저: discord.Member = None):
@@ -278,7 +319,7 @@ class QuestCog(commands.Cog):
 
         await interaction.response.defer() # 렌더링 시간 확보용
 
-        async with db.conn.execute("SELECT item_name FROM aquarium WHERE user_id=?", (target.id,)) as cursor:
+        async with db.conn.execute("SELECT item_name, amount FROM aquarium WHERE user_id=?", (target.id,)) as cursor:
             items = await cursor.fetchall()
 
         title = await db.get_user_title(target.id)
@@ -332,7 +373,7 @@ class QuestCog(commands.Cog):
             min_dist = 110 # 물고기간 최소 거리
 
             fish_to_draw = []
-            for (name,) in items:
+            for name, amt in items:
                 grade = FISH_DATA[name]["grade"]
                 parts = name.split(" ")
                 emoji = parts[-1] if len(parts) > 1 and len(parts[-1]) <= 2 else "🐟"
@@ -369,7 +410,7 @@ class QuestCog(commands.Cog):
 
             grade_colors = {
                 "일반": (200, 200, 200), "희귀": (100, 200, 255), "초희귀": (200, 100, 255),
-                "에픽": (255, 100, 100), "레전드": (255, 200, 0), "신화": (255, 50, 50), "히든": (255, 255, 255),
+                "대형 포식자": (255, 100, 100), "레전드": (255, 200, 0), "신화": (255, 50, 50), "히든": (255, 255, 255),
             }
 
             with Pilmoji(img) as pilmoji:
@@ -377,8 +418,8 @@ class QuestCog(commands.Cog):
                     cx, cy = fish["x"], fish["y"]
                     color = grade_colors.get(fish["grade"], (255, 255, 255))
 
-                    # [에픽] 이상 또는 특정 등급만 발광 효과
-                    if fish["grade"] in ["에픽", "레전드", "신화", "히든", "태고", "환상", "미스터리", "해신(海神)"]:
+                    # [대형 포식자] 이상 또는 특정 등급만 발광 효과
+                    if fish["grade"] in ["대형 포식자", "레전드", "신화", "히든", "태고", "환상", "미스터리", "해신(海神)"]:
                         for r in range(60, 0, -10):
                             alpha = int(40 * (r / 60)) # 더 은은하게 조정
                             draw.ellipse([cx-r, cy-r, cx+r, cy+r], fill=(color[0], color[1], color[2], alpha))
@@ -388,9 +429,9 @@ class QuestCog(commands.Cog):
 
             # 임베드 설명 구성 (이미지 내부 텍스트 대신 임베드로 이동)
             fish_list_str = ""
-            for (name,) in items:
+            for name, amt in items:
                 grade = FISH_DATA[name]["grade"]
-                fish_list_str += f"• **{name}** `[{grade}]` \n"
+                fish_list_str += f"• **{name}** `[{grade}]` x{amt}마리\n"
 
             embed.description = f"🌊 **수족관에 전시된 물고기들**\n\n{fish_list_str}"
 
@@ -405,13 +446,56 @@ class QuestCog(commands.Cog):
             await interaction.followup.send(embed=embed, file=file)
 
         except Exception:
+            import traceback
+            logger.error(f"수족관 렌더링 에러: {traceback.format_exc()}")
             # PIL 에러 등 예방
             desc = ""
-            for (name,) in items:
+            for name, amt in items:
                 grade = FISH_DATA[name]["grade"]
-                desc += f"**{name}** `[{grade}]`\n"
+                desc += f"**{name}** `[{grade}]` x{amt}마리\n"
             embed.description = f"*(이미지 렌더링 오류 발생. 텍스트로 대체합니다)*\n\n{desc}"
             await interaction.followup.send(embed=embed)
+
+    @app_commands.command(name="양식수확", description="수족관에 같은 종이 2마리 이상(소형 포식자 이하) 있을 때, 12시간마다 새끼를 수확합니다.")
+    async def 양식수확(self, interaction: discord.Interaction):
+        await db.get_user_data(interaction.user.id)
+        
+        async with db.conn.execute("SELECT last_farm_harvest FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+            res = await cursor.fetchone()
+        last_harvest_str = res[0] if res and res[0] else ""
+        
+        now = datetime.datetime.now(kst)
+        if last_harvest_str:
+            last_harvest = datetime.datetime.fromisoformat(last_harvest_str)
+            elapsed = now - last_harvest
+            if elapsed < datetime.timedelta(hours=12):
+                remaining = datetime.timedelta(hours=12) - elapsed
+                hours, remainder = divmod(remaining.seconds, 3600)
+                minutes, _ = divmod(remainder, 60)
+                return await interaction.response.send_message(f"⏳ 아직 물고기들이 성장 중입니다! (`{hours}시간 {minutes}분` 후 수확 가능)", ephemeral=True)
+        
+        async with db.conn.execute("SELECT item_name, amount FROM aquarium WHERE user_id=?", (interaction.user.id,)) as cursor:
+            aqua_items = await cursor.fetchall()
+        
+        harvested = []
+        for name, amt in aqua_items:
+            if amt >= 2:
+                grade = FISH_DATA.get(name, {}).get("grade", "일반")
+                if grade in ["일반", "희귀", "초희귀", "소형 포식자", "피식자"]:
+                    harvested.append(name)
+        
+        if not harvested:
+            return await interaction.response.send_message("❌ 수확할 수 있는 물고기가 없습니다! (조건: 같은 종 2마리 이상 전시, 소형 포식자 이하 등급)", ephemeral=True)
+        
+        for name in harvested:
+            await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id, name))
+        
+        await db.execute("UPDATE user_data SET last_farm_harvest=? WHERE user_id=?", (now.isoformat(), interaction.user.id))
+        await db.commit()
+        
+        harvest_str = "\n".join([f"• {name} 🐟" for name in harvested])
+        embed = discord.Embed(title="🧺 양식 수확 완료!", description=f"수족관에서 정성껏 키운 물고기들이 새끼를 쳤습니다!\n\n**[획득 목록]**\n{harvest_str}", color=0x2ecc71)
+        await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="수족관확장", description="코인을 지불하여 수족관 전시 슬롯을 하나 추가합니다.")
     async def 수족관확장(self, interaction: discord.Interaction):
