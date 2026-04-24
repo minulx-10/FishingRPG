@@ -8,8 +8,8 @@ from discord.ext import commands
 
 from fishing_core.database import db
 from fishing_core.logger import logger
-from fishing_core.shared import FISH_DATA, MARKET_PRICES, reload_data
-from fishing_core.utils import is_developer, log_admin_action
+from fishing_core.shared import FISH_DATA, MARKET_PRICES, reload_data_async
+from fishing_core.utils import fish_autocomplete, is_developer, log_admin_action
 
 
 class AdminCog(commands.Cog):
@@ -26,6 +26,7 @@ class AdminCog(commands.Cog):
         await interaction.response.send_message(f"💰 관리자 권한으로 **{target.name}**님에게 `{amount:,} C`를 지급했습니다!")
 
     @app_commands.command(name="아이템지급", description="[관리자 전용] 특정 유저에게 아이템을 강제 지급합니다.")
+    @app_commands.autocomplete(아이템명=fish_autocomplete)
     @is_developer()
     async def 아이템지급(self, interaction: discord.Interaction, target: discord.Member, 아이템명: str, 수량: int):
         await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, ?) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?", (target.id, 아이템명, 수량, 수량))
@@ -34,8 +35,15 @@ class AdminCog(commands.Cog):
         await interaction.response.send_message(f"🎁 관리자 권한으로 **{target.name}**님에게 `{아이템명}` {수량}개를 지급했습니다!")
 
     @app_commands.command(name="아이템회수", description="[관리자 전용] 특정 유저의 아이템을 강제 회수(삭제)합니다.")
+    @app_commands.autocomplete(아이템명=fish_autocomplete)
     @is_developer()
     async def 아이템회수(self, interaction: discord.Interaction, target: discord.Member, 아이템명: str, 수량: int):
+        async with db.conn.execute("SELECT amount FROM inventory WHERE user_id = ? AND item_name = ?", (target.id, 아이템명)) as cursor:
+            res = await cursor.fetchone()
+        
+        if not res or res[0] <= 0:
+            return await interaction.response.send_message(f"❌ **{target.name}**님은 `{아이템명}`을(를) 소지하고 있지 않습니다.", ephemeral=True)
+
         await db.execute("UPDATE inventory SET amount = MAX(0, amount - ?) WHERE user_id = ? AND item_name = ?", (수량, target.id, 아이템명))
         await db.execute("DELETE FROM inventory WHERE amount <= 0")
         await db.commit()
@@ -157,7 +165,7 @@ class AdminCog(commands.Cog):
             # 디코딩 처리
             stdout_text = stdout.decode('utf-8')
 
-            reload_data()
+            await reload_data_async()
 
             msg = f"✅ 최신 데이터를 깃허브에서 가져와 성공적으로 반영했습니다!\n```bash\n{stdout_text}```"
             await interaction.followup.send(msg)
