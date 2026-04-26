@@ -16,6 +16,7 @@ except ImportError:
     pass
 
 from fishing_core.database import db
+from fishing_core.logger import logger
 from fishing_core.shared import FISH_DATA, RECIPES, kst
 from fishing_core.utils import (
     aqua_autocomplete,

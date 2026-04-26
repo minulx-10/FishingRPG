@@ -111,9 +111,8 @@ class FishingCog(commands.Cog):
                     base_prob *= 5.0
                 if "large_predator_equalizer" in active_buffs and grade not in ["레전드", "신화", "태고", "환상", "미스터리", "해신(海神)"]:
                     base_prob = 10.0 # 확률 평준화
-                if "only_large_predator_mode" in active_buffs:
-                    if grade != "대형 포식자":
-                        base_prob = 0
+                if "only_large_predator_mode" in active_buffs and grade != "대형 포식자":
+                    base_prob = 0
                 if "skip_normal" in active_buffs and grade == "일반":
                     base_prob = 0
                 if "deep_sea_sniper" in active_buffs:
@@ -199,9 +198,8 @@ class FishingCog(commands.Cog):
 
         # 더블 캐치 확률 (요리 버프)
         double_catch = False
-        if "double_catch_chance" in active_buffs:
-            if random.random() < 0.25: # 25% 확률로 더블 캐치
-                double_catch = True
+        if "double_catch_chance" in active_buffs and random.random() < 0.25:  # 25% 확률로 더블 캐치
+            double_catch = True
 
         # 낚시 대기 시각 효과 (찌 애니메이션)
         view = FishingView(interaction.user, target_fish, effective_rod_tier)
