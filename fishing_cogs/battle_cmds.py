@@ -16,6 +16,25 @@ class BattleCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    async def _show_locked_list(self, interaction: discord.Interaction, target: discord.Member):
+        async with db.conn.execute("SELECT item_name, amount FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (target.id,)) as cursor:
+            items = await cursor.fetchall()
+
+        embed = discord.Embed(title=f"🔒 {target.name}의 잠금(보호) 목록", color=0x2ecc71)
+        if items:
+            item_list = ""
+            for name, amt in items:
+                power = FISH_DATA.get(name, {}).get("power", 0)
+                grade_label = format_grade_label(FISH_DATA.get(name, {}).get("grade", "일반")) if name in FISH_DATA else "📦 아이템"
+                if power > 0:
+                    item_list += f"• {name} `{grade_label}`: {amt}마리 (전투력: {power}⚡)\n"
+                else:
+                    item_list += f"• {name} `{grade_label}`: {amt}개\n"
+            embed.add_field(name="보존된 아이템 및 전사", value=item_list, inline=False)
+        else:
+            embed.add_field(name="텅 비었습니다...", value="`/잠금` 명령어를 통해 중요한 물고기와 아이템을 판매로부터 보호하세요.", inline=False)
+        await interaction.response.send_message(embed=embed)
+
     @app_commands.command(name="배틀", description="나의 가장 강한 물고기로 야생의 NPC 물고기와 턴제 배틀을 진행합니다! (체력 15 소모)")
     @app_commands.checks.cooldown(1, 10.0, key=lambda i: i.user.id)
     @check_boat_tier(3)
@@ -53,23 +72,12 @@ class BattleCog(commands.Cog):
     @app_commands.command(name="잠금목록", description="나 또는 특정 유저의 가방에서 잠금(보호 및 배틀용) 처리된 목록을 확인합니다.")
     async def 잠금목록(self, interaction: discord.Interaction, 유저: discord.Member = None):
         target = 유저 or interaction.user
-        async with db.conn.execute("SELECT item_name, amount FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (target.id,)) as cursor:
-            items = await cursor.fetchall()
+        await self._show_locked_list(interaction, target)
 
-        embed = discord.Embed(title=f"🔒 {target.name}의 잠금(보호) 목록", color=0x2ecc71)
-        if items:
-            item_list = ""
-            for name, amt in items:
-                power = FISH_DATA.get(name, {}).get("power", 0)
-                grade_label = format_grade_label(FISH_DATA.get(name, {}).get("grade", "일반")) if name in FISH_DATA else "📦 아이템"
-                if power > 0:
-                    item_list += f"• {name} `{grade_label}`: {amt}마리 (전투력: {power}⚡)\n"
-                else:
-                    item_list += f"• {name} `{grade_label}`: {amt}개\n"
-            embed.add_field(name="보존된 아이템 및 전사", value=item_list, inline=False)
-        else:
-            embed.add_field(name="텅 비었습니다...", value="`/잠금` 명령어를 통해 중요한 물고기와 아이템을 판매로부터 보호하세요.", inline=False)
-        await interaction.response.send_message(embed=embed)
+    @app_commands.command(name="잠목", description="`/잠금목록`의 축약 명령어입니다.")
+    async def 잠목(self, interaction: discord.Interaction, 유저: discord.Member = None):
+        target = 유저 or interaction.user
+        await self._show_locked_list(interaction, target)
 
     @app_commands.command(name="수산대전", description="다른 유저를 지목하여 마라맛 PvP 배틀(약탈)을 겁니다!")
     @app_commands.checks.cooldown(1, 10.0, key=lambda i: i.user.id)

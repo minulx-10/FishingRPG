@@ -17,6 +17,77 @@ class FishingCog(commands.Cog):
         self.bot = bot
         self.equipped_baits = {}
 
+    async def _show_inventory(self, interaction: discord.Interaction, target: discord.Member):
+        coins, rod_tier, rating = await db.get_user_data(target.id)
+
+        async with db.conn.execute("SELECT boat_tier, stamina, max_stamina FROM user_data WHERE user_id=?", (target.id,)) as cursor:
+            res = await cursor.fetchone()
+        current_tier, stamina, max_stamina = res if res else (1, 100, 100)
+
+        tier_names = {1: "나룻배 🛶", 2: "어선 🚤", 3: "쇄빙선 🛳️", 4: "전투함 ⚓", 5: "잠수함 ⛴️", 6: "차원함선 🛸"}
+        boat_str = tier_names.get(current_tier, f"Lv.{current_tier}")
+
+        async with db.conn.execute("SELECT item_name, amount, is_locked FROM inventory WHERE user_id=? AND amount > 0", (target.id,)) as cursor:
+            items = await cursor.fetchall()
+
+        title = await db.get_user_title(target.id)
+        stats = (coins, rod_tier, rating, boat_str, stamina, max_stamina, title)
+
+        view = InventoryView(interaction.user, target, items, stats)
+        await interaction.response.send_message(embed=view.make_embed(), view=view)
+
+    async def _rest_user(self, interaction: discord.Interaction):
+        coins, _, _ = await db.get_user_data(interaction.user.id)
+
+        async with db.conn.execute("SELECT stamina, max_stamina, boat_tier, last_free_rest FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+            res = await cursor.fetchone()
+        stamina = res[0] if res else 100
+        max_stamina = res[1] if res else 100
+        boat_tier = res[2] if res else 1
+        last_free_rest = res[3] if res else ""
+
+        if stamina >= max_stamina:
+            return await interaction.response.send_message("✨ 체력이 이미 가득 차 있습니다! 휴식이 필요하지 않습니다.", ephemeral=True)
+
+        today = datetime.datetime.now(kst).strftime('%Y-%m-%d')
+        is_free = last_free_rest != today
+
+        tier_costs = {1: 500, 2: 1000, 3: 1800, 4: 2800, 5: 4000}
+        cost = tier_costs.get(boat_tier, 2500)
+
+        if is_free:
+            await db.execute("UPDATE user_data SET stamina = max_stamina, last_free_rest = ? WHERE user_id=?", (today, interaction.user.id))
+            await db.commit()
+            return await interaction.response.send_message(f"🛌 오늘의 **무료 휴식**을 사용했습니다! (체력 {max_stamina}⚡ 전부 회복 완료)\n💡 *내일 다시 무료 휴식이 충전됩니다.*")
+
+        if coins < cost:
+            return await interaction.response.send_message(f"❌ 코인이 부족합니다. (필요: `{cost:,} C` / 현재: `{coins:,} C`)\n💡 오늘의 무료 휴식은 이미 사용했습니다. 시간이 지나면 10분마다 자연 회복됩니다.", ephemeral=True)
+
+        await db.execute("UPDATE user_data SET coins = coins - ?, stamina = max_stamina WHERE user_id=?", (cost, interaction.user.id))
+        await db.commit()
+        await interaction.response.send_message(f"🛌 `{cost:,} C`를 지불하고 여관에서 푹 쉬었습니다! (체력 {max_stamina}⚡ 전부 회복 완료)")
+
+    async def _forecast_weather(self, interaction: discord.Interaction):
+        coins, _, _ = await db.get_user_data(interaction.user.id)
+        if coins < 3000:
+            return await interaction.response.send_message(f"❌ 코인이 부족합니다. (필요: `3,000 C` / 현재: `{coins:,} C`)", ephemeral=True)
+
+        await db.execute("UPDATE user_data SET coins = coins - 3000 WHERE user_id=?", (interaction.user.id,))
+        await db.commit()
+
+        if "WEATHER_QUEUE" not in env_state:
+            env_state["WEATHER_QUEUE"] = [random.choices(WEATHER_TYPES, weights=[40, 25, 20, 5, 10], k=1)[0] for _ in range(3)]
+
+        q = env_state["WEATHER_QUEUE"]
+        embed = discord.Embed(title="📡 수산시장 기상청 정밀 예보", color=0x3498db)
+        embed.description = "위성 사진과 기압골 데이터를 분석한 결과입니다."
+        embed.add_field(name="1시간 뒤", value=q[0], inline=True)
+        embed.add_field(name="2시간 뒤", value=q[1], inline=True)
+        embed.add_field(name="3시간 뒤", value=q[2], inline=True)
+        embed.set_footer(text="⚠️ 기상 상황은 급변할 수 있으며, 기우제 발생 시 예보가 빗나갈 수 있습니다.")
+
+        await interaction.response.send_message(embed=embed)
+
     @app_commands.command(name="미끼장착", description="자동으로 소모할 미끼를 장착하거나 해제합니다.")
     @app_commands.checks.cooldown(1, 3.0, key=lambda i: i.user.id)
     @app_commands.autocomplete(미끼이름=bait_autocomplete)
@@ -251,58 +322,23 @@ class FishingCog(commands.Cog):
     @app_commands.checks.cooldown(1, 5.0, key=lambda i: i.user.id)
     async def 인벤토리(self, interaction: discord.Interaction, 유저: discord.Member = None):
         target = 유저 or interaction.user
-        coins, rod_tier, rating = await db.get_user_data(target.id)
+        await self._show_inventory(interaction, target)
 
-        async with db.conn.execute("SELECT boat_tier, stamina, max_stamina FROM user_data WHERE user_id=?", (target.id,)) as cursor:
-            res = await cursor.fetchone()
-        current_tier, stamina, max_stamina = res if res else (1, 100, 100)
-
-        tier_names = {1: "나룻배 🛶", 2: "어선 🚤", 3: "쇄빙선 🛳️", 4: "전투함 ⚓", 5: "잠수함 ⛴️", 6: "차원함선 🛸"}
-        boat_str = tier_names.get(current_tier, f"Lv.{current_tier}")
-
-        async with db.conn.execute("SELECT item_name, amount, is_locked FROM inventory WHERE user_id=? AND amount > 0", (target.id,)) as cursor:
-            items = await cursor.fetchall()
-
-        title = await db.get_user_title(target.id)
-        stats = (coins, rod_tier, rating, boat_str, stamina, max_stamina, title)
-
-        view = InventoryView(interaction.user, target, items, stats)
-        await interaction.response.send_message(embed=view.make_embed(), view=view)
+    @app_commands.command(name="인벤", description="`/인벤토리`의 축약 명령어입니다.")
+    @app_commands.checks.cooldown(1, 5.0, key=lambda i: i.user.id)
+    async def 인벤(self, interaction: discord.Interaction, 유저: discord.Member = None):
+        target = 유저 or interaction.user
+        await self._show_inventory(interaction, target)
 
     @app_commands.command(name="휴식", description="여관에서 코인을 지불하고 행동력(체력)을 즉시 전부 회복합니다. (일일 1회 무료!)")
     @app_commands.checks.cooldown(1, 5.0, key=lambda i: i.user.id)
     async def 휴식(self, interaction: discord.Interaction):
-        coins, _, _ = await db.get_user_data(interaction.user.id)
+        await self._rest_user(interaction)
 
-        async with db.conn.execute("SELECT stamina, max_stamina, boat_tier, last_free_rest FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
-            res = await cursor.fetchone()
-        stamina = res[0] if res else 100
-        max_stamina = res[1] if res else 100
-        boat_tier = res[2] if res else 1
-        last_free_rest = res[3] if res else ""
-
-        if stamina >= max_stamina:
-            return await interaction.response.send_message("✨ 체력이 이미 가득 차 있습니다! 휴식이 필요하지 않습니다.", ephemeral=True)
-
-        # 일일 1회 무료 휴식 체크
-        today = datetime.datetime.now(kst).strftime('%Y-%m-%d')
-        is_free = (last_free_rest != today)
-
-        # 선박 티어별 차등 비용 (가성비 개선)
-        tier_costs = {1: 500, 2: 1000, 3: 1800, 4: 2800, 5: 4000}
-        cost = tier_costs.get(boat_tier, 2500)
-
-        if is_free:
-            await db.execute("UPDATE user_data SET stamina = max_stamina, last_free_rest = ? WHERE user_id=?", (today, interaction.user.id))
-            await db.commit()
-            await interaction.response.send_message(f"🛌 오늘의 **무료 휴식**을 사용했습니다! (체력 {max_stamina}⚡ 전부 회복 완료)\n💡 *내일 다시 무료 휴식이 충전됩니다.*")
-        else:
-            if coins < cost:
-                return await interaction.response.send_message(f"❌ 코인이 부족합니다. (필요: `{cost:,} C` / 현재: `{coins:,} C`)\n💡 오늘의 무료 휴식은 이미 사용했습니다. 시간이 지나면 10분마다 자연 회복됩니다.", ephemeral=True)
-
-            await db.execute("UPDATE user_data SET coins = coins - ?, stamina = max_stamina WHERE user_id=?", (cost, interaction.user.id))
-            await db.commit()
-            await interaction.response.send_message(f"🛌 `{cost:,} C`를 지불하고 여관에서 푹 쉬었습니다! (체력 {max_stamina}⚡ 전부 회복 완료)")
+    @app_commands.command(name="휴", description="`/휴식`의 축약 명령어입니다.")
+    @app_commands.checks.cooldown(1, 5.0, key=lambda i: i.user.id)
+    async def 휴(self, interaction: discord.Interaction):
+        await self._rest_user(interaction)
 
     @app_commands.command(name="바다", description="현재 바다의 시간대와 날씨 환경을 확인합니다.")
     async def 바다(self, interaction: discord.Interaction):
@@ -371,29 +407,11 @@ class FishingCog(commands.Cog):
 
     @app_commands.command(name="기상예측", description="기상청의 위성 자료를 분석하여 향후 3시간의 날씨 변화를 예측합니다. (비용: 3,000 C)")
     async def 기상예측(self, interaction: discord.Interaction):
-        coins, _, _ = await db.get_user_data(interaction.user.id)
-        if coins < 3000:
-            return await interaction.response.send_message(f"❌ 코인이 부족합니다. (필요: `3,000 C` / 현재: `{coins:,} C`)", ephemeral=True)
+        await self._forecast_weather(interaction)
 
-        await db.execute("UPDATE user_data SET coins = coins - 3000 WHERE user_id=?", (interaction.user.id,))
-        await db.commit()
-
-        # 현재 시간 기준으로 1시간, 2시간, 3시간 뒤 날씨를 시뮬레이션 (랜덤이지만 유저에게는 예측으로 보여줌)
-        # 실제 시스템은 1시간마다 weather_update_loop가 돌며 변경하므로,
-        # 이 예측을 실제 적용하기 위해선 env_state에 큐를 쌓아두는 것이 좋음.
-
-        if "WEATHER_QUEUE" not in env_state:
-            env_state["WEATHER_QUEUE"] = [random.choices(WEATHER_TYPES, weights=[40, 25, 20, 5, 10], k=1)[0] for _ in range(3)]
-
-        q = env_state["WEATHER_QUEUE"]
-        embed = discord.Embed(title="📡 수산시장 기상청 정밀 예보", color=0x3498db)
-        embed.description = "위성 사진과 기압골 데이터를 분석한 결과입니다."
-        embed.add_field(name="1시간 뒤", value=q[0], inline=True)
-        embed.add_field(name="2시간 뒤", value=q[1], inline=True)
-        embed.add_field(name="3시간 뒤", value=q[2], inline=True)
-        embed.set_footer(text="⚠️ 기상 상황은 급변할 수 있으며, 기우제 발생 시 예보가 빗나갈 수 있습니다.")
-
-        await interaction.response.send_message(embed=embed)
+    @app_commands.command(name="예보", description="`/기상예측`의 축약 명령어입니다.")
+    async def 예보(self, interaction: discord.Interaction):
+        await self._forecast_weather(interaction)
 
     @app_commands.command(name="기우제", description="전 서버 유저들과 힘을 합쳐 코인을 모으고 바다의 날씨를 강제로 변경합니다!")
     async def 기우제(self, interaction: discord.Interaction, 기부금: int):
