@@ -3,6 +3,7 @@ import datetime
 import io
 import os
 import random
+import json
 
 import aiohttp
 import discord
@@ -30,6 +31,11 @@ from fishing_core.views import QuestDeliveryView
 class QuestCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        try:
+            with open("collections.json", "r", encoding="utf-8") as f:
+                self.collections = json.load(f)
+        except Exception:
+            self.collections = {}
 
     async def _show_aquarium(self, interaction: discord.Interaction, target: discord.Member):
         await interaction.response.defer()
@@ -732,6 +738,54 @@ class QuestCog(commands.Cog):
             await interaction.response.send_message(f"🎉 **축하합니다! 새로운 보상을 수령했습니다!**\n{reward_txt}", embed=embed)
         else:
             await interaction.response.send_message("💡 아직 수령할 수 있는 새로운 보상이 없습니다. 더 많은 물고기를 낚아보세요!", embed=embed, ephemeral=True)
+
+    @app_commands.command(name="컬렉션", description="특정 어종 그룹을 모두 수집하여 특별한 보상을 수령합니다.")
+    async def 컬렉션(self, interaction: discord.Interaction):
+        # 유저 도감 정보 가져오기
+        async with db.conn.execute("SELECT item_name FROM fish_dex WHERE user_id=?", (interaction.user.id,)) as cursor:
+            dex_items = [row[0] for row in await cursor.fetchall()]
+        
+        async with db.conn.execute("SELECT claimed_collections FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+            res = await cursor.fetchone()
+        claimed = json.loads(res[0]) if res and res[0] else {}
+
+        embed = discord.Embed(title="📜 어류 수집 세트 컬렉션", color=0xf1c40f)
+        embed.description = "특정 물고기들을 모두 도감에 등록하면 특별한 보상을 드립니다!\n\n"
+
+        can_claim_any = False
+        newly_claimed = []
+
+        for set_name, data in self.collections.items():
+            required_fish = data["fish"]
+            collected_in_set = [f for f in required_fish if f in dex_items]
+            is_complete = len(collected_in_set) == len(required_fish)
+            is_claimed = claimed.get(set_name, False)
+
+            status = "✅ 수령 완료" if is_claimed else ("🎁 보상 수령 가능!" if is_complete else f"⏳ 진행 중 ({len(collected_in_set)}/{len(required_fish)})")
+            
+            fish_list_str = ", ".join([f"**{f}**" if f in dex_items else f"~~{f}~~" for f in required_fish])
+            
+            embed.add_field(
+                name=f"{set_name} ({status})",
+                value=f"• 대상: {fish_list_str}\n• 보상: `{data['reward_coins']:,} C` + 칭호 `{data['reward_title']}`",
+                inline=False
+            )
+
+            if is_complete and not is_claimed:
+                # 보상 지급
+                claimed[set_name] = True
+                await db.execute("UPDATE user_data SET coins = coins + ?, title = ? WHERE user_id=?", (data["reward_coins"], data["reward_title"], interaction.user.id))
+                can_claim_any = True
+                newly_claimed.append(f"🎉 **[{set_name}]** 컬렉션 완성! `{data['reward_coins']:,} C` + 칭호 `{data['reward_title']}` 획득!")
+
+        if can_claim_any:
+            await db.execute("UPDATE user_data SET claimed_collections = ? WHERE user_id=?", (json.dumps(claimed), interaction.user.id))
+            await db.commit()
+            msg = "\n".join(newly_claimed)
+            await interaction.response.send_message(f"🎊 **축하합니다! 컬렉션을 완성하여 보상을 수령했습니다!**\n{msg}", embed=embed)
+        else:
+            await interaction.response.send_message(embed=embed)
+
 
 async def setup(bot):
     await bot.add_cog(QuestCog(bot))

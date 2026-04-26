@@ -146,6 +146,7 @@ class DBManager:
             (27, "ALTER TABLE user_data ADD COLUMN merchant_purchase_state TEXT DEFAULT '{}'"),
             (28, "ALTER TABLE user_data ADD COLUMN last_prayer_date TEXT DEFAULT ''"),
             (29, "ALTER TABLE user_data ADD COLUMN current_region TEXT DEFAULT '연안'"),
+            (30, "ALTER TABLE user_data ADD COLUMN claimed_collections TEXT DEFAULT '{}'"),
         ]
 
         # 현재 버전 확인
