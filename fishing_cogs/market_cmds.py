@@ -61,7 +61,7 @@ class MarketCog(commands.Cog):
             {"item_name": "전설의 3대장 돔구이 🍱", "price": 2200, "stock": 3, "user_limit": 1, "category": "완성 요리", "source": "inventory", "amount": 1, "description": "완성된 인기 요리. 바로 판매 가능"},
         ]
 
-        offers = random.sample(common_pool, k=2) + [random.choice(rare_pool)]
+        offers = [*random.sample(common_pool, k=2), random.choice(rare_pool)]
         expires_at = now + datetime.timedelta(hours=5)
         state = {
             "merchant_id": now.strftime("%Y%m%d%H%M%S"),
