@@ -1,3 +1,4 @@
+import datetime
 import random
 
 import discord
@@ -5,7 +6,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from fishing_core.database import db
-from fishing_core.shared import FISH_DATA
+from fishing_core.shared import FISH_DATA, kst
 
 
 class PrayerCommands(commands.Cog):
@@ -207,7 +208,7 @@ class PrayerCommands(commands.Cog):
 
         embed = discord.Embed(
             title="🙏 오늘의 기도 결과",
-            description=f"바다에 정성스럽게 기도를 올렸습니다.\n수평선 너머에서 어떤 기운이 느껴집니다...",
+            description="바다에 정성스럽게 기도를 올렸습니다.\n수평선 너머에서 어떤 기운이 느껴집니다...",
             color=0x00FF00 if is_blessing else 0xFFA500
         )
         

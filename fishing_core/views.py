@@ -1,10 +1,16 @@
-import discord
-import random
-import asyncio
-from discord.ui import View, Button
-from fishing_core.shared import FISH_DATA, format_grade_label, kst, get_element_multiplier
-from fishing_core import database as db
 import datetime
+import random
+
+import discord
+from discord.ui import Button, View
+
+from fishing_core import database as db
+from fishing_core.shared import (
+    FISH_DATA,
+    format_grade_label,
+    get_element_multiplier,
+    kst,
+)
 
 class FishActionView(View):
     def __init__(self, user, fish_name):
@@ -150,12 +156,11 @@ class TensionFishingView(View):
         if self.tension >= 100 or self.tension <= 0:
             self.stop()
             msg = "💥 줄이 끊어졌습니다!" if self.tension >= 100 else "💨 바늘이 빠졌습니다!"
-            if self.grade in ["레전드", "신화", "태고", "환상", "미스터리", "대형 포식자"]:
-                if random.random() < 0.2:
-                    duration_minutes = 30
-                    end_time = (datetime.datetime.now(kst) + datetime.timedelta(minutes=duration_minutes)).isoformat()
-                    await db.execute("INSERT INTO active_buffs (user_id, buff_type, end_time) VALUES (?, 'wet_clothes', ?) ON CONFLICT(user_id, buff_type) DO UPDATE SET end_time = ?", (self.user.id, end_time, end_time))
-                    msg += "\n\n🌊 **[돌발 상황]** 바다에 빠졌습니다! 몸이 흠뻑 젖어 한동안 움직임이 둔해집니다."
+            if self.grade in ["레전드", "신화", "태고", "환상", "미스터리", "대형 포식자"] and random.random() < 0.2:
+                duration_minutes = 30
+                end_time = (datetime.datetime.now(kst) + datetime.timedelta(minutes=duration_minutes)).isoformat()
+                await db.execute("INSERT INTO active_buffs (user_id, buff_type, end_time) VALUES (?, 'wet_clothes', ?) ON CONFLICT(user_id, buff_type) DO UPDATE SET end_time = ?", (self.user.id, end_time, end_time))
+                msg += "\n\n🌊 **[돌발 상황]** 바다에 빠졌습니다! 몸이 흠뻑 젖어 한동안 움직임이 둔해집니다."
             await db.commit()
             return await interaction.response.edit_message(content=msg, embed=None, view=None)
         if self.turn >= self.max_turns:
@@ -202,7 +207,7 @@ class BattleView(View):
         def hp_bar(hp, mhp): return "🟩" * max(0, int((hp/mhp)*5)) + "⬛" * (5-max(0, int((hp/mhp)*5)))
         embed.add_field(name=f"🔵 {self.user.name}", value=f"**{self.my_fish}**\nHP: {self.my_hp}/{self.my_max_hp} {hp_bar(self.my_hp, self.my_max_hp)}", inline=True)
         embed.add_field(name="VS", value="⚡", inline=True)
-        embed.add_field(name=f"🔴 야생", value=f"**{self.npc_fish}**\nHP: {self.npc_hp}/{self.npc_max_hp} {hp_bar(self.npc_hp, self.npc_max_hp)}", inline=True)
+        embed.add_field(name="🔴 야생", value=f"**{self.npc_fish}**\nHP: {self.npc_hp}/{self.npc_max_hp} {hp_bar(self.npc_hp, self.npc_max_hp)}", inline=True)
         embed.add_field(name="📜 로그", value=self.battle_log.strip().split("\n")[-1], inline=False)
         return embed
 
@@ -358,7 +363,7 @@ class InventoryView(View):
         embed.add_field(name="💰 코인", value=f"{coins:,} C")
         start = self.current_page * self.per_page
         items = self.all_items[start:start+self.per_page]
-        if items: embed.description = "\n".join([f"**{n}**: {a}개" for n, a, l in items])
+        if items: embed.description = "\n".join([f"**{n}**: {a}개" for n, a, _ in items])
         else: embed.description = "가방이 텅 비었습니다."
         return embed
 

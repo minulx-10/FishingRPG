@@ -369,9 +369,8 @@ class FishingCog(commands.Cog):
 
         # 더블 캐치 확률 (요리 버프 및 기도)
         double_catch = False
-        if "double_catch_chance" in active_buffs and random.random() < 0.25:  # 25% 확률로 더블 캐치
-            double_catch = True
-        elif "prayer_double_catch" in active_buffs and random.random() < 0.20: # 기도 버프
+        if ("double_catch_chance" in active_buffs and random.random() < 0.25) or \
+           ("prayer_double_catch" in active_buffs and random.random() < 0.20):
             double_catch = True
 
         # 낚시 대기 시각 효과 (찌 애니메이션)

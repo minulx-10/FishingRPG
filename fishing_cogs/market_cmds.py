@@ -92,7 +92,7 @@ class MarketCog(commands.Cog):
                 # 아직 시간이 1시간 이상 넉넉히 남았다면 굳이 갱신하지 않고 소식만 전함
                 if expires_at - now > datetime.timedelta(hours=1):
                     should_refresh = False
-            except:
+            except Exception:
                 pass
 
         if should_refresh:
