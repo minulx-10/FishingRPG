@@ -21,6 +21,16 @@ class MarketCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    async def _merchant_item_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        state = await self._get_wandering_merchant_state()
+        choices = []
+        for offer in state["offers"]:
+            if current.lower() not in offer["item_name"].lower():
+                continue
+            stock_tag = "품절" if offer["stock"] <= 0 else f"재고 {offer['stock']}"
+            choices.append(app_commands.Choice(name=f"{offer['item_name']} ({stock_tag})", value=offer["item_name"]))
+        return choices[:25]
+
     async def _get_wandering_merchant_state(self) -> dict:
         async with db.conn.execute("SELECT value FROM server_state WHERE key='WANDERING_MERCHANT_STATE'") as cursor:
             row = await cursor.fetchone()
@@ -109,22 +119,28 @@ class MarketCog(commands.Cog):
             await db.commit()
 
         embed = discord.Embed(title="🧳 떠돌이 상인", color=0xE67E22)
-        embed.description = "먼 바다를 떠돌던 상인이 잠시 정박했습니다. 이번 물건은 재고가 적고, 1인 구매 제한이 있습니다."
+        embed.description = (
+            "먼 바다를 떠돌던 상인이 잠시 정박했습니다.\n"
+            "이번 물건은 재고가 적고, 1인 구매 제한이 있습니다."
+        )
 
-        for offer in state["offers"]:
+        for idx, offer in enumerate(state["offers"], start=1):
             bought = int(user_state["counts"].get(offer["item_name"], 0))
             remaining_limit = max(0, int(offer["user_limit"]) - bought)
+            stock_text = f"`{offer['stock']}`"
+            status_text = "🟥 품절" if offer["stock"] <= 0 else "🟩 구매 가능"
+            title_prefix = "⭐" if idx == len(state["offers"]) else "🧳"
             embed.add_field(
-                name=f"{offer['item_name']} · `{offer['category']}`",
+                name=f"{title_prefix} {offer['item_name']} · `{offer['category']}`",
                 value=(
                     f"{offer['description']}\n"
-                    f"가격: `{offer['price']:,} C` | 남은 재고: `{offer['stock']}`\n"
+                    f"가격: `{offer['price']:,} C` | 남은 재고: {stock_text} | 상태: {status_text}\n"
                     f"내 남은 구매 가능 수량: `{remaining_limit}`"
                 ),
                 inline=False,
             )
 
-        embed.set_footer(text=f"다음 교체까지: {self._format_remaining(state['expires_at'])}")
+        embed.set_footer(text=f"⭐ 마지막 상품은 오늘의 진귀품 | 다음 교체까지: {self._format_remaining(state['expires_at'])}")
         await interaction.response.send_message(embed=embed)
 
     async def _buy_from_wandering_merchant(self, interaction: discord.Interaction, item_name: str, quantity: int) -> None:
@@ -140,6 +156,9 @@ class MarketCog(commands.Cog):
         offer = next((entry for entry in state["offers"] if entry["item_name"] == item_name), None)
         if offer is None:
             return await interaction.response.send_message("❌ 지금 떠돌이 상인이 그 물건은 팔고 있지 않습니다.", ephemeral=True)
+
+        if offer["stock"] <= 0:
+            return await interaction.response.send_message("❌ 해당 상품은 이미 품절되었습니다.", ephemeral=True)
 
         if offer["stock"] < quantity:
             return await interaction.response.send_message(f"❌ 재고가 부족합니다. (남은 재고: {offer['stock']}개)", ephemeral=True)
@@ -208,6 +227,7 @@ class MarketCog(commands.Cog):
         await self._show_wandering_merchant(interaction)
 
     @app_commands.command(name="떠상구매", description="떠돌이 상인에게서 한정 상품을 구매합니다.")
+    @app_commands.autocomplete(상품명=_merchant_item_autocomplete)
     async def 떠상구매(self, interaction: discord.Interaction, 상품명: str, 수량: int = 1):
         await self._buy_from_wandering_merchant(interaction, 상품명, 수량)
 
