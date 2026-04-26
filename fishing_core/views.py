@@ -5,13 +5,11 @@ import discord
 from discord.ui import Button, View
 
 from fishing_core.database import db
-from fishing_core.services.battle_service import BattleService
-from fishing_core.services.fishing_service import FishingService
 from fishing_core.services.achievement_service import AchievementService
+from fishing_core.services.battle_service import BattleService
 from fishing_core.shared import (
     FISH_DATA,
     format_grade_label,
-    get_grade_order,
     kst,
 )
 

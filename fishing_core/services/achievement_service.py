@@ -1,6 +1,7 @@
 import datetime
-from typing import Any
+
 from fishing_core.database import db
+
 
 class AchievementService:
     ACHIEVEMENTS = {
