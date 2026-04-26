@@ -216,10 +216,6 @@ class DBManager:
             return None
         return await self.conn.executemany(query, params)
 
-    async def commit(self) -> None:
-        """변경 사항을 저장합니다."""
-        if self.conn:
-            await self.conn.commit()
 
     async def close(self) -> None:
         """연결을 종료합니다."""
