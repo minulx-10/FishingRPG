@@ -2,6 +2,7 @@ import datetime
 from typing import Any, ClassVar
 from fishing_core.database import db
 
+
 class AchievementService:
     ACHIEVEMENTS: ClassVar[dict[str, Any]] = {
         "FIRST_CATCH": {"name": "🌱 첫 걸음", "desc": "처음으로 물고기를 낚았습니다.", "reward": 1000},
