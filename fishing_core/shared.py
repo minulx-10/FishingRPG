@@ -76,6 +76,36 @@ env_state = {
     "CURRENT_WEATHER": "☀️ 맑음"
 }
 
+GRADE_STYLES: dict[str, dict[str, int | str]] = {
+    "일반": {"icon": "⚪", "color": 0x95A5A6, "order": 1},
+    "희귀": {"icon": "🟢", "color": 0x2ECC71, "order": 2},
+    "초희귀": {"icon": "🔵", "color": 0x3498DB, "order": 3},
+    "에픽": {"icon": "🟣", "color": 0x9B59B6, "order": 4},
+    "대형 포식자": {"icon": "🔴", "color": 0xE67E22, "order": 5},
+    "레전드": {"icon": "🟡", "color": 0xF1C40F, "order": 6},
+    "미스터리": {"icon": "❔", "color": 0x2F4F4F, "order": 7},
+    "태고": {"icon": "🧬", "color": 0x8B4513, "order": 8},
+    "환상": {"icon": "☄️", "color": 0x9932CC, "order": 9},
+    "신화": {"icon": "♦️", "color": 0xFF0000, "order": 10},
+    "special": {"icon": "🌌", "color": 0x6C5CE7, "order": 11},
+}
+
+
+def get_grade_icon(grade: str) -> str:
+    return str(GRADE_STYLES.get(grade, {}).get("icon", "❔"))
+
+
+def get_grade_color(grade: str) -> int:
+    return int(GRADE_STYLES.get(grade, {}).get("color", 0x00FF00))
+
+
+def get_grade_order(grade: str) -> int:
+    return int(GRADE_STYLES.get(grade, {}).get("order", 0))
+
+
+def format_grade_label(grade: str) -> str:
+    return f"{get_grade_icon(grade)} {grade}"
+
 def update_weather_randomly():
     """날씨 업데이트: 맑음(40%), 흐림(25%), 비(20%), 폭풍우(5%), 안개(10%) 확률"""
     new_weather = random.choices(WEATHER_TYPES, weights=[40, 25, 20, 5, 10], k=1)[0]

@@ -5,7 +5,14 @@ import discord
 from discord.ui import Button, View
 
 from .database import db
-from .shared import FISH_DATA, MARKET_PRICES, get_element_multiplier
+from .shared import (
+    FISH_DATA,
+    MARKET_PRICES,
+    format_grade_label,
+    get_element_multiplier,
+    get_grade_color,
+    get_grade_order,
+)
 
 
 class FishActionView(View):
@@ -38,11 +45,10 @@ class FishActionView(View):
 
         self.action_taken = True
         fish_grade = FISH_DATA.get(self.target_fish, {}).get("grade", "일반")
-        grade_order = {"일반": 1, "희귀": 2, "초희귀": 3, "대형 포식자": 4, "레전드": 5, "태고": 6, "환상": 7, "미스터리": 8, "신화": 9}
 
         if lock is None:
             # 에픽 등급 이상은 자동 잠금 처리
-            is_high_grade = grade_order.get(fish_grade, 0) >= 4
+            is_high_grade = get_grade_order(fish_grade) >= get_grade_order("에픽")
             lock_val = 1 if is_high_grade else 0
         else:
             lock_val = 1 if lock else 0
@@ -92,9 +98,8 @@ class FishActionView(View):
         self.action_taken = True
 
         fish_grade = FISH_DATA.get(self.target_fish, {}).get("grade", "일반")
-        grade_order = {"일반": 1, "희귀": 2, "초희귀": 3, "대형 포식자": 4, "레전드": 5, "태고": 6, "환상": 7, "미스터리": 8, "신화": 9}
 
-        if grade_order.get(fish_grade, 0) >= 4:
+        if get_grade_order(fish_grade) >= get_grade_order("에픽"):
             return await interaction.response.send_message(f"⚠️ **{fish_grade}** 등급 이상의 물고기는 '바로 판매'가 불가능합니다. 실수 방지를 위해 가방에 보관 후 개별 판매하거나 잠금을 해제하세요.", ephemeral=True)
 
         price = MARKET_PRICES.get(self.target_fish, FISH_DATA.get(self.target_fish, {}).get("price", 100))
@@ -112,6 +117,7 @@ class FishingView(View):
         self.is_bite = False
         self.start_time = 0
         self.message = None
+        self.resolved = False
 
         fish_info = FISH_DATA.get(self.target_fish, {"base_window": 2.0, "grade": "일반"})
         base_window = fish_info["base_window"]
@@ -119,6 +125,10 @@ class FishingView(View):
         self.limit_time = max(1.0, base_window + bonus_time)
 
     async def on_timeout(self):
+        if self.resolved:
+            return
+
+        self.resolved = True
         for child in self.children:
             child.disabled = True
 
@@ -133,9 +143,13 @@ class FishingView(View):
         if interaction.user != self.user:
             return await interaction.response.send_message("남의 낚싯대입니다! 🚫", ephemeral=True)
 
+        if self.resolved:
+            return await interaction.response.send_message("이미 낚시 결과가 정리되었습니다. 새로 `/낚시`를 시도해주세요.", ephemeral=True)
+
         self.stop()
 
         if not self.is_bite:
+            self.resolved = True
             return await interaction.response.edit_message(content="🎣 앗! 너무 일찍 챘습니다. 물고기가 도망갔어요! 💨", view=None)
 
         # 입질 시 임베드 색상 변경 (심미성 개선)
@@ -154,6 +168,7 @@ class FishingView(View):
                 else:
                     await self.on_bite_success(interaction, elapsed, grade)
             else:
+                self.resolved = True
                 fail_msg = f"⏰ 너무 늦었습니다! `{elapsed:.3f}초` 걸림.\n(놓친 물고기: **{self.target_fish}** / 제한: {self.limit_time:.2f}초)"
                 if grade in ["레전드", "신화", "태고", "환상", "미스터리"] and self.rod_tier > 1 and random.random() < 0.5:
                     await db.execute("UPDATE user_data SET rod_tier = rod_tier - 1 WHERE user_id = ?", (self.user.id,))
@@ -198,16 +213,12 @@ class FishingView(View):
 
             await db.commit()
 
-            grade_color = {
-                "일반": 0x95a5a6, "희귀": 0x3498db, "초희귀": 0x9b59b6,
-                "대형 포식자": 0xe67e22, "레전드": 0xe74c3c, "태고": 0x8b4513,
-                "환상": 0x9932cc, "미스터리": 0x2f4f4f, "신화": 0xff0000,
-            }
+            self.resolved = True
 
             embed = discord.Embed(
-                title=f"🎉 낚시 성공! [{grade}]",
+                title=f"🎉 낚시 성공! [{format_grade_label(grade)}]",
                 description=f"**{self.target_fish}**를 낚았습니다!",
-                color=grade_color.get(grade, 0x00ff00),
+                color=get_grade_color(grade),
             )
 
             # 에픽 이상 화려한 이미지 연출 (예시 이미지 사용)

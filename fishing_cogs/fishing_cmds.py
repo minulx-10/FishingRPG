@@ -228,6 +228,9 @@ class FishingCog(commands.Cog):
         wait_time = random.uniform(wait_min, wait_max)
         await asyncio.sleep(wait_time)
 
+        if view.is_finished() or view.resolved:
+            return
+
         view.is_bite = True
         view.start_time = datetime.datetime.now(kst).timestamp()
 
