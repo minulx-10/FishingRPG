@@ -87,9 +87,16 @@ class ShipCog(commands.Cog):
         if roll < success_rate:
             # 성공!
             await db.execute("UPDATE user_data SET rod_tier = rod_tier + 1, upgrade_pity = 0 WHERE user_id = ?", (interaction.user.id,))
+            await db.log_action(interaction.user.id, "ROD_UPGRADE_SUCCESS", f"Tier: {rod_tier} -> {rod_tier + 1}")
             await db.commit()
 
             new_level = rod_tier + 1
+            
+            # [업적] 낚싯대 30강 달성
+            if new_level >= 30:
+                from fishing_core.services.achievement_service import AchievementService
+                await AchievementService.check_achievement(interaction.user.id, "ROD_MASTER")
+
             pity_txt = "✨ **[천장 도달]** " if is_pity_trigger else ""
             msg = f"{pity_txt}{'🔥 **[초월 성공]** 🔥' if is_transcendence else '캉! 캉! 캉! ...'} 낚싯대가 **Lv.{new_level}** 로 강화되었습니다!"
 
@@ -167,6 +174,7 @@ class ShipCog(commands.Cog):
                          (req["coins"], new_max_stamina, new_max_stamina, interaction.user.id))
         if req["scrap"] > 0:
             await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name='낡은 고철 ⚙️'", (req["scrap"], interaction.user.id))
+        await db.log_action(interaction.user.id, "SHIP_UPGRADE_SUCCESS", f"Tier: {current_tier} -> {new_tier}, Boat: {req['next']}")
         await db.commit()
 
         embed = discord.Embed(title="🎉 선박 개조 완료!", description=f"뚝딱뚝딱... 쾅!\n배가 **[{req['next']}]**(으)로 업그레이드 되었습니다!", color=0x2ecc71)

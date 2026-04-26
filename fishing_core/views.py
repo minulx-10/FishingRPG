@@ -6,9 +6,12 @@ from discord.ui import Button, View
 
 from fishing_core.database import db
 from fishing_core.services.battle_service import BattleService
+from fishing_core.services.fishing_service import FishingService
+from fishing_core.services.achievement_service import AchievementService
 from fishing_core.shared import (
     FISH_DATA,
     format_grade_label,
+    get_grade_order,
     kst,
 )
 
@@ -128,6 +131,11 @@ class FishingView(View):
             async with db.conn.execute("SELECT COUNT(*) FROM fish_dex WHERE user_id=?", (self.user.id,)) as cursor:
                 dex_count = (await cursor.fetchone())[0]
             
+            # [업적] 첫 낚시 성공 및 등급별 업적
+            await AchievementService.check_achievement(self.user.id, "FIRST_CATCH")
+            if grade in ["레전드", "신화", "태고", "환상", "미스터리"]:
+                await AchievementService.check_achievement(self.user.id, "LEGENDARY_FISHER")
+
             if dex_count == 1:
                 tutorial_embed = discord.Embed(title="🌱 첫 낚시 성공을 축하합니다!", color=0x2ecc71)
                 tutorial_embed.description = (
@@ -369,7 +377,32 @@ class PvPBattleView(View):
 
     async def end_battle(self, interaction, winner, loser):
         self.stop()
-        await interaction.response.edit_message(content=f"🏆 {winner.mention} 승리!", embed=None, view=None)
+        
+        # 코인 약탈 로직 (패배자 코인의 5~10%)
+        async with db.conn.execute("SELECT coins FROM user_data WHERE user_id=?", (loser.id,)) as cursor:
+            res = await cursor.fetchone()
+        loser_coins = res[0] if res else 0
+        
+        steal_amount = int(loser_coins * random.uniform(0.05, 0.10))
+        if getattr(self, "is_offline_target", False):
+            steal_amount = int(steal_amount * 0.5) # 오프라인 시 50%만 약탈
+            
+        if steal_amount > 0:
+            await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id=?", (steal_amount, loser.id))
+            await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id=?", (steal_amount, winner.id))
+            await db.log_action(winner.id, "PVP_WIN", f"Winner: {winner.name}, Loser: {loser.name}, Stole: {steal_amount} C")
+            await db.log_action(loser.id, "PVP_LOSS", f"Winner: {winner.name}, Loser: {loser.name}, Lost: {steal_amount} C")
+            
+            # [업적] 수산대전 첫 승리
+            await AchievementService.check_achievement(winner.id, "BATTLE_WARRIOR")
+            
+            await db.commit()
+            
+            msg = f"🏆 {winner.mention} 승리! ({loser.name}님으로부터 `{steal_amount:,} C`를 약탈했습니다!)"
+        else:
+            msg = f"🏆 {winner.mention} 승리!"
+            
+        await interaction.response.edit_message(content=msg, embed=None, view=None)
 
     @discord.ui.button(label="공격", style=discord.ButtonStyle.danger)
     async def btn_attack(self, interaction: discord.Interaction, button: Button):
@@ -419,8 +452,9 @@ class QuestDeliveryView(View):
     async def deliver(self, interaction, btn):
         if interaction.user != self.user: return
         await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (self.reward, self.user.id))
+        await db.log_action(self.user.id, "QUEST_COMPLETE", f"Item: {self.item}, Amount: {self.amount}, Reward: {self.reward} C")
         await db.commit()
-        await interaction.response.edit_message(content="✅ 납품 완료!", view=None)
+        await interaction.response.edit_message(content=f"✅ 납품 완료! (+{self.reward:,} C)", view=None)
 
 class InventoryView(View):
     def __init__(self, user, target_user, items, stats):

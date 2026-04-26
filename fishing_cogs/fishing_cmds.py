@@ -421,6 +421,28 @@ class FishingCog(commands.Cog):
         
         await interaction.response.send_message(embed=embed)
 
+    @app_commands.command(name="업적", description="나의 업적 달성 현황과 보상을 확인합니다.")
+    async def 업적(self, interaction: discord.Interaction):
+        from fishing_core.services.achievement_service import AchievementService
+        achievements = await AchievementService.get_user_achievements(interaction.user.id)
+        
+        embed = discord.Embed(title=f"🏆 {interaction.user.name}님의 업적 현황", color=0xf1c40f)
+        
+        comp_count = sum(1 for a in achievements if a["is_completed"])
+        embed.description = f"현재 **{len(achievements)}개** 중 **{comp_count}개**의 업적을 달성했습니다."
+        
+        for a in achievements:
+            status = "✅ 달성" if a["is_completed"] else "🔒 미달성"
+            reward_txt = f"(보상: `{a['reward']:,} C`)" if not a["is_completed"] else f"(달성일: `{a['completed_at'][:10]}`)"
+            embed.add_field(
+                name=f"{a['name']} {status}",
+                value=f"{a['desc']}\n{reward_txt}",
+                inline=False
+            )
+            
+        embed.set_footer(text="업적은 활동을 통해 자동으로 달성되며 보상이 지급됩니다.")
+        await interaction.response.send_message(embed=embed)
+
     @app_commands.command(name="바다", description="현재 바다의 시간대와 날씨 환경을 확인합니다.")
     async def 바다(self, interaction: discord.Interaction):
         now_hour = datetime.datetime.now(kst).hour
