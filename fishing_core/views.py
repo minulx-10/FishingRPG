@@ -124,6 +124,22 @@ class FishingView(View):
             await interaction.response.edit_message(content=f"🎊 앗, 낚았습니다!{double_msg} 이 물고기를 어떻게 할까요?", embed=embed, view=action_view)
             action_view.message = await interaction.original_response()
 
+            # [신규] 초보자 튜토리얼 트리거
+            async with db.conn.execute("SELECT COUNT(*) FROM fish_dex WHERE user_id=?", (self.user.id,)) as cursor:
+                dex_count = (await cursor.fetchone())[0]
+            
+            if dex_count == 1:
+                tutorial_embed = discord.Embed(title="🌱 첫 낚시 성공을 축하합니다!", color=0x2ecc71)
+                tutorial_embed.description = (
+                    "방금 낚은 물고기는 당신의 첫 기록이 되었습니다!\n\n"
+                    "💡 **앞으로 무엇을 하면 좋을까요?**\n"
+                    "1. `/판매` 명령어로 물고기를 팔아 코인을 모으세요.\n"
+                    "2. `/강화` 명령어로 낚싯대를 업그레이드하세요.\n"
+                    "3. `/도움말`을 입력하면 더 많은 명령어를 볼 수 있습니다.\n"
+                    "4. `/가이드`를 통해 성장 로드맵을 확인하세요!"
+                )
+                await interaction.followup.send(embed=tutorial_embed, ephemeral=True)
+
             # [재앙 알림]
             if grade in ["태고", "환상", "미스터리", "신화"]:
                 alert_embed = None
@@ -176,11 +192,23 @@ class TensionFishingView(View):
         if self.tension >= 100 or self.tension <= 0:
             self.stop()
             msg = "💥 줄이 끊어졌습니다!" if self.tension >= 100 else "💨 바늘이 빠졌습니다!"
+            
+            # 바다 빠짐 연출 강화
             if self.grade in ["레전드", "신화", "태고", "환상", "미스터리", "대형 포식자"] and random.random() < 0.2:
                 duration_minutes = 30
                 end_time = (datetime.datetime.now(kst) + datetime.timedelta(minutes=duration_minutes)).isoformat()
                 await db.execute("INSERT INTO active_buffs (user_id, buff_type, end_time) VALUES (?, 'wet_clothes', ?) ON CONFLICT(user_id, buff_type) DO UPDATE SET end_time = ?", (self.user.id, end_time, end_time))
-                msg += "\n\n🌊 **[돌발 상황]** 바다에 빠졌습니다! 몸이 흠뻑 젖어 한동안 움직임이 둔해집니다."
+                await db.commit()
+                
+                fall_embed = discord.Embed(title="🌊 으아아아! 바다에 빠졌습니다!!", color=0xe74c3c)
+                fall_embed.description = f"물고기의 엄청난 힘에 이기지 못하고 배 밖으로 튕겨 나갔습니다!\n\n**[효과]**\n- 💨 **젖은 옷 (디버프)**: {duration_minutes}분 동안 낚시 대기 시간이 증가합니다.\n- 💔 **체력 감소**: 충격으로 인해 체력이 `20` 감소합니다."
+                fall_embed.set_image(url="https://images.unsplash.com/photo-1519046904884-53103b34b206?w=800") # 거친 파도 이미지
+                
+                await db.execute("UPDATE user_data SET stamina = MAX(0, stamina - 20) WHERE user_id=?", (self.user.id,))
+                await db.commit()
+                
+                return await interaction.response.edit_message(content=None, embed=fall_embed, view=None)
+            
             await db.commit()
             return await interaction.response.edit_message(content=msg, embed=None, view=None)
         if self.turn >= self.max_turns:
