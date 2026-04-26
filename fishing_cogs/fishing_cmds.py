@@ -252,6 +252,9 @@ class FishingCog(commands.Cog):
                     if fish not in ["낡은 고철 ⚙️", "해적의 금화 🪙", "가라앉은 보물상자 🧰"]:
                         continue
                     base_prob *= 2.0
+                elif "prayer_trash_boost" in active_buffs:
+                    if fish in ["낡은 고철 ⚙️", "바지락 🐚", "홍합 🐚", "낡은 장화 🥾"]:
+                        base_prob *= 3.0
                 elif bait_used == "고급 미끼 🪱":
                     if grade == "일반":
                         base_prob *= 0.1
@@ -345,6 +348,9 @@ class FishingCog(commands.Cog):
             effective_rod_tier += 3.0
         elif "premium_success_boost" in active_buffs:
             effective_rod_tier += 8.0
+        
+        if "prayer_success_boost" in active_buffs:
+            effective_rod_tier += 2.0
 
         # 행동력 차감 (요리 버프 및 선박 티어 반영)
         stamina_cost = 5 if current_tier == 1 else 10
@@ -353,21 +359,26 @@ class FishingCog(commands.Cog):
         elif "stamina_save_2" in active_buffs:
             stamina_cost = max(1, stamina_cost - 2)
         
+        if "prayer_stamina_save" in active_buffs:
+            stamina_cost = max(1, stamina_cost - 1)
+        
         if current_stamina < stamina_cost:
             return await interaction.response.send_message(f"❌ 행동력이 부족합니다! (필요: {stamina_cost}⚡ / 현재: {current_stamina}⚡)\n`/출석`을 하거나 상점에서 에너지 드링크를 구매하세요.", ephemeral=True)
 
         await db.execute("UPDATE user_data SET stamina = stamina - ? WHERE user_id=?", (stamina_cost, interaction.user.id))
 
-        # 더블 캐치 확률 (요리 버프)
+        # 더블 캐치 확률 (요리 버프 및 기도)
         double_catch = False
         if "double_catch_chance" in active_buffs and random.random() < 0.25:  # 25% 확률로 더블 캐치
             double_catch = True
+        elif "prayer_double_catch" in active_buffs and random.random() < 0.20: # 기도 버프
+            double_catch = True
 
         # 낚시 대기 시각 효과 (찌 애니메이션)
-        view = FishingView(interaction.user, target_fish, effective_rod_tier)
+        view = FishingView(interaction.user, target_fish, effective_rod_tier, self.bot)
         view.double_catch = double_catch # FishingView에 전달
         embed = discord.Embed(title="🎣 찌를 던졌습니다!", description=f"**{display_name}**님이 미끼를 던지고 입질을 기다립니다...{bait_text}", color=0x3498db)
-        embed.set_image(url="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExOHJqZ3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/l41lTfuxV5RWRsBPO/giphy.gif") # 낚시 대기 GIF
+        embed.set_image(url="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/l41lTfuxV5RWRsBPO/giphy.gif") # 낚시 대기 GIF
         embed.set_footer(text=f"내 낚싯대: Lv.{rod_tier} | 체력: {current_stamina-stamina_cost}⚡")
 
         await interaction.response.send_message(embed=embed, view=view)
@@ -379,6 +390,15 @@ class FishingCog(commands.Cog):
             wait_min, wait_max = 1.0, 3.0
         else:
             wait_min, wait_max = 2.0, 6.0
+
+        if "prayer_fog_delay" in active_buffs:
+            wait_min += 1.0
+            wait_max += 2.0
+
+        if "wet_clothes" in active_buffs:
+            wait_min += 3.0
+            wait_max += 5.0
+            bait_text += "\n*(🌊 바다에 빠져 몸이 무겁습니다... 낚시 속도가 느려집니다!)*"
 
         # 칭호 보너스 (강태공: 대기 시간 15% 단축)
         if title == "[강태공]":

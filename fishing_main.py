@@ -26,6 +26,7 @@ COGS = [
     "fishing_cogs.admin_cmds",
     "fishing_cogs.help_cmds",
     "fishing_cogs.prayer_cmds",
+    "fishing_cogs.collection_cmds",
     "fishing_cogs.events",
 ]
 

@@ -314,7 +314,7 @@ class BattleCog(commands.Cog):
         health_bar = "🟥" * filled + "⬛" * (bar_len - filled)
         
         embed.add_field(name="보스 체력", value=f"{health_bar}\n`{new_hp:,} / {boss_max_hp:,}`", inline=False)
-        embed.description = f"**{dmg:,}** 피해를 입혔습니다! 💰 `{reward:,} C` 지급 완료."
+        embed.description = f"⚔️ **{strongest_fish}** {format_grade_label(fish_grade)}의 맹공!\n💥 **{dmg:,}** 피해를 입혔습니다! 💰 `{reward:,} C` 지급 완료."
         await interaction.response.send_message(embed=embed)
 
         if new_hp <= 0:

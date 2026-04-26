@@ -81,6 +81,7 @@ GRADE_STYLES: dict[str, dict[str, int | str]] = {
     "희귀": {"icon": "🟢", "color": 0x2ECC71, "order": 2},
     "초희귀": {"icon": "🔵", "color": 0x3498DB, "order": 3},
     "에픽": {"icon": "🟣", "color": 0x9B59B6, "order": 4},
+    "소형 포식자": {"icon": "🟣", "color": 0x9B59B6, "order": 4.5},
     "대형 포식자": {"icon": "🔴", "color": 0xE67E22, "order": 5},
     "레전드": {"icon": "🟡", "color": 0xF1C40F, "order": 6},
     "미스터리": {"icon": "❔", "color": 0x2F4F4F, "order": 7},

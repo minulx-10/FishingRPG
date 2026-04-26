@@ -164,5 +164,62 @@ class PrayerCommands(commands.Cog):
             embed.set_footer(text=f"성공 확률: {total_success_chance*100:.1f}% | 꽝 확률: {(1-total_success_chance)*100:.1f}%")
             await interaction.followup.send(content=f"{interaction.user.mention}", embed=embed)
 
+    @app_commands.command(name="기도", description="오늘의 운세를 점치며 바다에 기도를 올립니다. (일일 1회)")
+    @app_commands.checks.cooldown(1, 5.0, key=lambda i: i.user.id)
+    async def daily_prayer(self, interaction: discord.Interaction):
+        user_id = interaction.user.id
+        today = datetime.datetime.now(kst).strftime("%Y-%m-%d")
+
+        async with db.conn.execute("SELECT last_prayer_date FROM user_data WHERE user_id = ?", (user_id,)) as cursor:
+            res = await cursor.fetchone()
+        
+        if res and res[0] == today:
+            return await interaction.response.send_message("🙏 이미 오늘 기도를 올리셨습니다. 내일 다시 찾아와주세요.", ephemeral=True)
+
+        # 버프 목록 정의 (type, name, desc, is_blessing)
+        outcomes = [
+            ("prayer_gold_boost", "☀️ 맑은 기운", "낚시 성공 시 획득 코인이 10% 증가합니다.", True),
+            ("prayer_stamina_save", "🌊 바다의 선율", "낚시 시 소모되는 행동력이 1 감소합니다.", True),
+            ("prayer_success_boost", "🐠 물고기 대이동", "낚시 성공 확률이 소폭 증가합니다.", True),
+            ("prayer_double_catch", "✨ 기적의 손길", "20% 확률로 물고기를 한 마리 더 낚습니다.", True),
+            ("prayer_fog_delay", "🌫️ 짙은 안개", "입질을 기다리는 시간이 평소보다 조금 길어집니다.", False),
+            ("prayer_trash_boost", "🦀 집게의 장난", "물고기 대신 잡동사니가 걸릴 확률이 늘어납니다.", False),
+        ]
+
+        # 축복 70%, 고난 30%
+        if random.random() < 0.7:
+            outcome = random.choice([o for o in outcomes if o[3]])
+        else:
+            outcome = random.choice([o for o in outcomes if not o[3]])
+
+        buff_type, buff_name, buff_desc, is_blessing = outcome
+        duration_hours = 2
+        end_time = (datetime.datetime.now(kst) + datetime.timedelta(hours=duration_hours)).isoformat()
+
+        # 데이터베이스 업데이트
+        await db.execute("UPDATE user_data SET last_prayer_date = ? WHERE user_id = ?", (today, user_id))
+        await db.execute(
+            "INSERT INTO active_buffs (user_id, buff_type, end_time) VALUES (?, ?, ?) "
+            "ON CONFLICT(user_id, buff_type) DO UPDATE SET end_time = ?",
+            (user_id, buff_type, end_time, end_time)
+        )
+        await db.commit()
+
+        embed = discord.Embed(
+            title="🙏 오늘의 기도 결과",
+            description=f"바다에 정성스럽게 기도를 올렸습니다.\n수평선 너머에서 어떤 기운이 느껴집니다...",
+            color=0x00FF00 if is_blessing else 0xFFA500
+        )
+        
+        status = "✨ **축복**" if is_blessing else "⚠️ **고난**"
+        embed.add_field(name=f"{status} | {buff_name}", value=f"**효과:** {buff_desc}\n**지속 시간:** {duration_hours}시간", inline=False)
+        
+        if not is_blessing:
+            embed.set_footer(text="고난은 당신을 더 강한 어부로 만들 것입니다.")
+        else:
+            embed.set_footer(text="바다의 가호가 함께하기를!")
+
+        await interaction.response.send_message(embed=embed)
+
 async def setup(bot):
     await bot.add_cog(PrayerCommands(bot))

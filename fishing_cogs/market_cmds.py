@@ -31,12 +31,12 @@ class MarketCog(commands.Cog):
             choices.append(app_commands.Choice(name=f"{offer['item_name']} ({stock_tag})", value=offer["item_name"]))
         return choices[:25]
 
-    async def _get_wandering_merchant_state(self) -> dict:
+    async def _get_wandering_merchant_state(self, force_refresh: bool = False) -> dict:
         async with db.conn.execute("SELECT value FROM server_state WHERE key='WANDERING_MERCHANT_STATE'") as cursor:
             row = await cursor.fetchone()
 
         now = datetime.datetime.now(kst)
-        if row:
+        if row and not force_refresh:
             try:
                 state = json.loads(row[0])
                 expires_at = state.get("expires_at", "")
@@ -77,6 +77,32 @@ class MarketCog(commands.Cog):
         )
         await db.commit()
         return state
+
+    async def trigger_merchant_encounter(self, interaction: discord.Interaction):
+        """낚시 중 떠돌이 상인 소식을 발견했을 때 호출됩니다."""
+        now = datetime.datetime.now(kst)
+        async with db.conn.execute("SELECT value FROM server_state WHERE key='WANDERING_MERCHANT_STATE'") as cursor:
+            row = await cursor.fetchone()
+
+        should_refresh = True
+        if row:
+            try:
+                state = json.loads(row[0])
+                expires_at = datetime.datetime.fromisoformat(state.get("expires_at", ""))
+                # 아직 시간이 1시간 이상 넉넉히 남았다면 굳이 갱신하지 않고 소식만 전함
+                if expires_at - now > datetime.timedelta(hours=1):
+                    should_refresh = False
+            except:
+                pass
+
+        if should_refresh:
+            await self._get_wandering_merchant_state(force_refresh=True)
+            msg = "📢 **[소문]** 근처 해역에 새로운 떠돌이 상인이 나타났다는 소식이 들려옵니다! `/떠상` 명령어로 확인해보세요."
+        else:
+            msg = "📢 **[소문]** 떠돌이 상인이 아직 이 근처 해역에 머물고 있다는 소식이 들려옵니다! `/떠상` 명령어로 확인해보세요."
+
+        await interaction.channel.send(msg)
+
 
     async def _get_user_merchant_state(self, user_id: int) -> dict:
         async with db.conn.execute("SELECT merchant_purchase_state FROM user_data WHERE user_id=?", (user_id,)) as cursor:
