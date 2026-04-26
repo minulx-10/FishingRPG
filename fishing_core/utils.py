@@ -40,6 +40,13 @@ async def bait_autocomplete(interaction: discord.Interaction, current: str) -> l
             choices.append(app_commands.Choice(name=row[0], value=row[0]))
     return choices[:25]
 
+async def net_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    nets = ["초급 그물망 🕸️", "튼튼한 그물망 🕸️"]
+    query = f"SELECT item_name FROM inventory WHERE user_id=? AND item_name IN ({','.join(['?']*len(nets))}) AND amount > 0"
+    async with db.conn.execute(query, [interaction.user.id, *nets]) as cursor:
+        items = await cursor.fetchall()
+    return [app_commands.Choice(name=row[0], value=row[0]) for row in items if current.lower() in row[0].lower()][:25]
+
 async def fish_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
     choices = [app_commands.Choice(name=fish, value=fish) for fish in FISH_DATA if current.lower() in fish.lower()]
     return choices[:25]

@@ -8,7 +8,7 @@ from discord.ext import commands
 
 from fishing_core.database import db
 from fishing_core.shared import FISH_DATA, WEATHER_TYPES, env_state, kst
-from fishing_core.utils import bait_autocomplete
+from fishing_core.utils import bait_autocomplete, net_autocomplete
 from fishing_core.views import FishingView, InventoryView
 
 
@@ -16,6 +16,97 @@ class FishingCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.equipped_baits = {}
+
+    async def _cast_net(self, interaction: discord.Interaction, net_name: str):
+        await db.get_user_data(interaction.user.id)
+        async with db.conn.execute("SELECT stamina FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+            stamina_row = await cursor.fetchone()
+        current_stamina = stamina_row[0] if stamina_row else 150
+
+        stamina_cost = 12 if net_name == "초급 그물망 🕸️" else 20
+        if current_stamina < stamina_cost:
+            return await interaction.response.send_message(
+                f"❌ 행동력이 부족합니다! (필요: {stamina_cost}⚡ / 현재: {current_stamina}⚡)\n"
+                "💡 `/휴식`, `/휴`, 에너지 드링크로 회복한 뒤 다시 시도해보세요.",
+                ephemeral=True,
+            )
+
+        async with db.conn.execute(
+            "SELECT amount FROM inventory WHERE user_id=? AND item_name=?",
+            (interaction.user.id, net_name),
+        ) as cursor:
+            net_row = await cursor.fetchone()
+        if not net_row or net_row[0] <= 0:
+            return await interaction.response.send_message(f"❌ **{net_name}**이(가) 없습니다! 상점에서 먼저 구매해주세요.", ephemeral=True)
+
+        pools = {
+            "초급 그물망 🕸️": {
+                "draws": 3,
+                "weights": {
+                    "낡은 고철 ⚙️": 20,
+                    "바지락 🐚": 18,
+                    "홍합 🐚": 18,
+                    "새우 🦐": 16,
+                    "멸치 🐟": 15,
+                    "까나리 🐟": 15,
+                    "정어리 🐟": 12,
+                    "소라 🐚": 10,
+                    "가리비 🐚": 8,
+                    "해적의 금화 🪙": 3,
+                },
+            },
+            "튼튼한 그물망 🕸️": {
+                "draws": 5,
+                "weights": {
+                    "낡은 고철 ⚙️": 18,
+                    "바지락 🐚": 16,
+                    "홍합 🐚": 16,
+                    "새우 🦐": 14,
+                    "가리비 🐚": 12,
+                    "소라 🐚": 12,
+                    "꽃게 🦀": 10,
+                    "쭈꾸미 🐙": 10,
+                    "전갱이 🐟": 10,
+                    "싱싱한 고등어 🐟": 8,
+                    "해적의 금화 🪙": 4,
+                },
+            },
+        }
+
+        config = pools[net_name]
+        candidates = list(config["weights"].keys())
+        weights = list(config["weights"].values())
+        catches = random.choices(candidates, weights=weights, k=config["draws"])
+
+        summary: dict[str, int] = {}
+        for item in catches:
+            summary[item] = summary.get(item, 0) + 1
+
+        await db.execute("UPDATE user_data SET stamina = stamina - ? WHERE user_id=?", (stamina_cost, interaction.user.id))
+        await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (interaction.user.id, net_name))
+
+        insert_rows = [(interaction.user.id, item, amount, amount) for item, amount in summary.items()]
+        await db.executemany(
+            "INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, ?) "
+            "ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?",
+            insert_rows,
+        )
+        await db.commit()
+
+        result_lines = []
+        total_value = 0
+        for item, amount in summary.items():
+            unit_price = FISH_DATA.get(item, {}).get("price", 0)
+            total_value += unit_price * amount
+            result_lines.append(f"• **{item}** x{amount}")
+
+        embed = discord.Embed(title=f"🕸️ {net_name} 투망 결과", color=0x1ABC9C)
+        embed.description = "그물망을 넓게 던져 한 번에 여러 자원을 건져 올렸습니다."
+        embed.add_field(name="획득 목록", value="\n".join(result_lines), inline=False)
+        embed.add_field(name="예상 판매 가치", value=f"`{total_value:,} C`", inline=True)
+        embed.add_field(name="소모 행동력", value=f"`{stamina_cost}⚡`", inline=True)
+        embed.set_footer(text="그물망은 빠른 자원 수급용입니다. 희귀 대물은 일반 낚시로 노려보세요.")
+        await interaction.response.send_message(embed=embed)
 
     async def _show_inventory(self, interaction: discord.Interaction, target: discord.Member):
         coins, rod_tier, rating = await db.get_user_data(target.id)
@@ -317,6 +408,16 @@ class FishingCog(commands.Cog):
             view.message = msg
         except Exception:
             pass
+
+    @app_commands.command(name="그물망", description="그물망을 던져 잡어와 자원을 한 번에 건져올립니다.")
+    @app_commands.autocomplete(그물종류=net_autocomplete)
+    async def 그물망(self, interaction: discord.Interaction, 그물종류: str):
+        await self._cast_net(interaction, 그물종류)
+
+    @app_commands.command(name="그물", description="`/그물망`의 축약 명령어입니다.")
+    @app_commands.autocomplete(그물종류=net_autocomplete)
+    async def 그물(self, interaction: discord.Interaction, 그물종류: str):
+        await self._cast_net(interaction, 그물종류)
 
     @app_commands.command(name="인벤토리", description="나 또는 특정 유저의 가방과 스탯을 확인합니다.")
     @app_commands.checks.cooldown(1, 5.0, key=lambda i: i.user.id)

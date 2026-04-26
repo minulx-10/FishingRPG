@@ -249,7 +249,7 @@ class MarketCog(commands.Cog):
         async with db.conn.execute("SELECT item_name, amount FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=0", (interaction.user.id,)) as cursor:
             items = await cursor.fetchall()
 
-        protected_items = ["낡은 고철 ⚙️", "가라앉은 보물상자 🧰", "고급 미끼 🪱", "자석 미끼 🧲", "찢어진 지도 조각 A 🧩", "찢어진 지도 조각 B 🧩", "찢어진 지도 조각 C 🧩", "찢어진 지도 조각 D 🧩", "레이드 작살 🔱"]
+        protected_items = ["낡은 고철 ⚙️", "가라앉은 보물상자 🧰", "고급 미끼 🪱", "자석 미끼 🧲", "찢어진 지도 조각 A 🧩", "찢어진 지도 조각 B 🧩", "찢어진 지도 조각 C 🧩", "찢어진 지도 조각 D 🧩", "레이드 작살 🔱", "초급 그물망 🕸️", "튼튼한 그물망 🕸️"]
         user_excludes = [x for x in [제외1, 제외2, 제외3] if x is not None]
         protected_items.extend(user_excludes)
 
@@ -339,7 +339,9 @@ class MarketCog(commands.Cog):
         if current_amount < 수량:
             return await interaction.response.send_message(f"❌ 가방에 **{target_fish}**가 부족합니다. (현재 보유: {current_amount}마리)", ephemeral=True)
 
-        price_per_item = MARKET_PRICES.get(target_fish, FISH_DATA[target_fish]["price"])
+        price_per_item = MARKET_PRICES.get(target_fish, FISH_DATA.get(target_fish, {}).get("price", 0))
+        if price_per_item <= 0:
+            return await interaction.response.send_message(f"❌ **{target_fish}**는 현재 시장에 판매할 수 없는 아이템입니다.", ephemeral=True)
 
         # 칭호 보너스 (갑부: 판매 수익 5% 추가)
         title = await db.get_user_title(interaction.user.id)
@@ -361,6 +363,8 @@ class MarketCog(commands.Cog):
         embed = discord.Embed(title="🏪 수산시장 아이템 상점", color=0xf1c40f)
         embed.add_field(name="고급 미끼 🪱 (가격: 500 C)", value="다음 낚시 때 일반 어종을 피하고 희귀 어종 등장 확률을 올려줍니다.", inline=False)
         embed.add_field(name="자석 미끼 🧲 (가격: 800 C)", value="물고기는 낚이지 않지만, 바다 밑에 가라앉은 고철이나 보물을 확정적으로 건져냅니다.", inline=False)
+        embed.add_field(name="초급 그물망 🕸️ (가격: 700 C)", value="얕은 바다를 훑어 잡어, 조개류, 고철을 한 번에 3개까지 건져올립니다.", inline=False)
+        embed.add_field(name="튼튼한 그물망 🕸️ (가격: 1,600 C)", value="좀 더 넓게 긁어 조개류와 소형 어종을 한 번에 5개까지 수확합니다.", inline=False)
         embed.add_field(name="에너지 드링크 ⚡ (가격: 1,500 C)", value="즉시 행동력(체력)을 **50⚡** 회복합니다. (최대치 초과 불가)", inline=False)
         embed.add_field(name="가속 포션 💨 (가격: 3,000 C)", value="30분간 낚시 입질 대기 시간이 50% 단축됩니다.", inline=False)
         embed.add_field(name="특수 떡밥 🎣 (가격: 2,000 C)", value="30분간 희귀 등급 이상 물고기 확률이 1.5배 증가합니다.", inline=False)
@@ -371,6 +375,8 @@ class MarketCog(commands.Cog):
     @app_commands.choices(아이템=[
         app_commands.Choice(name="고급 미끼 🪱", value="고급 미끼 🪱"),
         app_commands.Choice(name="자석 미끼 🧲", value="자석 미끼 🧲"),
+        app_commands.Choice(name="초급 그물망 🕸️", value="초급 그물망 🕸️"),
+        app_commands.Choice(name="튼튼한 그물망 🕸️", value="튼튼한 그물망 🕸️"),
         app_commands.Choice(name="에너지 드링크 ⚡", value="에너지 드링크 ⚡"),
         app_commands.Choice(name="가속 포션 💨", value="가속 포션 💨"),
         app_commands.Choice(name="특수 떡밥 🎣", value="특수 떡밥 🎣"),
@@ -387,6 +393,8 @@ class MarketCog(commands.Cog):
         item_prices = {
             "고급 미끼 🪱": 500,
             "자석 미끼 🧲": 800,
+            "초급 그물망 🕸️": 700,
+            "튼튼한 그물망 🕸️": 1600,
             "에너지 드링크 ⚡": 1500,
             "가속 포션 💨": 3000,
             "특수 떡밥 🎣": 2000,
