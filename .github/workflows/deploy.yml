@@ -10,18 +10,39 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # 🌟 (중요) 봇이 수정된 코드를 다시 Push할 수 있도록 쓰기 권한 부여
+
     steps:
       - uses: actions/checkout@v3
+        with:
+          # Auto-commit을 위해 전체 히스토리를 가져옵니다.
+          fetch-depth: 0 
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install ruff mypy -r requirements.txt
-      - name: Run Ruff
+
+      - name: Run Ruff Auto-fix
+        # 🌟 1. 일단 고칠 수 있는 건 다 고칩니다. (에러가 있어도 다음 단계로 넘어가게 || true 추가)
+        run: ruff check . --fix || true
+
+      - name: Auto-commit Ruff fixes
+        # 🌟 2. 수정된 파일이 있으면 깃허브 액션 봇이 알아서 커밋하고 푸시합니다.
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "style: auto-fix ruff formatting [skip ci]"
+
+      - name: Run Ruff (Strict Check)
+        # 🌟 3. 봇이 자동으로 못 고친 진짜 코드 에러가 남아있다면 여기서 빌드를 터트립니다.
         run: ruff check .
+
       - name: Run Mypy
         run: mypy .
 
