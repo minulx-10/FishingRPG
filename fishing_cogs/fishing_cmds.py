@@ -491,37 +491,6 @@ class FishingCog(commands.Cog):
         else:
             await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="해역이동", description="다른 해역으로 배를 몰고 이동합니다. (선박 등급 필요)")
-    @app_commands.choices(지역=[
-        app_commands.Choice(name="연안 (누구나)", value="연안"),
-        app_commands.Choice(name="먼 바다 (선박 Lv.2)", value="먼 바다"),
-        app_commands.Choice(name="심해 (선박 Lv.3)", value="심해"),
-        app_commands.Choice(name="산호초 (선박 Lv.2)", value="산호초"),
-        app_commands.Choice(name="북해 (선박 Lv.4)", value="북해"),
-    ])
-    async def 해역이동(self, interaction: discord.Interaction, 지역: app_commands.Choice[str]):
-        # 선박 티어 확인
-        async with db.conn.execute("SELECT boat_tier FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
-            res = await cursor.fetchone()
-        boat_tier = res[0] if res else 1
-
-        requirements = {
-            "연안": 1,
-            "먼 바다": 2,
-            "심해": 3,
-            "산호초": 2,
-            "북해": 4
-        }
-
-        req_tier = requirements.get(지역.value, 1)
-        if boat_tier < req_tier:
-            return await interaction.response.send_message(f"❌ **{지역.value}**(으)로 이동하려면 선박이 최소 `{req_tier}레벨`이어야 합니다. (현재: {boat_tier}레벨)", ephemeral=True)
-
-        await db.execute("UPDATE user_data SET current_region = ? WHERE user_id = ?", (지역.value, interaction.user.id))
-        await db.commit()
-
-        embed = discord.Embed(title="⛴️ 해역 이동 완료!", description=f"배를 몰아 **{지역.value}**(으)로 이동했습니다!\n이제 이곳에서만 낚이는 새로운 물고기들을 찾아보세요.", color=0x2ecc71)
-        await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="기상예측", description="기상청의 위성 자료를 분석하여 향후 3시간의 날씨 변화를 예측합니다. (비용: 3,000 C)")
     async def 기상예측(self, interaction: discord.Interaction):
