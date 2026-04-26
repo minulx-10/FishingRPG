@@ -76,14 +76,16 @@ class FishingView(View):
         if not self.is_bite:
             self.resolved = True
             self.stop()
-            return await interaction.response.edit_message(content="❌ 너무 일찍 당겼습니다! 물고기가 놀라 도망갔습니다.", embed=None, view=None)
+            embed = discord.Embed(title="💨 너무 일찍 당겼습니다!", description=f"낚싯줄을 던지자마자 당겨버렸습니다.\n잠시 입질을 기다리던 **{self.target_fish}**(이)가 놀라 도망갔습니다.", color=0x95a5a6)
+            return await interaction.response.edit_message(content=None, embed=embed, view=None)
         
         self.resolved = True
         self.stop()
         
         elapsed = datetime.datetime.now(kst).timestamp() - self.start_time
         if elapsed > 1.5:
-            return await interaction.response.edit_message(content="💨 물고기가 미끼만 먹고 도망갔습니다! (타이밍이 늦었습니다)", embed=None, view=None)
+            embed = discord.Embed(title="💨 타이밍이 늦었습니다!", description=f"찰나의 순간, **{self.target_fish}**(이)가 미끼만 쏙 빼먹고 깊은 바다로 도망갔습니다.", color=0x95a5a6)
+            return await interaction.response.edit_message(content=None, embed=embed, view=None)
         
         # 성공! 등급 확인
         fish_data = FISH_DATA.get(self.target_fish, {"grade": "일반"})
@@ -99,9 +101,31 @@ class FishingView(View):
 
     async def on_bite_success(self, interaction, elapsed, grade):
         try:
-            embed = discord.Embed(title="🎣 낚시 성공!", color=0x00ff00)
-            embed.add_field(name="어종", value=f"**{self.target_fish}**", inline=True)
-            embed.add_field(name="등급", value=format_grade_label(grade), inline=True)
+            embed = discord.Embed(title="✨ 낚시 성공! 월척입니다!", color=0x2ecc71)
+            embed.set_author(name=f"{self.user.name}님의 포획 기록", icon_url=self.user.display_avatar.url)
+            
+            grade_label = format_grade_label(grade)
+            embed.description = f"**{self.target_fish}** (을)를 성공적으로 낚아올렸습니다!\n입질 반응 속도: `{elapsed:.2f}초`"
+            
+            embed.add_field(name="🧬 어종 등급", value=grade_label, inline=True)
+            
+            # 가격 정보 가져오기
+            price = FISH_DATA.get(self.target_fish, {}).get("price", 100)
+            async with db.conn.execute("SELECT current_price FROM market_prices WHERE item_name=?", (self.target_fish,)) as cursor:
+                res = await cursor.fetchone()
+            if res: price = res[0]
+            embed.add_field(name="💰 현재 시세", value=f"`{price:,} C`", inline=True)
+
+            # 등급별 이미지 (나중에 어종별 이미지로 확장 가능)
+            grade_images = {
+                "일반": "https://images.unsplash.com/photo-1524704659698-9ff3121ef3c4?w=400",
+                "희귀": "https://images.unsplash.com/photo-1544551763-47a0159f963f?w=400",
+                "초희귀": "https://images.unsplash.com/photo-1559130464-473ff4653658?w=400",
+                "에픽": "https://images.unsplash.com/photo-1516684732162-798a0062be99?w=400",
+                "레전드": "https://images.unsplash.com/photo-1534043464124-3be32fe000c9?w=400",
+                "신화": "https://images.unsplash.com/photo-1498654203945-36283ca79272?w=400"
+            }
+            embed.set_thumbnail(url=grade_images.get(grade, grade_images["일반"]))
             
             # [신규] 크라켄 약탈 로직
             if self.target_fish == "심해의 파멸, 크라켄 🦑":
@@ -196,34 +220,39 @@ class TensionFishingView(View):
         if action == "당기기": self.tension += random.randint(15, 25)
         else: self.tension -= random.randint(15, 25)
         self.tension += random.choice([-15, -10, 10, 15])
-        if self.tension >= 100 or self.tension <= 0:
-            self.stop()
-            msg = "💥 줄이 끊어졌습니다!" if self.tension >= 100 else "💨 바늘이 빠졌습니다!"
-            
-            # 바다 빠짐 연출 강화
-            if self.grade in ["레전드", "신화", "태고", "환상", "미스터리", "대형 포식자"] and random.random() < 0.2:
-                duration_minutes = 30
-                end_time = (datetime.datetime.now(kst) + datetime.timedelta(minutes=duration_minutes)).isoformat()
-                await db.execute("INSERT INTO active_buffs (user_id, buff_type, end_time) VALUES (?, 'wet_clothes', ?) ON CONFLICT(user_id, buff_type) DO UPDATE SET end_time = ?", (self.user.id, end_time, end_time))
-                await db.commit()
-                
-                fall_embed = discord.Embed(title="🌊 으아아아! 바다에 빠졌습니다!!", color=0xe74c3c)
-                fall_embed.description = f"물고기의 엄청난 힘에 이기지 못하고 배 밖으로 튕겨 나갔습니다!\n\n**[효과]**\n- 💨 **젖은 옷 (디버프)**: {duration_minutes}분 동안 낚시 대기 시간이 증가합니다.\n- 💔 **체력 감소**: 충격으로 인해 체력이 `20` 감소합니다."
-                fall_embed.set_image(url="https://images.unsplash.com/photo-1519046904884-53103b34b206?w=800") # 거친 파도 이미지
-                
-                await db.execute("UPDATE user_data SET stamina = MAX(0, stamina - 20) WHERE user_id=?", (self.user.id,))
-                await db.commit()
-                
-                return await interaction.response.edit_message(content=None, embed=fall_embed, view=None)
-            
-            await db.commit()
-            return await interaction.response.edit_message(content=msg, embed=None, view=None)
-        if self.turn >= self.max_turns:
-            if not (20 <= self.tension <= 80):
+            if self.tension >= 100 or self.tension <= 0:
                 self.stop()
-                return await interaction.response.edit_message(content="💨 힘겨루기 실패!", embed=None, view=None)
-            self.stop()
-            await self.parent_view.on_bite_success(interaction, self.elapsed, self.grade)
+                if self.tension >= 100:
+                    msg = f"💥 낚싯줄이 팽팽하게 당겨지더니 끊어져 버렸습니다!\n**{self.target_fish}**(이)가 줄을 끊고 달아났습니다."
+                else:
+                    msg = f"💨 낚싯줄이 너무 느슨해져 바늘이 빠졌습니다!\n**{self.target_fish}**(이)가 유유히 바다로 사라졌습니다."
+                
+                # 바다 빠짐 연출 강화
+                if self.grade in ["레전드", "신화", "태고", "환상", "미스터리", "대형 포식자"] and random.random() < 0.2:
+                    duration_minutes = 30
+                    end_time = (datetime.datetime.now(kst) + datetime.timedelta(minutes=duration_minutes)).isoformat()
+                    await db.execute("INSERT INTO active_buffs (user_id, buff_type, end_time) VALUES (?, 'wet_clothes', ?) ON CONFLICT(user_id, buff_type) DO UPDATE SET end_time = ?", (self.user.id, end_time, end_time))
+                    await db.commit()
+                    
+                    fall_embed = discord.Embed(title="🌊 으아아아! 바다에 빠졌습니다!!", color=0xe74c3c)
+                    fall_embed.description = f"**{self.target_fish}**의 엄청난 괴력에 이기지 못하고 배 밖으로 튕겨 나갔습니다!\n\n**[효과]**\n- 💨 **젖은 옷 (디버프)**: {duration_minutes}분 동안 낚시 대기 시간이 증가합니다.\n- 💔 **체력 감소**: 충격으로 인해 체력이 `20` 감소합니다."
+                    fall_embed.set_image(url="https://images.unsplash.com/photo-1519046904884-53103b34b206?w=800") # 거친 파도 이미지
+                    
+                    await db.execute("UPDATE user_data SET stamina = MAX(0, stamina - 20) WHERE user_id=?", (self.user.id,))
+                    await db.commit()
+                    
+                    return await interaction.response.edit_message(content=None, embed=fall_embed, view=None)
+                
+                await db.commit()
+                fail_embed = discord.Embed(title="❌ 포획 실패!", description=msg, color=0x95a5a6)
+                return await interaction.response.edit_message(content=None, embed=fail_embed, view=None)
+            if self.turn >= self.max_turns:
+                if not (20 <= self.tension <= 80):
+                    self.stop()
+                    fail_embed = discord.Embed(title="❌ 힘싸움 패배!", description=f"끝내 기력을 다한 **{self.target_fish}**를 제압하지 못했습니다. 물고기가 바늘을 털고 도망갔습니다.", color=0x95a5a6)
+                    return await interaction.response.edit_message(content=None, embed=fail_embed, view=None)
+                self.stop()
+                await self.parent_view.on_bite_success(interaction, self.elapsed, self.grade)
         else:
             self.turn += 1
             await interaction.response.edit_message(embed=self.get_embed(), view=self)
