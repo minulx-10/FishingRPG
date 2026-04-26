@@ -4,7 +4,7 @@ import random
 import discord
 from discord.ui import Button, View
 
-from fishing_core import database as db
+from fishing_core.database import db
 from fishing_core.shared import (
     FISH_DATA,
     format_grade_label,

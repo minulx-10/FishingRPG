@@ -18,13 +18,16 @@ class FishingCog(commands.Cog):
         self.bot = bot
         self.equipped_baits = {}
 
-    async def _cast_net(self, interaction: discord.Interaction, net_name: str):
+    async def _cast_net(self, interaction: discord.Interaction, net_name: str, 수량: int = 1):
+        if 수량 < 1:
+            return await interaction.response.send_message("❌ 최소 1개 이상의 그물망을 던져야 합니다.", ephemeral=True)
+            
         await db.get_user_data(interaction.user.id)
         async with db.conn.execute("SELECT stamina FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
             stamina_row = await cursor.fetchone()
         current_stamina = stamina_row[0] if stamina_row else 150
 
-        stamina_cost = 12 if net_name == "초급 그물망 🕸️" else 20
+        stamina_cost = (12 if net_name == "초급 그물망 🕸️" else 20) * 수량
         if current_stamina < stamina_cost:
             return await interaction.response.send_message(
                 f"❌ 행동력이 부족합니다! (필요: {stamina_cost}⚡ / 현재: {current_stamina}⚡)\n"
@@ -37,12 +40,12 @@ class FishingCog(commands.Cog):
             (interaction.user.id, net_name),
         ) as cursor:
             net_row = await cursor.fetchone()
-        if not net_row or net_row[0] <= 0:
-            return await interaction.response.send_message(f"❌ **{net_name}**이(가) 없습니다! 상점에서 먼저 구매해주세요.", ephemeral=True)
+        if not net_row or net_row[0] < 수량:
+            return await interaction.response.send_message(f"❌ **{net_name}**이(가) 부족합니다! (보유: {net_row[0] if net_row else 0}개 / 필요: {수량}개)", ephemeral=True)
 
         pools = {
             "초급 그물망 🕸️": {
-                "draws": 3,
+                "draws": 5 * 수량,
                 "weights": {
                     "낡은 고철 ⚙️": 20,
                     "바지락 🐚": 18,
@@ -57,7 +60,7 @@ class FishingCog(commands.Cog):
                 },
             },
             "튼튼한 그물망 🕸️": {
-                "draws": 5,
+                "draws": 10 * 수량,
                 "weights": {
                     "낡은 고철 ⚙️": 18,
                     "바지락 🐚": 16,
@@ -84,7 +87,7 @@ class FishingCog(commands.Cog):
             summary[item] = summary.get(item, 0) + 1
 
         await db.execute("UPDATE user_data SET stamina = stamina - ? WHERE user_id=?", (stamina_cost, interaction.user.id))
-        await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (interaction.user.id, net_name))
+        await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name=?", (수량, interaction.user.id, net_name))
 
         insert_rows = [(interaction.user.id, item, amount, amount) for item, amount in summary.items()]
         await db.executemany(
@@ -101,7 +104,7 @@ class FishingCog(commands.Cog):
             total_value += unit_price * amount
             result_lines.append(f"• **{item}** x{amount}")
 
-        embed = discord.Embed(title=f"🕸️ {net_name} 투망 결과", color=0x1ABC9C)
+        embed = discord.Embed(title=f"🕸️ {net_name} {수량}개 투망 결과", color=0x1ABC9C)
         embed.description = "그물망을 넓게 던져 한 번에 여러 자원을 건져 올렸습니다."
         embed.add_field(name="획득 목록", value="\n".join(result_lines), inline=False)
         embed.add_field(name="예상 판매 가치", value=f"`{total_value:,} C`", inline=True)
@@ -347,13 +350,13 @@ class FishingCog(commands.Cog):
 
     @app_commands.command(name="그물망", description="그물망을 던져 잡어와 자원을 한 번에 건져올립니다.")
     @app_commands.autocomplete(그물종류=net_autocomplete)
-    async def 그물망(self, interaction: discord.Interaction, 그물종류: str):
-        await self._cast_net(interaction, 그물종류)
+    async def 그물망(self, interaction: discord.Interaction, 그물종류: str, 수량: int = 1):
+        await self._cast_net(interaction, 그물종류, 수량)
 
     @app_commands.command(name="그물", description="`/그물망`의 축약 명령어입니다.")
     @app_commands.autocomplete(그물종류=net_autocomplete)
-    async def 그물(self, interaction: discord.Interaction, 그물종류: str):
-        await self._cast_net(interaction, 그물종류)
+    async def 그물(self, interaction: discord.Interaction, 그물종류: str, 수량: int = 1):
+        await self._cast_net(interaction, 그물종류, 수량)
 
     @app_commands.command(name="인벤토리", description="나 또는 특정 유저의 가방과 스탯을 확인합니다.")
     @app_commands.checks.cooldown(1, 5.0, key=lambda i: i.user.id)

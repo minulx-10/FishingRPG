@@ -365,8 +365,8 @@ class MarketCog(commands.Cog):
         embed = discord.Embed(title="🏪 수산시장 아이템 상점", color=0xf1c40f)
         embed.add_field(name="고급 미끼 🪱 (가격: 500 C)", value="다음 낚시 때 일반 어종을 피하고 희귀 어종 등장 확률을 올려줍니다.", inline=False)
         embed.add_field(name="자석 미끼 🧲 (가격: 800 C)", value="물고기는 낚이지 않지만, 바다 밑에 가라앉은 고철이나 보물을 확정적으로 건져냅니다.", inline=False)
-        embed.add_field(name="초급 그물망 🕸️ (가격: 700 C)", value="얕은 바다를 훑어 잡어, 조개류, 고철을 한 번에 3개까지 건져올립니다.", inline=False)
-        embed.add_field(name="튼튼한 그물망 🕸️ (가격: 1,600 C)", value="좀 더 넓게 긁어 조개류와 소형 어종을 한 번에 5개까지 수확합니다.", inline=False)
+        embed.add_field(name="초급 그물망 🕸️ (가격: 500 C)", value="얕은 바다를 훑어 잡어, 조개류, 고철을 한 번에 5개까지 건져올립니다.", inline=False)
+        embed.add_field(name="튼튼한 그물망 🕸️ (가격: 1,200 C)", value="좀 더 넓게 긁어 조개류와 소형 어종을 한 번에 10개까지 수확합니다.", inline=False)
         embed.add_field(name="에너지 드링크 ⚡ (가격: 1,500 C)", value="즉시 행동력(체력)을 **50⚡** 회복합니다. (최대치 초과 불가)", inline=False)
         embed.add_field(name="가속 포션 💨 (가격: 3,000 C)", value="30분간 낚시 입질 대기 시간이 50% 단축됩니다.", inline=False)
         embed.add_field(name="특수 떡밥 🎣 (가격: 2,000 C)", value="30분간 희귀 등급 이상 물고기 확률이 1.5배 증가합니다.", inline=False)
@@ -395,8 +395,8 @@ class MarketCog(commands.Cog):
         item_prices = {
             "고급 미끼 🪱": 500,
             "자석 미끼 🧲": 800,
-            "초급 그물망 🕸️": 700,
-            "튼튼한 그물망 🕸️": 1600,
+            "초급 그물망 🕸️": 500,
+            "튼튼한 그물망 🕸️": 1200,
             "에너지 드링크 ⚡": 1500,
             "가속 포션 💨": 3000,
             "특수 떡밥 🎣": 2000,
