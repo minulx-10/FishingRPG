@@ -102,11 +102,9 @@ class FishingView(View):
 
     async def on_bite_success(self, interaction: discord.Interaction, elapsed: float, grade: str):
         try:
-            # 1. 기초 정보 수집 (DB 작업 등)
-            price = FISH_DATA.get(self.target_fish, {}).get("price", 100)
-            async with db.conn.execute("SELECT current_price FROM market_prices WHERE item_name=?", (self.target_fish,)) as cursor:
-                res = await cursor.fetchone()
-            if res: price = res[0]
+            # 1. 기초 정보 수집 (메모리 상의 시세 데이터 참조)
+            from fishing_core.shared import MARKET_PRICES
+            price = MARKET_PRICES.get(self.target_fish, FISH_DATA.get(self.target_fish, {}).get("price", 100))
 
             # 2. 임베드 생성
             embed = discord.Embed(title="✨ 낚시 성공! 월척입니다!", color=0x2ecc71)
