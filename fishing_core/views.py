@@ -58,27 +58,46 @@ class FishActionView(View):
         self.stop()
 
 class FishingView(View):
-    def __init__(self, user, rod_tier, boat_str, location, weather):
+    def __init__(self, user, target_fish, rod_tier, bot):
         super().__init__(timeout=60)
         self.user = user
+        self.target_fish = target_fish
         self.rod_tier = rod_tier
-        self.boat_str = boat_str
-        self.location = location
-        self.weather = weather
-        self.is_finished = False
+        self.bot = bot
+        self.is_bite = False
+        self.resolved = False
+        self.start_time = 0.0
+        self.message = None
 
-    def _escaped_message(self, title, desc):
-        return f"**{title}**\n{desc}"
+    @discord.ui.button(label="대기 중...", style=discord.ButtonStyle.secondary, emoji="🎣")
+    async def hook(self, interaction: discord.Interaction, button: Button):
+        if interaction.user != self.user: return
+        if not self.is_bite:
+            self.resolved = True
+            self.stop()
+            return await interaction.response.edit_message(content="❌ 너무 일찍 당겼습니다! 물고기가 놀라 도망갔습니다.", embed=None, view=None)
+        
+        self.resolved = True
+        self.stop()
+        
+        elapsed = datetime.datetime.now(kst).timestamp() - self.start_time
+        if elapsed > 1.5:
+            return await interaction.response.edit_message(content="💨 물고기가 미끼만 먹고 도망갔습니다! (타이밍이 늦었습니다)", embed=None, view=None)
+        
+        # 성공! 등급 확인
+        fish_data = FISH_DATA.get(self.target_fish, {"grade": "일반"})
+        grade = fish_data.get("grade", "일반")
+        
+        if grade in ["대형 포식자", "레전드", "신화", "태고", "환상", "미스터리"]:
+            # 힘겨루기 시작
+            from fishing_core.views import TensionFishingView
+            tension_view = TensionFishingView(self.user, self.target_fish, self.rod_tier, grade, self, elapsed)
+            await interaction.response.edit_message(embed=tension_view.get_embed(), view=tension_view)
+        else:
+            await self.on_bite_success(interaction, elapsed, grade)
 
     async def on_bite_success(self, interaction, elapsed, grade):
         try:
-            # 물고기 결정 로직 (간소화)
-            location_fish = [name for name, d in FISH_DATA.items() if d.get("location") == self.location and d.get("grade") == grade]
-            if not location_fish:
-                location_fish = [name for name, d in FISH_DATA.items() if d.get("grade") == grade]
-            
-            self.target_fish = random.choice(location_fish) if location_fish else "장화 👢"
-            
             embed = discord.Embed(title="🎣 낚시 성공!", color=0x00ff00)
             embed.add_field(name="어종", value=f"**{self.target_fish}**", inline=True)
             embed.add_field(name="등급", value=format_grade_label(grade), inline=True)
@@ -89,8 +108,8 @@ class FishingView(View):
                     target = await cursor.fetchone()
                 if target:
                     stolen_amount = int(target[1] * 0.1)
-                    await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id = ?", (stolen_amount, target[0]))
-                    await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (stolen_amount, self.user.id))
+                    await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id = ?", (target[0], stolen_amount))
+                    await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (self.user.id, stolen_amount))
                     await db.commit()
                     embed.add_field(name="🦑 크라켄의 촉수 발동!", value=f"심연에서 뻗어 나온 거대한 촉수가 누군가의 금고를 부수고 `{stolen_amount:,} C`를 훔쳐 당신에게 가져왔습니다!!", inline=False)
 
@@ -112,7 +131,7 @@ class FishingView(View):
                     alert_embed = discord.Embed(title="🦖 [경고] 바다가 공포에 질려 침묵합니다...", description=f"**{self.user.mention}**님이 역사상 가장 거대한 포식자 **{self.target_fish}**를 현세에 끌어올렸습니다!!!", color=0x8b4513)
                 elif self.target_fish == "심해의 파멸, 크라켄 🦑":
                     alert_embed = discord.Embed(title="🦑 [재앙 경고] 거대한 촉수들이 해수면을 산산조각 냅니다!!!", description=f"**{self.user.mention}**님이 수백 척의 배를 가라앉힌 북유럽의 악몽, **{self.target_fish}**를 심연에서 건져 올렸습니다!!!", color=0xff0000)
-                # ... 기타 알림 생략 (필요시 추가)
+                
                 if alert_embed:
                     await interaction.channel.send(content="@here", embed=alert_embed)
 
