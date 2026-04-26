@@ -4,6 +4,15 @@ from fishing_core.shared import FISH_DATA
 
 
 class FishingService:
+    # 해역별 특성 정의
+    REGION_CONFIG = {
+        "연안": {"elements": ["표층", "무속성"], "grades": ["일반", "희귀", "피식자", "소형 포식자"], "bonus": 1.0},
+        "먼 바다": {"elements": ["표층", "암초", "무속성"], "grades": ["희귀", "초희귀", "소형 포식자", "대형 포식자"], "bonus": 1.2},
+        "심해": {"elements": ["심해", "무속성"], "grades": ["초희귀", "에픽", "대형 포식자", "레전드"], "bonus": 1.5},
+        "산호초": {"elements": ["암초", "표층"], "grades": ["희귀", "초희귀", "에픽"], "bonus": 1.3},
+        "북해": {"elements": ["심해", "표층", "무속성"], "grades": ["레전드", "신화", "태고", "환상", "미스터리"], "bonus": 2.0},
+    }
+
     @staticmethod
     def calculate_fish_probabilities(
         user_id: int,
@@ -11,8 +20,10 @@ class FishingService:
         bait_used: str,
         active_buffs: list[str],
         title: str,
-        current_weather: str
+        current_weather: str,
+        region: str = "연안"
     ) -> tuple[list[str], list[float]]:
+        config = FishingService.REGION_CONFIG.get(region, FishingService.REGION_CONFIG["연안"])
         candidates = []
         weights = []
 
@@ -24,8 +35,14 @@ class FishingService:
             return candidates, weights
 
         for fish, data in FISH_DATA.items():
-            base_prob = data["prob"]
             grade = data["grade"]
+            element = data.get("element", "무속성")
+
+            # 1. 해역 필터링
+            if not (element in config["elements"] or element == "무속성") or not (grade in config["grades"] or "신화" in grade):
+                continue
+
+            base_prob = data["prob"] * config["bonus"]
 
             # 미끼 효과
             if bait_used == "자석 미끼 🧲":
