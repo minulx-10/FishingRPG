@@ -135,6 +135,7 @@ class DBManager:
             "ALTER TABLE user_data ADD COLUMN guard_fish TEXT DEFAULT ''",
             "ALTER TABLE aquarium ADD COLUMN amount INTEGER DEFAULT 1",
             "ALTER TABLE user_data ADD COLUMN last_farm_harvest TEXT DEFAULT ''",
+            "ALTER TABLE user_data ADD COLUMN merchant_purchase_state TEXT DEFAULT '{}'",
         ]
 
         for query in alter_queries:

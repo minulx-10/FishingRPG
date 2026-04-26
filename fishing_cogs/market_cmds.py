@@ -1,9 +1,13 @@
+import datetime
+import json
+import random
+
 import discord
 from discord import app_commands
 from discord.ext import commands
 
 from fishing_core.database import db
-from fishing_core.shared import FISH_DATA, MARKET_PRICES, RECIPES, format_grade_label, get_grade_order
+from fishing_core.shared import FISH_DATA, MARKET_PRICES, RECIPES, format_grade_label, get_grade_order, kst
 from fishing_core.utils import (
     check_boat_tier,
     fish_autocomplete,
@@ -16,6 +20,162 @@ from fishing_core.views import MarketPaginationView
 class MarketCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    async def _get_wandering_merchant_state(self) -> dict:
+        async with db.conn.execute("SELECT value FROM server_state WHERE key='WANDERING_MERCHANT_STATE'") as cursor:
+            row = await cursor.fetchone()
+
+        now = datetime.datetime.now(kst)
+        if row:
+            try:
+                state = json.loads(row[0])
+                expires_at = state.get("expires_at", "")
+                if expires_at and now < datetime.datetime.fromisoformat(expires_at):
+                    return state
+            except (json.JSONDecodeError, ValueError, TypeError):
+                pass
+
+        common_pool = [
+            {"item_name": "고급 미끼 🪱", "price": 380, "stock": 12, "user_limit": 4, "category": "소모품", "source": "inventory", "amount": 1, "description": "상점보다 조금 저렴한 희귀 낚시용 미끼"},
+            {"item_name": "자석 미끼 🧲", "price": 650, "stock": 8, "user_limit": 3, "category": "소모품", "source": "inventory", "amount": 1, "description": "고철과 보물을 끌어오는 특수 미끼"},
+            {"item_name": "레이드 작살 🔱", "price": 4200, "stock": 5, "user_limit": 2, "category": "전투", "source": "inventory", "amount": 1, "description": "다음 레이드 공격을 크게 강화하는 일회용 장비"},
+            {"item_name": "가라앉은 보물상자 🧰", "price": 2800, "stock": 4, "user_limit": 2, "category": "희귀품", "source": "inventory", "amount": 1, "description": "언제 열어도 설레는 수상한 보물상자"},
+        ]
+        rare_pool = [
+            {"item_name": "찢어진 지도 조각 A 🧩", "price": 1800, "stock": 3, "user_limit": 1, "category": "지도 조각", "source": "inventory", "amount": 1, "description": "보물지도 합성에 필요한 조각"},
+            {"item_name": "찢어진 지도 조각 B 🧩", "price": 1800, "stock": 3, "user_limit": 1, "category": "지도 조각", "source": "inventory", "amount": 1, "description": "보물지도 합성에 필요한 조각"},
+            {"item_name": "찢어진 지도 조각 C 🧩", "price": 1800, "stock": 3, "user_limit": 1, "category": "지도 조각", "source": "inventory", "amount": 1, "description": "보물지도 합성에 필요한 조각"},
+            {"item_name": "찢어진 지도 조각 D 🧩", "price": 1800, "stock": 3, "user_limit": 1, "category": "지도 조각", "source": "inventory", "amount": 1, "description": "보물지도 합성에 필요한 조각"},
+            {"item_name": "특급 참치 초밥 🍣", "price": 1200, "stock": 4, "user_limit": 2, "category": "완성 요리", "source": "inventory", "amount": 1, "description": "바로 되팔 수 있는 완성 요리"},
+            {"item_name": "황실 캐비어 카나페 🍘", "price": 4200, "stock": 2, "user_limit": 1, "category": "완성 요리", "source": "inventory", "amount": 1, "description": "고급 시장에 넘기기 좋은 사치 요리"},
+            {"item_name": "전설의 3대장 돔구이 🍱", "price": 2200, "stock": 3, "user_limit": 1, "category": "완성 요리", "source": "inventory", "amount": 1, "description": "완성된 인기 요리. 바로 판매 가능"},
+        ]
+
+        offers = random.sample(common_pool, k=2) + [random.choice(rare_pool)]
+        expires_at = now + datetime.timedelta(hours=5)
+        state = {
+            "merchant_id": now.strftime("%Y%m%d%H%M%S"),
+            "created_at": now.isoformat(),
+            "expires_at": expires_at.isoformat(),
+            "offers": offers,
+        }
+
+        await db.execute(
+            "INSERT INTO server_state (key, value) VALUES ('WANDERING_MERCHANT_STATE', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = ?",
+            (json.dumps(state, ensure_ascii=False), json.dumps(state, ensure_ascii=False)),
+        )
+        await db.commit()
+        return state
+
+    async def _get_user_merchant_state(self, user_id: int) -> dict:
+        async with db.conn.execute("SELECT merchant_purchase_state FROM user_data WHERE user_id=?", (user_id,)) as cursor:
+            row = await cursor.fetchone()
+        if not row or not row[0]:
+            return {"merchant_id": "", "counts": {}}
+        try:
+            state = json.loads(row[0])
+        except json.JSONDecodeError:
+            return {"merchant_id": "", "counts": {}}
+        state.setdefault("merchant_id", "")
+        state.setdefault("counts", {})
+        return state
+
+    async def _save_user_merchant_state(self, user_id: int, state: dict) -> None:
+        await db.execute(
+            "UPDATE user_data SET merchant_purchase_state = ? WHERE user_id = ?",
+            (json.dumps(state, ensure_ascii=False), user_id),
+        )
+
+    @staticmethod
+    def _format_remaining(expires_at: str) -> str:
+        try:
+            remaining = datetime.datetime.fromisoformat(expires_at) - datetime.datetime.now(kst)
+        except ValueError:
+            return "알 수 없음"
+        if remaining.total_seconds() <= 0:
+            return "곧 교체됨"
+        total_minutes = int(remaining.total_seconds() // 60)
+        hours, minutes = divmod(total_minutes, 60)
+        return f"{hours}시간 {minutes}분"
+
+    async def _show_wandering_merchant(self, interaction: discord.Interaction) -> None:
+        await db.get_user_data(interaction.user.id)
+        state = await self._get_wandering_merchant_state()
+        user_state = await self._get_user_merchant_state(interaction.user.id)
+        if user_state.get("merchant_id") != state["merchant_id"]:
+            user_state = {"merchant_id": state["merchant_id"], "counts": {}}
+            await self._save_user_merchant_state(interaction.user.id, user_state)
+            await db.commit()
+
+        embed = discord.Embed(title="🧳 떠돌이 상인", color=0xE67E22)
+        embed.description = "먼 바다를 떠돌던 상인이 잠시 정박했습니다. 이번 물건은 재고가 적고, 1인 구매 제한이 있습니다."
+
+        for offer in state["offers"]:
+            bought = int(user_state["counts"].get(offer["item_name"], 0))
+            remaining_limit = max(0, int(offer["user_limit"]) - bought)
+            embed.add_field(
+                name=f"{offer['item_name']} · `{offer['category']}`",
+                value=(
+                    f"{offer['description']}\n"
+                    f"가격: `{offer['price']:,} C` | 남은 재고: `{offer['stock']}`\n"
+                    f"내 남은 구매 가능 수량: `{remaining_limit}`"
+                ),
+                inline=False,
+            )
+
+        embed.set_footer(text=f"다음 교체까지: {self._format_remaining(state['expires_at'])}")
+        await interaction.response.send_message(embed=embed)
+
+    async def _buy_from_wandering_merchant(self, interaction: discord.Interaction, item_name: str, quantity: int) -> None:
+        if quantity <= 0:
+            return await interaction.response.send_message("❌ 수량은 1개 이상이어야 합니다.", ephemeral=True)
+
+        await db.get_user_data(interaction.user.id)
+        state = await self._get_wandering_merchant_state()
+        user_state = await self._get_user_merchant_state(interaction.user.id)
+        if user_state.get("merchant_id") != state["merchant_id"]:
+            user_state = {"merchant_id": state["merchant_id"], "counts": {}}
+
+        offer = next((entry for entry in state["offers"] if entry["item_name"] == item_name), None)
+        if offer is None:
+            return await interaction.response.send_message("❌ 지금 떠돌이 상인이 그 물건은 팔고 있지 않습니다.", ephemeral=True)
+
+        if offer["stock"] < quantity:
+            return await interaction.response.send_message(f"❌ 재고가 부족합니다. (남은 재고: {offer['stock']}개)", ephemeral=True)
+
+        purchased = int(user_state["counts"].get(item_name, 0))
+        if purchased + quantity > int(offer["user_limit"]):
+            remain = max(0, int(offer["user_limit"]) - purchased)
+            return await interaction.response.send_message(f"❌ 개인 구매 한도를 초과합니다. (남은 가능 수량: {remain}개)", ephemeral=True)
+
+        coins, _, _ = await db.get_user_data(interaction.user.id)
+        total_price = int(offer["price"]) * quantity
+        if coins < total_price:
+            return await interaction.response.send_message(f"❌ 코인이 부족합니다! (필요: {total_price:,} C / 현재: {coins:,} C)", ephemeral=True)
+
+        await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id = ?", (total_price, interaction.user.id))
+        await db.execute(
+            "INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, ?) "
+            "ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?",
+            (interaction.user.id, item_name, quantity, quantity),
+        )
+
+        offer["stock"] -= quantity
+        user_state["merchant_id"] = state["merchant_id"]
+        user_state["counts"][item_name] = purchased + quantity
+
+        await self._save_user_merchant_state(interaction.user.id, user_state)
+        await db.execute(
+            "UPDATE server_state SET value = ? WHERE key = 'WANDERING_MERCHANT_STATE'",
+            (json.dumps(state, ensure_ascii=False),),
+        )
+        await db.commit()
+
+        await interaction.response.send_message(
+            f"🧳 떠돌이 상인에게서 **{item_name}** {quantity}개를 구매했습니다! "
+            f"(총 `{total_price:,} C` 사용 / 남은 재고: `{offer['stock']}`)"
+        )
 
     @app_commands.command(name="시세", description="현재 수산시장의 글로벌 시세를 확인합니다.")
     @app_commands.autocomplete(검색어=fish_autocomplete)
@@ -38,6 +198,18 @@ class MarketCog(commands.Cog):
 
         view = MarketPaginationView(MARKET_PRICES)
         await interaction.response.send_message(embed=view.make_embed(), view=view)
+
+    @app_commands.command(name="떠돌이상인", description="지금 정박 중인 떠돌이 상인의 상품을 확인합니다.")
+    async def 떠돌이상인(self, interaction: discord.Interaction):
+        await self._show_wandering_merchant(interaction)
+
+    @app_commands.command(name="떠상", description="`/떠돌이상인`의 축약 명령어입니다.")
+    async def 떠상(self, interaction: discord.Interaction):
+        await self._show_wandering_merchant(interaction)
+
+    @app_commands.command(name="떠상구매", description="떠돌이 상인에게서 한정 상품을 구매합니다.")
+    async def 떠상구매(self, interaction: discord.Interaction, 상품명: str, 수량: int = 1):
+        await self._buy_from_wandering_merchant(interaction, 상품명, 수량)
 
     @app_commands.command(name="판매", description="인벤토리에 있는 물고기를 일괄 판매합니다. (등급 필터를 사용할 수 있습니다)")
     @app_commands.describe(제외1="판매하지 않고 보호할 아이템 1", 제외2="판매하지 않고 보호할 아이템 2", 제외3="판매하지 않고 보호할 아이템 3", 등급필터="지정한 등급 이하만 판매합니다.")
