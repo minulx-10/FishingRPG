@@ -1,9 +1,9 @@
 import datetime
-from typing import Any
+from typing import Any, ClassVar
 from fishing_core.database import db
 
 class AchievementService:
-    ACHIEVEMENTS = {
+    ACHIEVEMENTS: ClassVar[dict[str, Any]] = {
         "FIRST_CATCH": {"name": "🌱 첫 걸음", "desc": "처음으로 물고기를 낚았습니다.", "reward": 1000},
         "LEGENDARY_FISHER": {"name": "🌟 전설의 강림", "desc": "레전드 등급 이상의 물고기를 낚았습니다.", "reward": 10000},
         "MARKET_MASTER": {"name": "💰 시장의 큰손", "desc": "누적 판매 금액 100,000 C를 달성했습니다.", "reward": 5000},
