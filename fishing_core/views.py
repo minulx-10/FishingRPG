@@ -12,6 +12,7 @@ from fishing_core.shared import (
     kst,
 )
 
+
 class FishActionView(View):
     def __init__(self, user, fish_name):
         super().__init__(timeout=60)
