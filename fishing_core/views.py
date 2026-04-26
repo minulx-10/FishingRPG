@@ -5,6 +5,7 @@ import discord
 from discord.ui import Button, View
 
 from fishing_core.database import db
+from fishing_core.services.battle_service import BattleService
 from fishing_core.shared import (
     FISH_DATA,
     format_grade_label,
@@ -142,6 +143,7 @@ class FishingView(View):
 
             # [재앙 알림]
             if grade in ["태고", "환상", "미스터리", "신화"]:
+                await db.log_action(self.user.id, "CATCH_RARE_FISH", f"Fish: {self.target_fish}, Grade: {grade}")
                 alert_embed = None
                 if self.target_fish == "메갈로돈 🦈":
                     alert_embed = discord.Embed(title="🦖 [경고] 바다가 공포에 질려 침묵합니다...", description=f"**{self.user.mention}**님이 역사상 가장 거대한 포식자 **{self.target_fish}**를 현세에 끌어올렸습니다!!!", color=0x8b4513)
@@ -261,16 +263,26 @@ class BattleView(View):
 
     async def execute_turn(self, interaction, action):
         if action == "attack":
-            mult = get_element_multiplier(self.my_elem, self.npc_elem)
-            dmg = int(self.my_atk * mult)
+            res = BattleService.calculate_damage(self.my_fish, self.npc_fish, is_defending=self.is_npc_defending)
+            dmg = res["damage"]
             self.npc_hp -= dmg
-            self.battle_log += f"🔵 {self.my_fish} 공격! {dmg} 피해!\n"
+            self.battle_log += f"🔵 {self.my_fish} 공격! {dmg} 피해! ({res['description']})\n"
+            self.is_npc_defending = False # 리셋
         else:
-            self.my_ap += 1
-            self.battle_log += f"🔵 {self.my_fish} 방어!\n"
+            self.is_my_defending = True
+            self.battle_log += f"🔵 {self.my_fish} 방어 자세!\n"
+            
         if self.npc_hp <= 0: return await self.end_battle(interaction, True)
-        self.my_hp -= self.npc_atk
+        
+        # NPC의 반격 (단순화)
+        npc_res = BattleService.calculate_damage(self.npc_fish, self.my_fish, is_defending=self.is_my_defending)
+        npc_dmg = npc_res["damage"]
+        self.my_hp -= npc_dmg
+        self.battle_log += f"🔴 {self.npc_fish} 반격! {npc_dmg} 피해! ({npc_res['description']})\n"
+        self.is_my_defending = False # 리셋
+        
         if self.my_hp <= 0: return await self.end_battle(interaction, False)
+        
         self.turn += 1
         await interaction.response.edit_message(embed=self.generate_embed(), view=self)
 
@@ -326,22 +338,35 @@ class PvPBattleView(View):
     async def execute_turn(self, interaction, action):
         if interaction.user != self.current_turn_user: return
         is_p1 = (interaction.user == self.p1)
+        
+        attacker_fish = self.p1_fish if is_p1 else self.p2_fish
+        defender_fish = self.p2_fish if is_p1 else self.p1_fish
+        
         if action == "attack":
-            mult = get_element_multiplier(self.p1_elem if is_p1 else self.p2_elem, self.p2_elem if is_p1 else self.p1_elem)
-            dmg = int((self.p1_atk if is_p1 else self.p2_atk) * mult)
+            res = BattleService.calculate_damage(attacker_fish, defender_fish)
+            dmg = res["damage"]
             if is_p1: self.p2_hp -= dmg
             else: self.p1_hp -= dmg
+            self.battle_log = f"{'🔵' if is_p1 else '🔴'} {attacker_fish}의 공격! {dmg} 피해! ({res['description']})"
+            
         if self.p1_hp <= 0:
             self.p1_idx += 1
             if self.p1_idx >= len(self.p1_deck): return await self.end_battle(interaction, self.p2, self.p1)
             self._init_fish(1)
+            self.battle_log += f"\n🔵 {self.p1.name}님의 다음 물고기 {self.p1_fish} 출격!"
+            
         if self.p2_hp <= 0:
             self.p2_idx += 1
             if self.p2_idx >= len(self.p2_deck): return await self.end_battle(interaction, self.p1, self.p2)
             self._init_fish(2)
+            self.battle_log += f"\n🔴 {self.p2.name}님의 다음 물고기 {self.p2_fish} 출격!"
+            
         self.current_turn_user = self.p2 if is_p1 else self.p1
         self.turn_count += 1
-        await interaction.response.edit_message(embed=self.generate_embed(), view=self)
+        
+        embed = self.generate_embed()
+        embed.add_field(name="📜 로그", value=self.battle_log, inline=False)
+        await interaction.response.edit_message(embed=embed, view=self)
 
     async def end_battle(self, interaction, winner, loser):
         self.stop()

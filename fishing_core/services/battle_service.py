@@ -2,7 +2,7 @@ import random
 from typing import Any
 
 from fishing_core.database import db
-from fishing_core.shared import FISH_DATA
+from fishing_core.shared import FISH_DATA, get_element_multiplier
 
 
 class BattleService:
@@ -21,12 +21,38 @@ class BattleService:
         return best_fish, max_power
 
     @staticmethod
-    def calculate_damage(attacker_power: int, is_crit: bool = False, multiplier: float = 1.0) -> int:
-        """기본 데미지를 계산합니다."""
-        dmg = attacker_power * random.uniform(0.9, 1.1) * multiplier
+    def calculate_damage(attacker_name: str, defender_name: str, multiplier: float = 1.0, is_defending: bool = False) -> dict[str, Any]:
+        """속성 상성을 반영하여 최종 데미지를 계산합니다."""
+        atk_data = FISH_DATA.get(attacker_name, {"power": 10, "element": "무속성"})
+        def_data = FISH_DATA.get(defender_name, {"power": 10, "element": "무속성"})
+        
+        atk_power = atk_data["power"]
+        atk_elem = atk_data.get("element", "무속성")
+        def_elem = def_data.get("element", "무속성")
+        
+        # 1. 속성 상성 적용
+        elem_mult = get_element_multiplier(atk_elem, def_elem)
+        
+        # 2. 난수 및 기본 데미지
+        base_dmg = atk_power * random.uniform(0.9, 1.1) * multiplier * elem_mult
+        
+        # 3. 크리티컬 (15%)
+        is_crit = random.random() < 0.15
         if is_crit:
-            dmg *= 2.0
-        return int(dmg)
+            base_dmg *= 2.0
+            
+        # 4. 방어 시 데미지 반감
+        if is_defending:
+            base_dmg *= 0.5
+            
+        final_dmg = int(base_dmg)
+        
+        return {
+            "damage": final_dmg,
+            "is_crit": is_crit,
+            "elem_mult": elem_mult,
+            "description": f"{'🔥 크리티컬! ' if is_crit else ''}{'🔺 상성 우위!' if elem_mult > 1.0 else ('🔻 상성 열세...' if elem_mult < 1.0 else '')}"
+        }
 
     @staticmethod
     async def process_raid_attack(user_id: int, fish_name: str, boss_hp: int, boss_max_hp: int) -> dict[str, Any]:

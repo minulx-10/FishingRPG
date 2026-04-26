@@ -103,6 +103,10 @@ class FishingService:
             if title == "[해신]" and grade in ["신화", "미스터리", "태고", "환상"]:
                 base_prob *= 1.3
 
+            # [신규] 초보자 행운의 파도 (Beginner Lucky Wave)
+            if rod_tier == 1 and grade in ["일반", "희귀"]:
+                base_prob *= 1.5
+
             candidates.append(fish)
             weights.append(base_prob)
 

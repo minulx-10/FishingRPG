@@ -147,6 +147,15 @@ class DBManager:
             (28, "ALTER TABLE user_data ADD COLUMN last_prayer_date TEXT DEFAULT ''"),
             (29, "ALTER TABLE user_data ADD COLUMN current_region TEXT DEFAULT '연안'"),
             (30, "ALTER TABLE user_data ADD COLUMN claimed_collections TEXT DEFAULT '{}'"),
+            (31, '''
+                CREATE TABLE IF NOT EXISTS audit_logs (
+                    log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    action_type TEXT,
+                    details TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            '''),
         ]
 
         # 현재 버전 확인
@@ -180,6 +189,19 @@ class DBManager:
             await self.conn.execute("DROP TABLE bucket")
             logger.info("✅ 마이그레이션 성공: 통(bucket) 데이터가 inventory로 안전하게 병합되었습니다.")
 
+    async def commit(self) -> None:
+        """변경 사항을 저장합니다."""
+        if self.conn:
+            await self.conn.commit()
+
+    async def log_action(self, user_id: int, action_type: str, details: str):
+        """중요 액션을 감사 로그에 기록합니다."""
+        if not self.conn:
+            return
+        await self.conn.execute(
+            "INSERT INTO audit_logs (user_id, action_type, details) VALUES (?, ?, ?)",
+            (user_id, action_type, details)
+        )
         await self.conn.commit()
 
     async def execute(self, query: str, params: tuple[Any, ...] | list[Any] = ()) -> aiosqlite.Cursor | None:

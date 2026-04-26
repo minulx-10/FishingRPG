@@ -97,6 +97,12 @@ class BattleCog(commands.Cog):
             await db.get_user_data(상대.id)
 
             # 평화모드 체크
+            # 0) 초보자 보호 체크
+            async with db.conn.execute("SELECT boat_tier FROM user_data WHERE user_id=?", (상대.id,)) as cursor:
+                target_boat = (await cursor.fetchone())[0]
+            if target_boat <= 1:
+                return await interaction.response.send_message(f"🔰 '{상대.name}'님은 아직 초보 어부(선박 Lv.1)입니다. 초보자는 약탈 대상에서 보호받습니다.", ephemeral=True)
+
             async with db.conn.execute("SELECT peace_mode FROM user_data WHERE user_id=?", (상대.id,)) as cursor:
                 res = await cursor.fetchone()
             if res and res[0] == 1:

@@ -316,6 +316,7 @@ class MarketCog(commands.Cog):
         await db.executemany("DELETE FROM inventory WHERE user_id = ? AND item_name = ?", delete_targets)
         await db.executemany("INSERT INTO market_sales (item_name, amount_sold) VALUES (?, ?) ON CONFLICT(item_name) DO UPDATE SET amount_sold = amount_sold + ?", sales_logs)
         await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (total_earned, interaction.user.id))
+        await db.log_action(interaction.user.id, "MARKET_SELL_ALL", f"Total Earned: {total_earned} C, Items: {len(sellable_items)} types")
         await db.commit()
 
         msg = f"{msg}\n**총 수익: +{total_earned:,} C**"
@@ -355,6 +356,7 @@ class MarketCog(commands.Cog):
         await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name=?", (수량, interaction.user.id, target_fish))
         await db.execute("INSERT INTO market_sales (item_name, amount_sold) VALUES (?, ?) ON CONFLICT(item_name) DO UPDATE SET amount_sold = amount_sold + ?", (target_fish, 수량, 수량))
         await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id=?", (total_earned, interaction.user.id))
+        await db.log_action(interaction.user.id, "MARKET_SELL_ITEM", f"Item: {target_fish}, Amount: {수량}, Total Earned: {total_earned} C")
         await db.commit()
 
         await interaction.response.send_message(f"💰 **{target_fish}** {수량}마리를 팔아서 총 `{total_earned:,} C`를 얻었습니다! (개당 {price_per_item}C)")
