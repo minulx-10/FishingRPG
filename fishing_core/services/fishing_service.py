@@ -1,11 +1,12 @@
 import random
+from typing import Any, ClassVar
 
 from fishing_core.shared import FISH_DATA
 
 
 class FishingService:
     # 해역별 특성 정의
-    REGION_CONFIG = {
+    REGION_CONFIG: ClassVar[dict[str, Any]] = {
         "연안": {"elements": ["표층", "무속성"], "grades": ["일반", "희귀", "피식자", "소형 포식자"], "bonus": 1.0},
         "먼 바다": {"elements": ["표층", "암초", "무속성"], "grades": ["희귀", "초희귀", "소형 포식자", "대형 포식자"], "bonus": 1.2},
         "심해": {"elements": ["심해", "무속성"], "grades": ["초희귀", "에픽", "대형 포식자", "레전드"], "bonus": 1.5},

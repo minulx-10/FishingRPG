@@ -1,5 +1,6 @@
 import datetime
 import random
+from typing import Any
 
 from fishing_core.database import db
 from fishing_core.shared import FISH_DATA, MARKET_PRICES, kst
@@ -79,7 +80,7 @@ class MarketService:
         return stamina_regen
 
     @staticmethod
-    def get_price_status(item_name: str) -> Dict[str, any]:
+    def get_price_status(item_name: str) -> dict[str, Any]:
         """특정 어종의 현재 시세 상태(떡상/떡락/평범)를 반환합니다."""
         if item_name not in MARKET_PRICES or item_name not in FISH_DATA:
             return {"ratio": 1.0, "status": "➖ 평범"}
