@@ -1,12 +1,11 @@
 import datetime
-import random
 
 from discord.ext import commands, tasks
 
 from fishing_core.database import db
 from fishing_core.logger import logger
-from fishing_core.shared import FISH_DATA, MARKET_PRICES, env_state, kst, update_weather_randomly
 from fishing_core.services.market_service import MarketService
+from fishing_core.shared import env_state, kst, update_weather_randomly
 
 
 class EventCog(commands.Cog):

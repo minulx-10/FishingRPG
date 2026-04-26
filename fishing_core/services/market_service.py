@@ -71,7 +71,7 @@ class MarketService:
         """유저들의 행동력을 시간대에 따라 자연 회복시킵니다."""
         now_hour = datetime.datetime.now(kst).hour
         # 밤/새벽(18시~06시)은 회복률 감소 (5⚡), 낮 시간은 15⚡
-        stamina_regen = 5 if (18 <= now_hour or now_hour < 6) else 15
+        stamina_regen = 5 if (now_hour >= 18 or now_hour < 6) else 15
         
         await db.execute(f"UPDATE user_data SET stamina = stamina + {stamina_regen} WHERE stamina < max_stamina")
         await db.execute("UPDATE user_data SET stamina = max_stamina WHERE stamina > max_stamina")

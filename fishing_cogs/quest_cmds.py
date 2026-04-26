@@ -1,9 +1,9 @@
 import asyncio
 import datetime
 import io
+import json
 import os
 import random
-import json
 
 import aiohttp
 import discord
@@ -32,7 +32,7 @@ class QuestCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         try:
-            with open("collections.json", "r", encoding="utf-8") as f:
+            with open("collections.json", encoding="utf-8") as f:
                 self.collections = json.load(f)
         except Exception:
             self.collections = {}

@@ -1,13 +1,13 @@
 import random
-import datetime
-from typing import List, Tuple, Dict, Any
+from typing import Any
 
 from fishing_core.database import db
-from fishing_core.shared import FISH_DATA, kst
+from fishing_core.shared import FISH_DATA
+
 
 class BattleService:
     @staticmethod
-    def get_strongest_fish(inventory_items: List[Tuple[str, int]]) -> Tuple[str, int]:
+    def get_strongest_fish(inventory_items: list[tuple[str, int]]) -> tuple[str, int]:
         """잠금된 아이템 중 가장 전투력이 높은 물고기를 반환합니다."""
         max_power = -1
         best_fish = None
@@ -29,7 +29,7 @@ class BattleService:
         return int(dmg)
 
     @staticmethod
-    async def process_raid_attack(user_id: int, fish_name: str, boss_hp: int, boss_max_hp: int) -> Dict[str, Any]:
+    async def process_raid_attack(user_id: int, fish_name: str, boss_hp: int, boss_max_hp: int) -> dict[str, Any]:
         """레이드 공격 로직을 처리하고 결과를 반환합니다."""
         power = FISH_DATA.get(fish_name, {}).get("power", 100)
         grade = FISH_DATA.get(fish_name, {}).get("grade", "일반")
@@ -70,7 +70,7 @@ class BattleService:
         }
 
     @staticmethod
-    async def get_pvp_deck(user_id: int) -> List[Tuple[str, int]]:
+    async def get_pvp_deck(user_id: int) -> list[tuple[str, int]]:
         """유저의 PvP 덱(상위 3마리)을 가져옵니다."""
         async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (user_id,)) as cursor:
             items = await cursor.fetchall()
