@@ -107,41 +107,62 @@ class DBManager:
 
         await self.conn.execute('CREATE INDEX IF NOT EXISTS idx_active_buffs_end_time ON active_buffs (user_id, end_time)')
 
-        # 컬럼 추가 (스키마 업데이트)
-        alter_queries = [
-            "ALTER TABLE user_data ADD COLUMN last_daily TEXT DEFAULT ''",
-            "ALTER TABLE user_data ADD COLUMN boat_tier INTEGER DEFAULT 1",
-            "ALTER TABLE user_data ADD COLUMN quest_date TEXT DEFAULT ''",
-            "ALTER TABLE user_data ADD COLUMN quest_item TEXT DEFAULT ''",
-            "ALTER TABLE user_data ADD COLUMN quest_amount INTEGER DEFAULT 0",
-            "ALTER TABLE user_data ADD COLUMN quest_reward INTEGER DEFAULT 0",
-            "ALTER TABLE user_data ADD COLUMN quest_is_cleared INTEGER DEFAULT 0",
-            "ALTER TABLE inventory ADD COLUMN is_locked INTEGER DEFAULT 0",
-            "ALTER TABLE user_data ADD COLUMN stamina INTEGER DEFAULT 150",
-            "ALTER TABLE user_data ADD COLUMN max_stamina INTEGER DEFAULT 150",
-            "ALTER TABLE user_data ADD COLUMN peace_mode INTEGER DEFAULT 0",
-            "ALTER TABLE user_data ADD COLUMN title TEXT DEFAULT ''",
-            "ALTER TABLE user_data ADD COLUMN aquarium_slots INTEGER DEFAULT 5",
-            "ALTER TABLE user_data ADD COLUMN username TEXT DEFAULT ''",
-            "ALTER TABLE user_data ADD COLUMN peace_cooldown TEXT DEFAULT ''",
-            "ALTER TABLE user_data ADD COLUMN last_free_rest TEXT DEFAULT ''",
-            "ALTER TABLE user_data ADD COLUMN pvp_shield_count INTEGER DEFAULT 3",
-            "ALTER TABLE user_data ADD COLUMN pvp_shield_date TEXT DEFAULT ''",
-            "ALTER TABLE user_data ADD COLUMN pvp_last_target INTEGER DEFAULT 0",
-            "ALTER TABLE user_data ADD COLUMN pvp_consecutive_count INTEGER DEFAULT 0",
-            "ALTER TABLE user_data ADD COLUMN dex_rewards TEXT DEFAULT '{}'",
-            "ALTER TABLE user_data ADD COLUMN upgrade_pity INTEGER DEFAULT 0",
-            "ALTER TABLE user_data ADD COLUMN last_active TEXT DEFAULT ''",
-            "ALTER TABLE user_data ADD COLUMN guard_fish TEXT DEFAULT ''",
-            "ALTER TABLE aquarium ADD COLUMN amount INTEGER DEFAULT 1",
-            "ALTER TABLE user_data ADD COLUMN last_farm_harvest TEXT DEFAULT ''",
-            "ALTER TABLE user_data ADD COLUMN merchant_purchase_state TEXT DEFAULT '{}'",
-            "ALTER TABLE user_data ADD COLUMN last_prayer_date TEXT DEFAULT ''",
+        # 마이그레이션 테이블 생성
+        await self.conn.execute('''
+            CREATE TABLE IF NOT EXISTS migrations (
+                version INTEGER PRIMARY KEY,
+                applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # 마이그레이션 리스트 (버전, 쿼리)
+        migrations = [
+            (1, "ALTER TABLE user_data ADD COLUMN last_daily TEXT DEFAULT ''"),
+            (2, "ALTER TABLE user_data ADD COLUMN boat_tier INTEGER DEFAULT 1"),
+            (3, "ALTER TABLE user_data ADD COLUMN quest_date TEXT DEFAULT ''"),
+            (4, "ALTER TABLE user_data ADD COLUMN quest_item TEXT DEFAULT ''"),
+            (5, "ALTER TABLE user_data ADD COLUMN quest_amount INTEGER DEFAULT 0"),
+            (6, "ALTER TABLE user_data ADD COLUMN quest_reward INTEGER DEFAULT 0"),
+            (7, "ALTER TABLE user_data ADD COLUMN quest_is_cleared INTEGER DEFAULT 0"),
+            (8, "ALTER TABLE inventory ADD COLUMN is_locked INTEGER DEFAULT 0"),
+            (9, "ALTER TABLE user_data ADD COLUMN stamina INTEGER DEFAULT 150"),
+            (10, "ALTER TABLE user_data ADD COLUMN max_stamina INTEGER DEFAULT 150"),
+            (11, "ALTER TABLE user_data ADD COLUMN peace_mode INTEGER DEFAULT 0"),
+            (12, "ALTER TABLE user_data ADD COLUMN title TEXT DEFAULT ''"),
+            (13, "ALTER TABLE user_data ADD COLUMN aquarium_slots INTEGER DEFAULT 5"),
+            (14, "ALTER TABLE user_data ADD COLUMN username TEXT DEFAULT ''"),
+            (15, "ALTER TABLE user_data ADD COLUMN peace_cooldown TEXT DEFAULT ''"),
+            (16, "ALTER TABLE user_data ADD COLUMN last_free_rest TEXT DEFAULT ''"),
+            (17, "ALTER TABLE user_data ADD COLUMN pvp_shield_count INTEGER DEFAULT 3"),
+            (18, "ALTER TABLE user_data ADD COLUMN pvp_shield_date TEXT DEFAULT ''"),
+            (19, "ALTER TABLE user_data ADD COLUMN pvp_last_target INTEGER DEFAULT 0"),
+            (20, "ALTER TABLE user_data ADD COLUMN pvp_consecutive_count INTEGER DEFAULT 0"),
+            (21, "ALTER TABLE user_data ADD COLUMN dex_rewards TEXT DEFAULT '{}'"),
+            (22, "ALTER TABLE user_data ADD COLUMN upgrade_pity INTEGER DEFAULT 0"),
+            (23, "ALTER TABLE user_data ADD COLUMN last_active TEXT DEFAULT ''"),
+            (24, "ALTER TABLE user_data ADD COLUMN guard_fish TEXT DEFAULT ''"),
+            (25, "ALTER TABLE aquarium ADD COLUMN amount INTEGER DEFAULT 1"),
+            (26, "ALTER TABLE user_data ADD COLUMN last_farm_harvest TEXT DEFAULT ''"),
+            (27, "ALTER TABLE user_data ADD COLUMN merchant_purchase_state TEXT DEFAULT '{}'"),
+            (28, "ALTER TABLE user_data ADD COLUMN last_prayer_date TEXT DEFAULT ''"),
         ]
 
-        for query in alter_queries:
-            with contextlib.suppress(aiosqlite.OperationalError):
-                await self.conn.execute(query)
+        # 현재 버전 확인
+        async with self.conn.execute("SELECT MAX(version) FROM migrations") as cursor:
+            row = await cursor.fetchone()
+            current_version = row[0] if row and row[0] is not None else 0
+
+        for version, query in migrations:
+            if version > current_version:
+                try:
+                    await self.conn.execute(query)
+                    await self.conn.execute("INSERT INTO migrations (version) VALUES (?)", (version,))
+                    logger.info(f"🚀 DB 마이그레이션 적용 완료: 버전 {version}")
+                except aiosqlite.OperationalError as e:
+                    if "duplicate column name" in str(e).lower():
+                        await self.conn.execute("INSERT OR IGNORE INTO migrations (version) VALUES (?)", (version,))
+                    else:
+                        logger.error(f"❌ 마이그레이션 실패 (버전 {version}): {e}")
 
         # 통 (bucket) 마이그레이션 로직
         with contextlib.suppress(aiosqlite.OperationalError):

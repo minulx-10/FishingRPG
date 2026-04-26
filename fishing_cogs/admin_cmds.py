@@ -212,5 +212,47 @@ class AdminCog(commands.Cog):
 
         await interaction.followup.send(msg)
 
+    @app_commands.command(name="데이터점검", description="[관리자 전용] 데이터베이스의 정합성을 검사하고 비정상 데이터를 찾아냅니다.")
+    @is_developer()
+    async def 데이터점검(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        
+        issues = []
+        
+        # 1. 음수 코인 체크
+        async with db.conn.execute("SELECT user_id, coins FROM user_data WHERE coins < 0") as cursor:
+            neg_coins = await cursor.fetchall()
+            for uid, coin in neg_coins:
+                issues.append(f"🔴 유저 <@{uid}>: 음수 코인 보유 ({coin:,} C)")
+
+        # 2. 인벤토리 비정상 수량 (0 이하)
+        async with db.conn.execute("SELECT user_id, item_name, amount FROM inventory WHERE amount <= 0") as cursor:
+            inv_issues = await cursor.fetchall()
+            for uid, item, amt in inv_issues:
+                issues.append(f"🟠 유저 <@{uid}>: 아이템 '{item}' 수량 비정상 ({amt})")
+
+        # 3. 고립된 아이템 (데이터에 없는 아이템)
+        from fishing_core.shared import RECIPES
+        async with db.conn.execute("SELECT DISTINCT item_name FROM inventory") as cursor:
+            items_in_inv = await cursor.fetchall()
+            for (item,) in items_in_inv:
+                if item not in FISH_DATA and item not in RECIPES and "미끼" not in item and "그물망" not in item and "조각" not in item and "상자" not in item and "작살" not in item:
+                    issues.append(f"🟡 정의되지 않은 아이템 발견: '{item}'")
+
+        # 4. 필수 스탯 누락 (기본값 설정 여부)
+        async with db.conn.execute("SELECT user_id FROM user_data WHERE boat_tier IS NULL OR rod_tier IS NULL OR max_stamina IS NULL") as cursor:
+            stat_issues = await cursor.fetchall()
+            for (uid,) in stat_issues:
+                issues.append(f"🔴 유저 <@{uid}>: 필수 스탯(선박/낚싯대/체력) 누락")
+
+        if not issues:
+            return await interaction.followup.send("✅ **데이터 정합성 검사 완료!** 발견된 이상 데이터가 없습니다.", ephemeral=True)
+        
+        msg = "🔍 **데이터베이스 정합성 검사 결과**\n" + "\n".join(issues)
+        if len(msg) > 1950:
+            msg = msg[:1950] + "\n... (중략) ..."
+        
+        await interaction.followup.send(msg, ephemeral=True)
+
 async def setup(bot):
     await bot.add_cog(AdminCog(bot))
