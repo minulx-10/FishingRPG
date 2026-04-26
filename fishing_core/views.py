@@ -825,7 +825,7 @@ class MarketPaginationView(View):
             ratio = current_price / base
             status = "📈 떡상" if ratio > 1.2 else ("📉 떡락" if ratio < 0.8 else "➖ 평범")
             grade = FISH_DATA.get(fish, {}).get("grade", "일반")
-            embed.add_field(name=f"{fish} [{grade}]", value=f"현재가: **{current_price} C**\n({status})", inline=True)
+            embed.add_field(name=f"{fish} [{format_grade_label(grade)}]", value=f"현재가: **{current_price} C**\n({status})", inline=True)
 
         max_page = max(1, (len(self.filtered_items)-1)//self.per_page + 1)
         embed.set_footer(text=f"페이지: {self.current_page + 1} / {max_page}")
@@ -969,7 +969,11 @@ class InventoryView(View):
             item_str = ""
             for name, amt, locked in page_items:
                 lock_icon = "🔒" if locked else "📦"
-                item_str += f"{lock_icon} **{name}**: {amt}개\n"
+                if name in FISH_DATA:
+                    grade = FISH_DATA.get(name, {}).get("grade", "일반")
+                    item_str += f"{lock_icon} **{name}** `{format_grade_label(grade)}`: {amt}개\n"
+                else:
+                    item_str += f"{lock_icon} **{name}**: {amt}개\n"
             embed.add_field(name=f"내역 ({len(self.filtered_items)}종)", value=item_str, inline=False)
         else:
             embed.add_field(name="내역", value="해당 카테고리에 아이템이 없습니다.", inline=False)

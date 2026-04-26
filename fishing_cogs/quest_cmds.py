@@ -17,7 +17,7 @@ except ImportError:
 
 from fishing_core.database import db
 from fishing_core.logger import logger
-from fishing_core.shared import FISH_DATA, RECIPES, kst
+from fishing_core.shared import FISH_DATA, RECIPES, format_grade_label, get_grade_color, kst
 from fishing_core.utils import (
     aqua_autocomplete,
     check_boat_tier,
@@ -77,13 +77,17 @@ class QuestCog(commands.Cog):
         embed.add_field(name="도감 등급", value=f"**{dex_rank}**", inline=False)
 
         if collected_names:
-            recent_fish = "\n".join([f"• {name}" for name in collected_names[-5:]])
+            recent_fish = "\n".join(
+                [f"• {name} `{format_grade_label(FISH_DATA.get(name, {}).get('grade', '일반'))}`" for name in collected_names[-5:]]
+            )
             embed.add_field(name="최근 발견한 어종", value=recent_fish, inline=False)
 
             async with db.conn.execute("SELECT item_name, max_size FROM fish_records WHERE user_id=? ORDER BY max_size DESC LIMIT 5", (target.id,)) as cursor:
                 records = await cursor.fetchall()
             if records:
-                record_str = "\n".join([f"🏆 **{name}** : `{size} cm`" for name, size in records])
+                record_str = "\n".join(
+                    [f"🏆 **{name}** `{format_grade_label(FISH_DATA.get(name, {}).get('grade', '일반'))}` : `{size} cm`" for name, size in records]
+                )
                 embed.add_field(name="월척 기록 (Top 5)", value=record_str, inline=False)
         else:
             embed.add_field(name="최근 발견한 어종", value="아직 발견한 물고기가 없습니다.", inline=False)
@@ -253,8 +257,9 @@ class QuestCog(commands.Cog):
             embed = discord.Embed(title="📜 오늘의 항구 의뢰", description="오늘의 의뢰는 이미 완료했습니다!\n마을이 평화롭네요. 내일 다시 와주세요.", color=0x95a5a6)
             return await interaction.response.send_message(embed=embed)
 
-        embed = discord.Embed(title="📜 오늘의 항구 의뢰", description="마을 촌장님이 급하게 생선을 찾고 있습니다!", color=0xe67e22)
-        embed.add_field(name="🎯 타겟 어종", value=f"**{q_item}**", inline=True)
+        q_grade = FISH_DATA.get(q_item, {}).get("grade", "일반")
+        embed = discord.Embed(title="📜 오늘의 항구 의뢰", description="마을 촌장님이 급하게 생선을 찾고 있습니다!", color=get_grade_color(q_grade))
+        embed.add_field(name="🎯 타겟 어종", value=f"**{q_item}**\n`{format_grade_label(q_grade)}`", inline=True)
         embed.add_field(name="🔢 필요 수량", value=f"`{q_amount}마리`", inline=True)
         embed.add_field(name="💰 납품 보상", value=f"`{q_reward:,} C`", inline=False)
 
@@ -432,7 +437,7 @@ class QuestCog(commands.Cog):
             fish_list_str = ""
             for name, amt in items:
                 grade = FISH_DATA[name]["grade"]
-                fish_list_str += f"• **{name}** `[{grade}]` x{amt}마리\n"
+                fish_list_str += f"• **{name}** `{format_grade_label(grade)}` x{amt}마리\n"
 
             embed.description = f"🌊 **수족관에 전시된 물고기들**\n\n{fish_list_str}"
 
@@ -453,7 +458,7 @@ class QuestCog(commands.Cog):
             desc = ""
             for name, amt in items:
                 grade = FISH_DATA[name]["grade"]
-                desc += f"**{name}** `[{grade}]` x{amt}마리\n"
+                desc += f"**{name}** `{format_grade_label(grade)}` x{amt}마리\n"
             embed.description = f"*(이미지 렌더링 오류 발생. 텍스트로 대체합니다)*\n\n{desc}"
             await interaction.followup.send(embed=embed)
 

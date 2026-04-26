@@ -7,7 +7,7 @@ from discord.ext import commands
 
 from fishing_core.database import db
 from fishing_core.logger import logger
-from fishing_core.shared import FISH_DATA, kst
+from fishing_core.shared import FISH_DATA, format_grade_label, kst
 from fishing_core.utils import check_boat_tier, inv_autocomplete
 from fishing_core.views import BattleView, PvPBattleView
 
@@ -61,10 +61,11 @@ class BattleCog(commands.Cog):
             item_list = ""
             for name, amt in items:
                 power = FISH_DATA.get(name, {}).get("power", 0)
+                grade_label = format_grade_label(FISH_DATA.get(name, {}).get("grade", "일반")) if name in FISH_DATA else "📦 아이템"
                 if power > 0:
-                    item_list += f"• {name}: {amt}마리 (전투력: {power}⚡)\n"
+                    item_list += f"• {name} `{grade_label}`: {amt}마리 (전투력: {power}⚡)\n"
                 else:
-                    item_list += f"• {name}: {amt}개\n"
+                    item_list += f"• {name} `{grade_label}`: {amt}개\n"
             embed.add_field(name="보존된 아이템 및 전사", value=item_list, inline=False)
         else:
             embed.add_field(name="텅 비었습니다...", value="`/잠금` 명령어를 통해 중요한 물고기와 아이템을 판매로부터 보호하세요.", inline=False)

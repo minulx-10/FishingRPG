@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from fishing_core.database import db
-from fishing_core.shared import FISH_DATA, MARKET_PRICES, RECIPES
+from fishing_core.shared import FISH_DATA, MARKET_PRICES, RECIPES, format_grade_label, get_grade_order
 from fishing_core.utils import (
     check_boat_tier,
     fish_autocomplete,
@@ -28,8 +28,10 @@ class MarketCog(commands.Cog):
             current_price = MARKET_PRICES[검색어]
             ratio = current_price / base
             status = "📈 떡상" if ratio > 1.2 else ("📉 떡락" if ratio < 0.8 else "➖ 평범")
+            grade = FISH_DATA[검색어].get("grade", "일반")
 
             embed = discord.Embed(title=f"📊 {검색어} 시세 정보", color=0xf1c40f)
+            embed.add_field(name="등급", value=f"**{format_grade_label(grade)}**", inline=True)
             embed.add_field(name="현재 시장가", value=f"**{current_price} C**", inline=True)
             embed.add_field(name="시세 상태", value=status, inline=True)
             return await interaction.response.send_message(embed=embed)
@@ -59,8 +61,7 @@ class MarketCog(commands.Cog):
         user_excludes = [x for x in [제외1, 제외2, 제외3] if x is not None]
         protected_items.extend(user_excludes)
 
-        grade_order = {"일반": 1, "희귀": 2, "초희귀": 3, "대형 포식자": 4, "레전드": 5, "태고": 6, "환상": 7, "미스터리": 8, "신화": 9}
-        target_grade_lv = grade_order.get(등급필터, 10) # '전체'면 10으로 설정해 모든 등급 포함
+        target_grade_lv = get_grade_order(등급필터) if 등급필터 != "전체" else 999
 
         sellable_items = []
         for name, amt in items:
@@ -68,7 +69,7 @@ class MarketCog(commands.Cog):
 
             # 등급 필터링
             fish_grade = FISH_DATA.get(name, {}).get("grade", "일반")
-            if grade_order.get(fish_grade, 0) > target_grade_lv:
+            if get_grade_order(fish_grade) > target_grade_lv:
                 continue
 
             sellable_items.append((name, amt))
@@ -110,7 +111,8 @@ class MarketCog(commands.Cog):
 
             item_total = price * amt
             total_earned += item_total
-            msg += f"• {name} {amt}마리 : `{item_total:,} C` (개당 {price:,}C)\n"
+            grade_label = format_grade_label(item_grade) if name in FISH_DATA else "📦 아이템"
+            msg += f"• {name} `{grade_label}` {amt}마리 : `{item_total:,} C` (개당 {price:,}C)\n"
 
         delete_targets = [(interaction.user.id, name) for name, amt in sellable_items]
         sales_logs = [(name, amt, amt) for name, amt in sellable_items]
