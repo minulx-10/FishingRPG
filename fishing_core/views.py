@@ -124,6 +124,16 @@ class FishingView(View):
         bonus_time = (self.rod_tier - 1) * 0.2
         self.limit_time = max(1.0, base_window + bonus_time)
 
+    def _target_label(self) -> str:
+        grade = FISH_DATA.get(self.target_fish, {}).get("grade", "일반")
+        return f"**{self.target_fish}** `{format_grade_label(grade)}`"
+
+    def _escaped_message(self, reason: str, detail: str = "") -> str:
+        msg = f"{reason}\n놓친 대상: {self._target_label()}"
+        if detail:
+            msg += f"\n{detail}"
+        return msg
+
     async def on_timeout(self):
         if self.resolved:
             return
@@ -134,7 +144,7 @@ class FishingView(View):
 
         if self.message:
             try:
-                await self.message.edit(content="⏰ 낚시 시간이 초과되어 낚싯대를 거두었습니다.", view=self)
+                await self.message.edit(content="⏰ 입질이 오기 전에 낚싯대를 거두었습니다.\n이번엔 아무것도 걸리지 않았습니다.", view=self)
             except Exception:
                 pass
 
@@ -150,7 +160,10 @@ class FishingView(View):
 
         if not self.is_bite:
             self.resolved = True
-            return await interaction.response.edit_message(content="🎣 앗! 너무 일찍 챘습니다. 물고기가 도망갔어요! 💨", view=None)
+            return await interaction.response.edit_message(
+                content="🎣 앗, 너무 일찍 챘습니다!\n아직 입질이 오지 않아 찌 아래의 그림자만 흩어졌습니다. 💨",
+                view=None,
+            )
 
         # 입질 시 임베드 색상 변경 (심미성 개선)
         embed = discord.Embed(title="❗ 챔질 성공!", color=0xffd700) # 황금색
@@ -169,7 +182,10 @@ class FishingView(View):
                     await self.on_bite_success(interaction, elapsed, grade)
             else:
                 self.resolved = True
-                fail_msg = f"⏰ 너무 늦었습니다! `{elapsed:.3f}초` 걸림.\n(놓친 물고기: **{self.target_fish}** / 제한: {self.limit_time:.2f}초)"
+                fail_msg = self._escaped_message(
+                    f"⏰ 챔질이 너무 늦었습니다! (`{elapsed:.3f}초` / 제한 `{self.limit_time:.2f}초`)",
+                    "물고기가 바늘 끝을 스치고 깊은 곳으로 사라졌습니다.",
+                )
                 if grade in ["레전드", "신화", "태고", "환상", "미스터리"] and self.rod_tier > 1 and random.random() < 0.5:
                     await db.execute("UPDATE user_data SET rod_tier = rod_tier - 1 WHERE user_id = ?", (self.user.id,))
                     fail_msg += "\n\n💥 **[치명적 손상]** 괴수의 힘을 이기지 못하고 **낚싯대가 부러졌습니다!** (낚싯대 레벨 1 하락)"
@@ -382,12 +398,18 @@ class TensionFishingView(View):
         if self.tension >= 100 or self.tension <= 0:
             self.stop()
             if self.tension >= 100:
-                msg = f"💥 줄이 끊어졌습니다! (텐션 100% 초과)\n놓친 물고기: **{self.target_fish}**"
+                msg = self.parent_view._escaped_message(
+                    "💥 줄이 버티지 못하고 끊어졌습니다! (텐션 100% 초과)",
+                    "괴수가 마지막으로 몸부림치며 수면 아래로 사라졌습니다.",
+                )
                 if self.grade in ["레전드", "신화", "태고", "환상", "미스터리"] and self.rod_tier > 1 and random.random() < 0.5:
                     await db.execute("UPDATE user_data SET rod_tier = rod_tier - 1 WHERE user_id = ?", (self.user.id,))
                     msg += "\n\n💥 **[치명적 손상]** 괴수의 힘을 이기지 못하고 **낚싯대가 부러졌습니다!** (레벨 1 하락)"
             else:
-                msg = f"💨 물고기가 바늘을 털고 도망갔습니다! (텐션 0% 미만)\n놓친 물고기: **{self.target_fish}**"
+                msg = self.parent_view._escaped_message(
+                    "💨 텐션이 너무 풀려 바늘이 빠졌습니다! (텐션 0% 미만)",
+                    "간신히 걸렸던 물고기가 몸을 비틀어 달아났습니다.",
+                )
 
             if self.target_fish == "둔클레오스테우스 🦖":
                 async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=0", (self.user.id,)) as cursor:
@@ -404,7 +426,14 @@ class TensionFishingView(View):
         if self.turn >= self.max_turns:
             if not (20 <= self.tension <= 80):
                 self.stop()
-                return await interaction.response.edit_message(content=f"💨 아깝게 놓쳤습니다! 마지막 텐션 조절에 실패했습니다.\n놓친 물고기: **{self.target_fish}**", embed=None, view=None)
+                return await interaction.response.edit_message(
+                    content=self.parent_view._escaped_message(
+                        "💨 마지막 힘겨루기에서 균형이 무너졌습니다!",
+                        "거대한 그림자가 수면 아래로 멀어져 갑니다.",
+                    ),
+                    embed=None,
+                    view=None,
+                )
             self.stop()
             await self.parent_view.on_bite_success(interaction, self.elapsed, self.grade)
         else:
