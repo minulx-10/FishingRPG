@@ -7,7 +7,8 @@ from discord import app_commands
 from discord.ext import commands
 
 from fishing_core.database import db
-from fishing_core.shared import FISH_DATA, MARKET_PRICES, RECIPES, format_grade_label, get_grade_order, kst
+from fishing_core.shared import FISH_DATA, MARKET_PRICES, RECIPES, env_state, format_grade_label, get_grade_order, kst
+from fishing_core.services.market_service import MarketService
 from fishing_core.utils import (
     check_boat_tier,
     fish_autocomplete,
@@ -226,19 +227,13 @@ class MarketCog(commands.Cog):
     @app_commands.autocomplete(검색어=fish_autocomplete)
     async def 시세(self, interaction: discord.Interaction, 검색어: str = None):
         if 검색어:
-            if 검색어 not in MARKET_PRICES:
-                return await interaction.response.send_message(f"❌ '{검색어}'에 대한 정보가 수산시장에 없습니다.", ephemeral=True)
-
-            base = FISH_DATA[검색어]["price"]
-            current_price = MARKET_PRICES[검색어]
-            ratio = current_price / base
-            status = "📈 떡상" if ratio > 1.2 else ("📉 떡락" if ratio < 0.8 else "➖ 평범")
+            status_info = MarketService.get_price_status(검색어)
             grade = FISH_DATA[검색어].get("grade", "일반")
 
             embed = discord.Embed(title=f"📊 {검색어} 시세 정보", color=0xf1c40f)
             embed.add_field(name="등급", value=f"**{format_grade_label(grade)}**", inline=True)
-            embed.add_field(name="현재 시장가", value=f"**{current_price} C**", inline=True)
-            embed.add_field(name="시세 상태", value=status, inline=True)
+            embed.add_field(name="현재 시장가", value=f"**{status_info['current']} C**", inline=True)
+            embed.add_field(name="시세 상태", value=status_info['status'], inline=True)
             return await interaction.response.send_message(embed=embed)
 
         view = MarketPaginationView(MARKET_PRICES)
@@ -301,34 +296,17 @@ class MarketCog(commands.Cog):
         if user_excludes:
             msg += f"*(🛡️ 선택 보호됨: {', '.join(user_excludes)})*\n\n"
 
-        from fishing_core.shared import env_state
         current_weather = env_state.get("CURRENT_WEATHER", "☀️ 맑음")
-        weather_bonus_msg = ""
-        if current_weather == "☀️ 맑음":
-            weather_bonus_msg = "*(☀️ 맑은 날씨 보너스: 일반/희귀 어종 가격 1.3배 적용 중!)*\n"
-
         for name, amt in sellable_items:
-            if name in MARKET_PRICES:
-                price = MARKET_PRICES[name]
-            elif name in FISH_DATA:
-                price = FISH_DATA[name]["price"]
-            elif name in RECIPES and "price" in RECIPES[name]:
-                price = RECIPES[name]["price"]
-            else:
-                price = 0
-
-            # 맑은 날 일반/희귀 보너스
-            item_grade = FISH_DATA.get(name, {}).get("grade", "일반")
-            if current_weather == "☀️ 맑음" and item_grade in ["일반", "희귀"]:
-                price = int(price * 1.3)
-
-            # 칭호 보너스 (갑부: 판매 수익 5% 추가)
-            title = await db.get_user_title(interaction.user.id)
-            if title == "[갑부]":
-                price = int(price * 1.05)
-
+            base_price = 0
+            if name in FISH_DATA: base_price = FISH_DATA[name]["price"]
+            elif name in RECIPES and "price" in RECIPES[name]: base_price = RECIPES[name]["price"]
+            
+            price = await MarketService.calculate_sell_price(interaction.user.id, name, base_price, current_weather)
+            
             item_total = price * amt
             total_earned += item_total
+            item_grade = FISH_DATA.get(name, {}).get("grade", "아이템")
             grade_label = format_grade_label(item_grade) if name in FISH_DATA else "📦 아이템"
             msg += f"• {name} `{grade_label}` {amt}마리 : `{item_total:,} C` (개당 {price:,}C)\n"
 
@@ -340,7 +318,7 @@ class MarketCog(commands.Cog):
         await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (total_earned, interaction.user.id))
         await db.commit()
 
-        msg = f"{weather_bonus_msg}{msg}\n**총 수익: +{total_earned:,} C**"
+        msg = f"{msg}\n**총 수익: +{total_earned:,} C**"
 
         if len(msg) > 1900:
             msg = msg[:1900] + "\n... (목록이 너무 길어 생략됨) ...\n" + f"\n**총 수익: +{total_earned:,} C**"
@@ -365,14 +343,12 @@ class MarketCog(commands.Cog):
         if current_amount < 수량:
             return await interaction.response.send_message(f"❌ 가방에 **{target_fish}**가 부족합니다. (현재 보유: {current_amount}마리)", ephemeral=True)
 
-        price_per_item = MARKET_PRICES.get(target_fish, FISH_DATA.get(target_fish, {}).get("price", 0))
+        current_weather = env_state.get("CURRENT_WEATHER", "☀️ 맑음")
+        base_price = FISH_DATA.get(target_fish, {}).get("price", 0)
+        price_per_item = await MarketService.calculate_sell_price(interaction.user.id, target_fish, base_price, current_weather)
+
         if price_per_item <= 0:
             return await interaction.response.send_message(f"❌ **{target_fish}**는 현재 시장에 판매할 수 없는 아이템입니다.", ephemeral=True)
-
-        # 칭호 보너스 (갑부: 판매 수익 5% 추가)
-        title = await db.get_user_title(interaction.user.id)
-        if title == "[갑부]":
-            price_per_item = int(price_per_item * 1.05)
 
         total_earned = price_per_item * 수량
 

@@ -6,6 +6,7 @@ from discord.ext import commands, tasks
 from fishing_core.database import db
 from fishing_core.logger import logger
 from fishing_core.shared import FISH_DATA, MARKET_PRICES, env_state, kst, update_weather_randomly
+from fishing_core.services.market_service import MarketService
 
 
 class EventCog(commands.Cog):
@@ -22,45 +23,18 @@ class EventCog(commands.Cog):
 
     @tasks.loop(minutes=10)
     async def market_update_loop(self):
-        """10분마다 시세를 업데이트하고 유저의 체력을 회복시킵니다."""
+        """10분마다 시세 업데이트, 버프 정리, 체력 회복을 수행합니다."""
         try:
-            async with db.conn.execute("SELECT item_name, amount_sold FROM market_sales") as cursor:
-                sales_data = await cursor.fetchall()
+            # 1. 시장 시세 업데이트 (공급/수요 기반)
+            await MarketService.update_market_prices()
+            
+            # 2. 만료된 버프 정리
+            await MarketService.cleanup_expired_buffs()
 
-            sales_dict = {row[0]: row[1] for row in sales_data}
+            # 3. 행동력(체력) 자연 회복
+            stamina_regen = await MarketService.recover_user_stamina()
 
-            for fish, data in FISH_DATA.items():
-                base_price = data["price"]
-                sold = sales_dict.get(fish, 0)
-
-                # 수요와 공급 기반 알고리즘 (탄력성 강화)
-                if sold == 0:
-                    # 판매가 없으면 가격 상승 (0.5% ~ 3.5% 랜덤)
-                    increase_rate = random.uniform(0.005, 0.035)
-                    new_price = int(MARKET_PRICES.get(fish, base_price) * (1 + increase_rate))
-                    # 최대 250% 제한
-                    new_price = min(new_price, int(base_price * 2.5))
-                else:
-                    # 판매량에 따른 가격 하락 (지수적 하락)
-                    drop_factor = max(0.1, 0.95 ** (sold / 2))
-                    new_price = int(MARKET_PRICES.get(fish, base_price) * drop_factor)
-                    # 최소 10% 제한
-                    new_price = max(new_price, int(base_price * 0.1))
-
-                jitter = random.uniform(0.97, 1.03) # 3% 랜덤 노이즈
-                MARKET_PRICES[fish] = int(new_price * jitter)
-
-            await db.execute("UPDATE market_sales SET amount_sold = 0")
-
-            # 행동력(체력) 10분마다 자연 회복 (최대치 초과 방지)
-            now_hour = datetime.datetime.now(kst).hour
-            stamina_regen = 5 if (18 <= now_hour <= 23 or 0 <= now_hour < 6) else 15  # 밤/새벽 시간대는 자연 회복률 1/3 토막
-
-            await db.execute(f"UPDATE user_data SET stamina = stamina + {stamina_regen} WHERE stamina < max_stamina")
-            await db.execute("UPDATE user_data SET stamina = max_stamina WHERE stamina > max_stamina")
-            await db.commit()
-
-            logger.info(f"시세 업데이트 및 체력 {stamina_regen}⚡ 회복 완료.")
+            logger.info(f"정기 시스템 점검 완료 (시세 변동 / 버프 정리 / 체력 {stamina_regen}⚡ 회복)")
         except Exception as e:
             logger.error(f"시세 업데이트 루프 에러: {e}")
 

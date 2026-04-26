@@ -1,5 +1,6 @@
 import datetime as dt
 import random
+import json
 
 import discord
 from discord import app_commands
@@ -10,6 +11,7 @@ from fishing_core.logger import logger
 from fishing_core.shared import FISH_DATA, format_grade_label, kst
 from fishing_core.utils import check_boat_tier, inv_autocomplete
 from fishing_core.views import BattleView, PvPBattleView
+from fishing_core.services.battle_service import BattleService
 
 
 class BattleCog(commands.Cog):
@@ -44,26 +46,21 @@ class BattleCog(commands.Cog):
             st = await cursor.fetchone()
         if st and st[0] < 15:
             return await interaction.response.send_message(f"❌ 행동력(체력)이 부족합니다! (필요: 15⚡ / 현재: {st[0]}⚡)\n💡 `/출석`이나 `/휴식`으로 체력을 회복하세요.", ephemeral=True)
-        await db.execute("UPDATE user_data SET stamina = stamina - 15 WHERE user_id=?", (interaction.user.id,))
-
-        async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (interaction.user.id,)) as cursor:
+        
+        async with db.conn.execute("SELECT item_name, amount FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (interaction.user.id,)) as cursor:
             items = await cursor.fetchall()
 
         if not items:
             return await interaction.response.send_message("❌ 잠금(보호) 처리된 물고기가 없습니다! 인벤토리에서 `/잠금` 명령어로 전사를 보호하세요.", ephemeral=True)
 
-        my_best_fish = None
-        max_power = -1
-        for (name,) in items:
-            power = FISH_DATA.get(name, {}).get("power", -1)
-            if power > max_power:
-                max_power = power
-                my_best_fish = name
+        my_best_fish, max_power = BattleService.get_strongest_fish(items)
 
         if max_power == -1 or not my_best_fish:
             return await interaction.response.send_message("❌ 출전할 유효한 물고기가 없습니다! (잠금된 목록에 일반 아이템만 존재합니다)", ephemeral=True)
 
-        npc_pool = [name for name, data in FISH_DATA.items() if data.get("grade") != "히든"]
+        await db.execute("UPDATE user_data SET stamina = stamina - 15 WHERE user_id=?", (interaction.user.id,))
+        
+        npc_pool = [name for name, data in FISH_DATA.items() if data.get("grade") not in ["히든", "special"]]
         npc_fish = random.choice(npc_pool)
 
         view = BattleView(interaction.user, my_best_fish, npc_fish)
@@ -96,7 +93,7 @@ class BattleCog(commands.Cog):
                 st = await cursor.fetchone()
             if st and st[0] < 20:
                 return await interaction.response.send_message(f"❌ 행동력(체력)이 부족합니다! (필요: 20⚡ / 현재: {st[0]}⚡)\n💡 `/출석`이나 `/휴식`으로 체력을 회복하세요.", ephemeral=True)
-            await db.execute("UPDATE user_data SET stamina = stamina - 20 WHERE user_id=?", (interaction.user.id,))
+            
             await db.get_user_data(상대.id)
 
             # 평화모드 체크
@@ -115,13 +112,11 @@ class BattleCog(commands.Cog):
                 target_rp = (await cursor.fetchone())[0]
 
             rp_gap_limit = 500
-            if my_rp > 2000:
-                rp_gap_limit = 1000
+            if my_rp > 2000: rp_gap_limit = 1000
 
             if my_rp - target_rp > rp_gap_limit:
                 return await interaction.response.send_message(
-                    f"❌ 상대방과의 RP 격차가 너무 큽니다! (나: {my_rp} / 상대: {target_rp})\n"
-                    f"⚖️ 비슷한 실력의 유저에게만 수산대전을 걸 수 있습니다.",
+                    f"❌ 상대방과의 RP 격차가 너무 큽니다! (나: {my_rp} / 상대: {target_rp})\n⚖️ 비슷한 실력의 유저에게만 수산대전을 걸 수 있습니다.",
                     ephemeral=True,
                 )
 
@@ -138,36 +133,23 @@ class BattleCog(commands.Cog):
             if shield_count <= 0:
                 return await interaction.response.send_message(f"🛡️ '{상대.name}'님은 오늘 이미 3회 약탈당해 **보호막**이 발동 중입니다.", ephemeral=True)
 
-            # 3) 공격자 평화모드 해제 및 쿨타임
+            # 덱 구성 가져오기
+            p1_deck = await BattleService.get_pvp_deck(interaction.user.id)
+            p2_deck = await BattleService.get_pvp_deck(상대.id)
+
+            if not p1_deck:
+                return await interaction.response.send_message("❌ 내 잠금 목록에 출전 가능한 전사가 없습니다!", ephemeral=True)
+            if not p2_deck:
+                return await interaction.response.send_message(f"❌ 상대방({상대.name})의 잠금 목록이 비어있어 약탈할 수 없습니다!", ephemeral=True)
+
+            # 성공 시 체력 차감 및 상태 업데이트
+            await db.execute("UPDATE user_data SET stamina = stamina - 20 WHERE user_id=?", (interaction.user.id,))
             cooldown_until = (now + dt.timedelta(hours=1)).isoformat()
             await db.execute("UPDATE user_data SET peace_mode=0, peace_cooldown=? WHERE user_id=?", (cooldown_until, interaction.user.id))
-
-            # 방어자 보호막 1회 차감
             await db.execute("UPDATE user_data SET pvp_shield_count = pvp_shield_count - 1, pvp_shield_date=? WHERE user_id=?", (today_str, 상대.id))
             await db.commit()
 
-            async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (interaction.user.id,)) as cursor:
-                items1 = await cursor.fetchall()
-            if not items1:
-                return await interaction.response.send_message("❌ 내 잠금 목록이 비어있습니다!", ephemeral=True)
-
-            async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (상대.id,)) as cursor:
-                items2 = await cursor.fetchall()
-            if not items2:
-                return await interaction.response.send_message(f"❌ 상대방({상대.name})의 잠금 목록이 비어있어 약탈할 수 없습니다!", ephemeral=True)
-
-            def get_top3_fish(items):
-                fish_list = []
-                for (name,) in items:
-                    p = FISH_DATA.get(name, {}).get("power", -1)
-                    if p > 0:
-                        fish_list.append((name, p))
-                fish_list.sort(key=lambda x: x[1], reverse=True)
-                return fish_list[:3]
-
-            p1_deck = get_top3_fish(items1)
-            p2_deck = get_top3_fish(items2)
-
+            # 호위 로직 반영
             async with db.conn.execute("SELECT last_active, guard_fish FROM user_data WHERE user_id=?", (상대.id,)) as cursor:
                 p2_data = await cursor.fetchone()
             p2_last_active, p2_guard = p2_data if p2_data else ("", "")
@@ -179,18 +161,7 @@ class BattleCog(commands.Cog):
                     is_p2_offline = True
 
             if p2_guard and any(f[0] == p2_guard for f in p2_deck):
-                new_p2_deck = []
-                for f_name, f_pwr in p2_deck:
-                    if f_name == p2_guard:
-                        new_p2_deck.append((f_name, int(f_pwr * 1.15)))
-                    else:
-                        new_p2_deck.append((f_name, f_pwr))
-                p2_deck = new_p2_deck
-
-            if not p1_deck:
-                return await interaction.response.send_message("❌ 출전 가능한 유효한 물고기가 없습니다!", ephemeral=True)
-            if not p2_deck:
-                return await interaction.response.send_message(f"❌ 상대방({상대.name})에게 유효한 배틀 물고기가 없습니다!", ephemeral=True)
+                p2_deck = [(f[0], int(f[1]*1.15) if f[0] == p2_guard else f[1]) for f in p2_deck]
 
             offline_msg = "\n⚠️ **[오프라인 보호]** 상대가 장기 미접속 중입니다. 승리 시 약탈 금액이 감소합니다." if is_p2_offline else ""
             guard_msg = f"\n🛡️ **[호위 발동]** 상대의 **{p2_guard}**(이)가 방어 태세를 갖추고 있습니다!" if p2_guard and any(f[0] == p2_guard for f in p2_deck) else ""
@@ -244,14 +215,22 @@ class BattleCog(commands.Cog):
     @app_commands.command(name="레이드", description="서버 전체 유저들과 힘을 합쳐 월드 보스를 토벌합니다! (체력 25 소모, 30분 쿨타임)")
     @app_commands.checks.cooldown(1, 1800, key=lambda i: i.user.id)
     async def 레이드(self, interaction: discord.Interaction):
-        import json
         await db.get_user_data(interaction.user.id)
         async with db.conn.execute("SELECT stamina FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
             st = await cursor.fetchone()
         if st and st[0] < 25:
             return await interaction.response.send_message(f"❌ 행동력(체력)이 부족합니다! (필요: 25⚡ / 현재: {st[0]}⚡)", ephemeral=True)
-        await db.execute("UPDATE user_data SET stamina = stamina - 25 WHERE user_id=?", (interaction.user.id,))
 
+        async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (interaction.user.id,)) as cursor:
+            items = await cursor.fetchall()
+        if not items:
+            return await interaction.response.send_message("❌ 전투에 출전할 잠금 처리된 물고기가 없습니다!", ephemeral=True)
+
+        strongest_fish, _ = BattleService.get_strongest_fish(items)
+        if not strongest_fish:
+            return await interaction.response.send_message("❌ 출전할 유효한 전사가 없습니다!", ephemeral=True)
+
+        # 보스 데이터 로드
         async with db.conn.execute("SELECT value FROM server_state WHERE key='RAID_BOSS_LEVEL'") as cursor:
             lvl_res = await cursor.fetchone()
         boss_level = int(lvl_res[0]) if lvl_res else 1
@@ -259,8 +238,8 @@ class BattleCog(commands.Cog):
 
         async with db.conn.execute("SELECT value FROM server_state WHERE key='RAID_BOSS_HP'") as cursor:
             res = await cursor.fetchone()
-
         boss_hp = int(res[0]) if res else boss_max_hp
+
         if boss_hp <= 0:
             boss_level += 1
             boss_max_hp = int(1000000 * (1.1 ** (boss_level - 1)))
@@ -269,55 +248,38 @@ class BattleCog(commands.Cog):
             await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_DAMAGE_LOG', ?)", ('{}',))
             await interaction.channel.send(f"📢 Lv.{boss_level} 월드 보스가 더 강해져서 깨어났습니다!")
 
-        async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (interaction.user.id,)) as cursor:
-            items = await cursor.fetchall()
-
-        if not items:
-            return await interaction.response.send_message("❌ 전투에 출전할 잠금 처리된 물고기가 없습니다!", ephemeral=True)
-
-        strongest_fish = max(items, key=lambda x: FISH_DATA.get(x[0], {}).get("power", 0))[0]
-        max_power = FISH_DATA.get(strongest_fish, {}).get("power", 0)
-        fish_grade = FISH_DATA.get(strongest_fish, {}).get("grade", "일반")
-
-        dmg = max_power * random.randint(5, 15)
-        if fish_grade in ["레전드", "신화", "태고", "환상", "미스터리"] and random.random() < 0.25:
-            dmg = int(dmg * 1.5)
-
-        is_crit = random.random() < 0.2
-        if is_crit:
-            dmg *= 2
-
-        async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name='레이드 작살 🔱'", (interaction.user.id,)) as cursor:
-            harpoon = await cursor.fetchone()
-        if harpoon and harpoon[0] > 0:
-            dmg *= 2
-            await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name='레이드 작살 🔱'", (interaction.user.id,))
-
-        new_hp = max(0, boss_hp - dmg)
-        await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_BOSS_HP', ?)", (str(new_hp),))
+        # 서비스 레이어를 통한 공격 처리
+        result = await BattleService.process_raid_attack(interaction.user.id, strongest_fish, boss_hp, boss_max_hp)
+        
+        # DB 업데이트
+        await db.execute("UPDATE user_data SET stamina = stamina - 25 WHERE user_id=?", (interaction.user.id,))
+        await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_BOSS_HP', ?)", (str(result['new_hp']),))
 
         async with db.conn.execute("SELECT value FROM server_state WHERE key='RAID_DAMAGE_LOG'") as cursor:
             log_res = await cursor.fetchone()
         damage_log = json.loads(log_res[0]) if log_res and log_res[0] else {}
-        damage_log[str(interaction.user.id)] = damage_log.get(str(interaction.user.id), 0) + dmg
+        damage_log[str(interaction.user.id)] = damage_log.get(str(interaction.user.id), 0) + result['damage']
         await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_DAMAGE_LOG', ?)", (json.dumps(damage_log),))
-
-        reward = int((dmg ** 0.8) * 2)
-        await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (reward, interaction.user.id))
+        
+        await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (result['reward'], interaction.user.id))
         await db.commit()
 
+        # 임베드 구성
+        fish_grade = FISH_DATA.get(strongest_fish, {}).get("grade", "일반")
         embed = discord.Embed(title=f"🌌 월드 보스 레이드 (Lv.{boss_level})", color=0x9932cc)
-        
-        # 체력 바 생성
         bar_len = 20
-        filled = int((new_hp / boss_max_hp) * bar_len) if boss_max_hp > 0 else 0
+        filled = int((result['new_hp'] / boss_max_hp) * bar_len) if boss_max_hp > 0 else 0
         health_bar = "🟥" * filled + "⬛" * (bar_len - filled)
         
-        embed.add_field(name="보스 체력", value=f"{health_bar}\n`{new_hp:,} / {boss_max_hp:,}`", inline=False)
-        embed.description = f"⚔️ **{strongest_fish}** {format_grade_label(fish_grade)}의 맹공!\n💥 **{dmg:,}** 피해를 입혔습니다! 💰 `{reward:,} C` 지급 완료."
+        crit_msg = "💥 **[치명타!]** " if result['is_crit'] else "⚔️ "
+        harpoon_msg = "🔱 **[작살 강화]** " if result['used_harpoon'] else ""
+        
+        embed.add_field(name="보스 체력", value=f"{health_bar}\n`{result['new_hp']:,} / {boss_max_hp:,}`", inline=False)
+        embed.description = f"{crit_msg}{harpoon_msg}**{strongest_fish}** {format_grade_label(fish_grade)}의 맹공!\n" \
+                            f"💥 **{result['damage']:,}** 피해를 입혔습니다! 💰 `{result['reward']:,} C` 지급 완료."
         await interaction.response.send_message(embed=embed)
 
-        if new_hp <= 0:
+        if result['new_hp'] <= 0:
             await interaction.channel.send(f"🎉 Lv.{boss_level} 보스가 토벌되었습니다!")
 
     @app_commands.command(name="호위설정", description="나의 전사 중 한 마리를 '호위 어종'으로 지정합니다.")
