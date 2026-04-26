@@ -84,13 +84,21 @@ class FishingView(View):
         self.stop()
         
         elapsed = datetime.datetime.now(kst).timestamp() - self.start_time
-        if elapsed > 1.5:
-            embed = discord.Embed(title="💨 타이밍이 늦었습니다!", description=f"찰나의 순간, **{self.target_fish}**(이)가 미끼만 쏙 빼먹고 깊은 바다로 도망갔습니다.", color=0x95a5a6)
-            return await interaction.response.edit_message(content=None, embed=embed, view=None)
         
-        # 성공! 등급 확인
+        # [난이도 조정] 등급별 반응 시간 유동적 적용 (기존 1.5초 일괄 적용에서 상향)
         fish_data = FISH_DATA.get(self.target_fish, {"grade": "일반"})
         grade = fish_data.get("grade", "일반")
+        
+        # 등급별 제한 시간 (초)
+        limit_map = {
+            "일반": 3.0, "희귀": 3.0, "초희귀": 2.5, "에픽": 2.2, "소형 포식자": 2.5,
+            "대형 포식자": 2.0, "레전드": 1.8, "신화": 1.8, "태고": 1.5, "환상": 1.5
+        }
+        time_limit = limit_map.get(grade, 2.0)
+        
+        if elapsed > time_limit:
+            embed = discord.Embed(title="💨 타이밍이 늦었습니다!", description=f"찰나의 순간, **{self.target_fish}**(이)가 미끼만 쏙 빼먹고 깊은 바다로 도망갔습니다.\n(반응 속도: `{elapsed:.2f}초` / 제한: `{time_limit}초`)", color=0x95a5a6)
+            return await interaction.response.edit_message(content=None, embed=embed, view=None)
         
         if grade in ["대형 포식자", "레전드", "신화", "태고", "환상", "미스터리"]:
             # 힘겨루기 시작
