@@ -1,5 +1,6 @@
 import datetime
 from typing import Any, ClassVar
+
 from fishing_core.database import db
 
 
