@@ -9,7 +9,6 @@ from fishing_core.services.battle_service import BattleService
 from fishing_core.shared import (
     FISH_DATA,
     format_grade_label,
-    get_element_multiplier,
     kst,
 )
 
