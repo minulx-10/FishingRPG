@@ -99,24 +99,21 @@ class FishingView(View):
         else:
             await self.on_bite_success(interaction, elapsed, grade)
 
-    async def on_bite_success(self, interaction, elapsed, grade):
+    async def on_bite_success(self, interaction: discord.Interaction, elapsed: float, grade: str):
         try:
-            embed = discord.Embed(title="✨ 낚시 성공! 월척입니다!", color=0x2ecc71)
-            embed.set_author(name=f"{self.user.name}님의 포획 기록", icon_url=self.user.display_avatar.url)
-            
-            grade_label = format_grade_label(grade)
-            embed.description = f"**{self.target_fish}** (을)를 성공적으로 낚아올렸습니다!\n입질 반응 속도: `{elapsed:.2f}초`"
-            
-            embed.add_field(name="🧬 어종 등급", value=grade_label, inline=True)
-            
-            # 가격 정보 가져오기
+            # 1. 기초 정보 수집 (DB 작업 등)
             price = FISH_DATA.get(self.target_fish, {}).get("price", 100)
             async with db.conn.execute("SELECT current_price FROM market_prices WHERE item_name=?", (self.target_fish,)) as cursor:
                 res = await cursor.fetchone()
             if res: price = res[0]
+
+            # 2. 임베드 생성
+            embed = discord.Embed(title="✨ 낚시 성공! 월척입니다!", color=0x2ecc71)
+            embed.set_author(name=f"{self.user.name}님의 포획 기록", icon_url=self.user.display_avatar.url)
+            embed.description = f"**{self.target_fish}** (을)를 성공적으로 낚아올렸습니다!\n입질 반응 속도: `{elapsed:.2f}초`"
+            embed.add_field(name="🧬 어종 등급", value=format_grade_label(grade), inline=True)
             embed.add_field(name="💰 현재 시세", value=f"`{price:,} C`", inline=True)
 
-            # 등급별 이미지 (나중에 어종별 이미지로 확장 가능)
             grade_images = {
                 "일반": "https://images.unsplash.com/photo-1524704659698-9ff3121ef3c4?w=400",
                 "희귀": "https://images.unsplash.com/photo-1544551763-47a0159f963f?w=400",
@@ -126,8 +123,8 @@ class FishingView(View):
                 "신화": "https://images.unsplash.com/photo-1498654203945-36283ca79272?w=400"
             }
             embed.set_thumbnail(url=grade_images.get(grade, grade_images["일반"]))
-            
-            # [신규] 크라켄 약탈 로직
+
+            # 3. 특수 로직 (크라켄 등)
             if self.target_fish == "심해의 파멸, 크라켄 🦑":
                 async with db.conn.execute("SELECT user_id, coins FROM user_data WHERE user_id != ? AND coins > 1000 AND peace_mode=0 ORDER BY RANDOM() LIMIT 1", (self.user.id,)) as cursor:
                     target = await cursor.fetchone()
@@ -138,53 +135,52 @@ class FishingView(View):
                     await db.commit()
                     embed.add_field(name="🦑 크라켄의 촉수 발동!", value=f"심연에서 뻗어 나온 거대한 촉수가 누군가의 금고를 부수고 `{stolen_amount:,} C`를 훔쳐 당신에게 가져왔습니다!!", inline=False)
 
+            # 4. 더블 캐치 처리 및 응답 전송
             action_view = FishActionView(self.user, self.target_fish)
-            
-            # 더블 캐치 처리
             double_msg = ""
             if getattr(self, "double_catch", False):
                 await action_view._add_to_inventory()
                 double_msg = " (👯 **더블 캐치!** 요리 효과로 한 마리 더 낚았습니다!)"
+
+            # 응답 시도
+            if not interaction.response.is_done():
+                await interaction.response.edit_message(content=f"🎊 앗, 낚았습니다!{double_msg} 이 물고기를 어떻게 할까요?", embed=embed, view=action_view)
+            else:
+                await interaction.followup.send(content=f"🎊 앗, 낚았습니다!{double_msg} 이 물고기를 어떻게 할까요?", embed=embed, view=action_view)
             
-            await interaction.response.edit_message(content=f"🎊 앗, 낚았습니다!{double_msg} 이 물고기를 어떻게 할까요?", embed=embed, view=action_view)
             action_view.message = await interaction.original_response()
 
-            # [신규] 초보자 튜토리얼 트리거
+            # 5. 후속 처리 (업적, 튜토리얼, 재앙 알림) - 비동기로 진행해도 무방
             async with db.conn.execute("SELECT COUNT(*) FROM fish_dex WHERE user_id=?", (self.user.id,)) as cursor:
-                dex_count = (await cursor.fetchone())[0]
+                dex_res = await cursor.fetchone()
+                dex_count = dex_res[0] if dex_res else 0
             
-            # [업적] 첫 낚시 성공 및 등급별 업적
             await AchievementService.check_achievement(self.user.id, "FIRST_CATCH")
             if grade in ["레전드", "신화", "태고", "환상", "미스터리"]:
                 await AchievementService.check_achievement(self.user.id, "LEGENDARY_FISHER")
 
             if dex_count == 1:
                 tutorial_embed = discord.Embed(title="🌱 첫 낚시 성공을 축하합니다!", color=0x2ecc71)
-                tutorial_embed.description = (
-                    "방금 낚은 물고기는 당신의 첫 기록이 되었습니다!\n\n"
-                    "💡 **앞으로 무엇을 하면 좋을까요?**\n"
-                    "1. `/판매` 명령어로 물고기를 팔아 코인을 모으세요.\n"
-                    "2. `/강화` 명령어로 낚싯대를 업그레이드하세요.\n"
-                    "3. `/도움말`을 입력하면 더 많은 명령어를 볼 수 있습니다.\n"
-                    "4. `/가이드`를 통해 성장 로드맵을 확인하세요!"
-                )
+                tutorial_embed.description = "방금 낚은 물고기는 당신의 첫 기록이 되었습니다!\n\n💡 `/가이드`를 통해 성장 로드맵을 확인하세요!"
                 await interaction.followup.send(embed=tutorial_embed, ephemeral=True)
 
-            # [재앙 알림]
             if grade in ["태고", "환상", "미스터리", "신화"]:
                 await db.log_action(self.user.id, "CATCH_RARE_FISH", f"Fish: {self.target_fish}, Grade: {grade}")
-                alert_embed = None
                 if self.target_fish == "메갈로돈 🦈":
-                    alert_embed = discord.Embed(title="🦖 [경고] 바다가 공포에 질려 침묵합니다...", description=f"**{self.user.mention}**님이 역사상 가장 거대한 포식자 **{self.target_fish}**를 현세에 끌어올렸습니다!!!", color=0x8b4513)
+                    alert_embed = discord.Embed(title="🦖 [경고] 바다가 공포에 질려 침묵합니다...", description=f"**{self.user.mention}**님이 거대 포식자 **{self.target_fish}**를 포획했습니다!", color=0x8b4513)
+                    await interaction.channel.send(content="@here", embed=alert_embed)
                 elif self.target_fish == "심해의 파멸, 크라켄 🦑":
-                    alert_embed = discord.Embed(title="🦑 [재앙 경고] 거대한 촉수들이 해수면을 산산조각 냅니다!!!", description=f"**{self.user.mention}**님이 수백 척의 배를 가라앉힌 북유럽의 악몽, **{self.target_fish}**를 심연에서 건져 올렸습니다!!!", color=0xff0000)
-                
-                if alert_embed:
+                    alert_embed = discord.Embed(title="🦑 [재앙 경고] 거대한 촉수가 솟구칩니다!!!", description=f"**{self.user.mention}**님이 전설의 재앙 **{self.target_fish}**를 심연에서 끌어올렸습니다!!!", color=0xff0000)
                     await interaction.channel.send(content="@here", embed=alert_embed)
 
-        except Exception:
+        except Exception as e:
+            logger.error(f"on_bite_success 오류: {e}")
             import traceback
-            await interaction.followup.send(f"❌ 오류 발생: {traceback.format_exc()[:1000]}", ephemeral=True)
+            error_msg = f"❌ 낚시 처리 중 오류가 발생했습니다.\n```py\n{traceback.format_exc()[:500]}```"
+            if not interaction.response.is_done():
+                await interaction.response.send_message(error_msg, ephemeral=True)
+            else:
+                await interaction.followup.send(error_msg, ephemeral=True)
 
 class TensionFishingView(View):
     def __init__(self, user, target_fish, rod_tier, grade, parent_view, elapsed):
