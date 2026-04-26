@@ -1,8 +1,8 @@
 import random
-from typing import Dict
 
 from fishing_core.database import db
 from fishing_core.shared import FISH_DATA, MARKET_PRICES
+
 
 class MarketService:
     @staticmethod
@@ -30,12 +30,11 @@ class MarketService:
                 new_price = int(current_price * (1 - drop_ratio))
                 # 최소 가격은 기본가의 50%
                 MARKET_PRICES[item_name] = max(int(base_price * 0.5), new_price)
-            else:
-                # 판매량이 0이면 기본가로 5%씩 회복
-                if current_price < base_price:
-                    MARKET_PRICES[item_name] = min(base_price, int(current_price * 1.05))
-                elif current_price > base_price:
-                    MARKET_PRICES[item_name] = max(base_price, int(current_price * 0.95))
+            # 판매량이 0이면 기본가로 5%씩 회복
+            elif current_price < base_price:
+                MARKET_PRICES[item_name] = min(base_price, int(current_price * 1.05))
+            elif current_price > base_price:
+                MARKET_PRICES[item_name] = max(base_price, int(current_price * 0.95))
         
         # 시세 변동 후 판매량 초기화 (다음 텀을 위해)
         await db.execute("UPDATE market_sales SET amount_sold = 0")

@@ -7,10 +7,10 @@ from discord import app_commands
 from discord.ext import commands
 
 from fishing_core.database import db
+from fishing_core.services.fishing_service import FishingService
 from fishing_core.shared import FISH_DATA, WEATHER_TYPES, env_state, kst
 from fishing_core.utils import bait_autocomplete, net_autocomplete
 from fishing_core.views import FishingView, InventoryView
-from fishing_core.services.fishing_service import FishingService
 
 
 class FishingCog(commands.Cog):

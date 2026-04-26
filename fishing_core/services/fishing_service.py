@@ -1,8 +1,7 @@
-import datetime
 import random
-from typing import Dict, List, Tuple
 
-from fishing_core.shared import FISH_DATA, env_state, kst
+from fishing_core.shared import FISH_DATA
+
 
 class FishingService:
     @staticmethod
@@ -10,10 +9,10 @@ class FishingService:
         user_id: int,
         rod_tier: int,
         bait_used: str,
-        active_buffs: List[str],
+        active_buffs: list[str],
         title: str,
         current_weather: str
-    ) -> Tuple[List[str], List[float]]:
+    ) -> tuple[list[str], list[float]]:
         candidates = []
         weights = []
 
@@ -79,9 +78,7 @@ class FishingService:
                 base_prob *= 1.3
             elif current_weather == "🌧️ 비" and grade == "대형 포식자":
                 base_prob *= 1.5
-            elif current_weather == "🌫️ 안개" and grade == "레전드":
-                base_prob *= 2.0
-            elif current_weather == "🌩️ 폭풍우" and grade in ["신화", "태고", "환상", "미스터리"]:
+            elif (current_weather == "🌫️ 안개" and grade == "레전드") or (current_weather == "🌩️ 폭풍우" and grade in ["신화", "태고", "환상", "미스터리"]):
                 base_prob *= 2.0
 
             # 4. 칭호 보너스
@@ -94,7 +91,7 @@ class FishingService:
         return candidates, weights
 
     @staticmethod
-    def get_waiting_time(active_buffs: List[str], title: str) -> float:
+    def get_waiting_time(active_buffs: list[str], title: str) -> float:
         if "fishing_speed_up" in active_buffs:
             wait_min, wait_max = 0.5, 2.0
         elif "cooldown_reduction" in active_buffs:
