@@ -247,7 +247,6 @@ class FishingCog(commands.Cog):
         now_hour = datetime.datetime.now(kst).hour
         if target_fish == "바다의 원혼, 우미보즈 🌑" and not (0 <= now_hour < 4):
             target_fish = "낡은 장화 🥾"
-            # 조건 미달로 잡어 낚인 경우 미끼 복구 (UX 개선)
             if bait_used != "none":
                 await db.execute("UPDATE inventory SET amount = amount + 1 WHERE user_id=? AND item_name=?", (interaction.user.id, bait_used))
                 await db.commit()
@@ -257,7 +256,6 @@ class FishingCog(commands.Cog):
 
         if target_fish == "네스호의 그림자, 네시 🦕" and env_state["CURRENT_WEATHER"] not in ["🌧️ 비", "🌫️ 안개", "🌩️ 폭풍우"]:
             target_fish = "낡은 장화 🥾"
-            # 조건 미달로 잡어 낚인 경우 미끼 복구 (UX 개선)
             if bait_used != "none":
                 await db.execute("UPDATE inventory SET amount = amount + 1 WHERE user_id=? AND item_name=?", (interaction.user.id, bait_used))
                 await db.commit()
@@ -265,31 +263,24 @@ class FishingCog(commands.Cog):
             else:
                 bait_text += "\n*(거대한 그림자가 지나갔지만, 깊은 곳으로 숨어버렸습니다...)*"
 
-        # 폭풍우 시 안내 추가
         if env_state["CURRENT_WEATHER"] == "🌩️ 폭풍우":
             bait_text += "\n*(거친 폭풍우가 몰아칩니다! 심연의 괴수들이 활동하기 시작합니다!)*"
 
-        # 황금 조류 효과 및 요리 버프 연동
         effective_rod_tier = rod_tier + 7.5 if "golden_tide" in active_buffs else rod_tier
-
         if "fishing_speed_up" in active_buffs:
-            effective_rod_tier += 2.0  # 낚시 속도 증가 버프 (난이도 하락)
-            
+            effective_rod_tier += 2.0
         if "common_success_boost" in active_buffs:
             effective_rod_tier += 3.0
         elif "premium_success_boost" in active_buffs:
             effective_rod_tier += 8.0
-        
         if "prayer_success_boost" in active_buffs:
             effective_rod_tier += 2.0
 
-        # 행동력 차감 (요리 버프 및 선박 티어 반영)
         stamina_cost = 5 if current_tier == 1 else 10
         if "stamina_save_1" in active_buffs:
             stamina_cost = max(1, stamina_cost - 1)
         elif "stamina_save_2" in active_buffs:
             stamina_cost = max(1, stamina_cost - 2)
-        
         if "prayer_stamina_save" in active_buffs:
             stamina_cost = max(1, stamina_cost - 1)
         
@@ -298,27 +289,27 @@ class FishingCog(commands.Cog):
 
         await db.execute("UPDATE user_data SET stamina = stamina - ? WHERE user_id=?", (stamina_cost, interaction.user.id))
 
-        # 더블 캐치 확률 (요리 버프 및 기도)
         double_catch = False
         if ("double_catch_chance" in active_buffs and random.random() < 0.25) or \
            ("prayer_double_catch" in active_buffs and random.random() < 0.20):
             double_catch = True
 
-        # 낚시 대기 시각 효과 (찌 애니메이션)
         view = FishingView(interaction.user, target_fish, effective_rod_tier, self.bot)
-        view.double_catch = double_catch # FishingView에 전달
+        view.double_catch = double_catch
         embed = discord.Embed(title="🎣 찌를 던졌습니다!", description=f"**{display_name}**님이 미끼를 던지고 입질을 기다립니다...{bait_text}", color=0x3498db)
-        embed.set_image(url="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/l41lTfuxV5RWRsBPO/giphy.gif") # 낚시 대기 GIF
+        embed.set_image(url="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/l41lTfuxV5RWRsBPO/giphy.gif")
         embed.set_footer(text=f"내 낚싯대: Lv.{rod_tier} | 체력: {current_stamina-stamina_cost}⚡")
 
         await interaction.response.send_message(embed=embed, view=view)
 
-        # [신규] 떠돌이 상인 소문 시스템 (5% 확률로 상인 출현/유지 소식)
-        if random.random() < 0.05:
+        # [신규] 떠돌이 상인 소문 시스템 (3% 확률로 상인 출현/유지 소식)
+        if random.random() < 0.03:
             market_cog = self.bot.get_cog("MarketCog")
             if market_cog:
-                # 낚시 로직에 방해되지 않게 비동기로 별도 실행
-                asyncio.create_task(market_cog.trigger_merchant_encounter(interaction))
+                try:
+                    await market_cog.trigger_merchant_encounter(interaction)
+                except Exception:
+                    pass
 
         # 입질 대기 시간 계산
         if "wet_clothes" in active_buffs:
@@ -339,10 +330,8 @@ class FishingCog(commands.Cog):
             item.emoji = "‼️"
 
         try:
-            # 입질 시 메시지 업데이트 (시각적 피드백 강화)
             embed = discord.Embed(title="❗ 입질 발생!!!!", description="**찌가 격렬하게 흔들립니다! 지금 당기세요!!!**", color=0xff0000)
-            embed.set_image(url="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/l41lTfuxV5RWRsBPO/giphy.gif") # 입질 GIF (동일한거 쓰거나 다른걸로 교체)
-
+            embed.set_image(url="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/l41lTfuxV5RWRsBPO/giphy.gif")
             msg = await interaction.edit_original_response(content=None, embed=embed, view=view)
             view.message = msg
         except Exception:
@@ -379,6 +368,19 @@ class FishingCog(commands.Cog):
     @app_commands.checks.cooldown(1, 5.0, key=lambda i: i.user.id)
     async def 휴(self, interaction: discord.Interaction):
         await self._rest_user(interaction)
+
+    @app_commands.command(name="가이드", description="신규 어부들을 위한 성장 가이드를 확인합니다.")
+    async def 가이드(self, interaction: discord.Interaction):
+        embed = discord.Embed(title="🎣 Fishing RPG 성장 로드맵", color=0x3498db)
+        embed.set_thumbnail(url="https://images.unsplash.com/photo-1544551763-47a0159f963f?w=400")
+        
+        embed.add_field(name="🌱 1단계: 해안가 적응", value="`/낚시`를 통해 물고기를 잡고, `/판매`로 자금을 모으세요. 초기에는 인벤토리를 자주 확인하며 잠금을 설정하는 법을 익히세요.", inline=False)
+        embed.add_field(name="🔧 2단계: 장비 강화", value="모은 코인으로 `/강화`를 진행하세요. 낚싯대 티어가 높을수록 더 크고 희귀한 물고기를 쉽게 낚을 수 있습니다.", inline=False)
+        embed.add_field(name="🚤 3단계: 해역 확장", value="어선(2단계 선박)을 구매하면 `/상점` 이용이 가능해지고, 더 먼 바다로 나갈 수 있습니다. 각 해역마다 등장하는 물고기가 다릅니다.", inline=False)
+        embed.add_field(name="⚔️ 4단계: 수산 배틀 & 레이드", value="강력한 포식자 물고기를 잡았다면 `/잠금`한 뒤 수산대전에 참여하거나, 주기적으로 나타나는 보스 레이드에 도전하세요.", inline=False)
+        
+        embed.set_footer(text="궁금한 점이 있다면 `/도움말`을 입력해보세요!")
+        await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="바다", description="현재 바다의 시간대와 날씨 환경을 확인합니다.")
     async def 바다(self, interaction: discord.Interaction):
