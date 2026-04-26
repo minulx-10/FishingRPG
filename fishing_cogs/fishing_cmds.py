@@ -382,6 +382,45 @@ class FishingCog(commands.Cog):
         embed.set_footer(text="궁금한 점이 있다면 `/도움말`을 입력해보세요!")
         await interaction.response.send_message(embed=embed)
 
+    @app_commands.command(name="이동", description="원하는 해역으로 이동합니다. (선박 등급 필요 및 체력 20 소모)")
+    @app_commands.choices(해역=[
+        app_commands.Choice(name="연안 (Lv.1+)", value="연안"),
+        app_commands.Choice(name="먼 바다 (Lv.2+)", value="먼 바다"),
+        app_commands.Choice(name="산호초 (Lv.3+)", value="산호초"),
+        app_commands.Choice(name="심해 (Lv.4+)", value="심해"),
+        app_commands.Choice(name="북해 (Lv.5+)", value="북해"),
+    ])
+    async def 이동(self, interaction: discord.Interaction, 해역: app_commands.Choice[str]):
+        user_id = interaction.user.id
+        async with db.conn.execute("SELECT boat_tier, current_region, stamina FROM user_data WHERE user_id=?", (user_id,)) as cursor:
+            res = await cursor.fetchone()
+        
+        boat_tier, current_region, stamina = res if res else (1, "연안", 100)
+        
+        if current_region == 해역.value:
+            return await interaction.response.send_message(f"📍 이미 **{해역.value}**에 위치해 있습니다.", ephemeral=True)
+            
+        target_config = FishingService.REGION_CONFIG.get(해역.value)
+        if not target_config:
+            return await interaction.response.send_message("❌ 존재하지 않는 해역입니다.", ephemeral=True)
+            
+        min_tier = target_config["min_tier"]
+        if boat_tier < min_tier:
+            return await interaction.response.send_message(f"🚫 **{해역.value}**에 진입하기 위해서는 선박 Lv.{min_tier} 이상의 배가 필요합니다. (현재: Lv.{boat_tier})", ephemeral=True)
+            
+        if stamina < 20:
+            return await interaction.response.send_message(f"🔋 항해에 필요한 체력이 부족합니다. (필요: 20⚡ / 현재: {stamina}⚡)", ephemeral=True)
+            
+        await db.execute("UPDATE user_data SET current_region = ?, stamina = stamina - 20 WHERE user_id = ?", (해역.value, user_id))
+        await db.commit()
+        
+        embed = discord.Embed(title="🛳️ 항해를 시작합니다!", description=f"**{current_region}**에서 출발하여 **{해역.value}**에 무사히 도착했습니다!", color=0x3498db)
+        embed.add_field(name="⛽ 소모 체력", value="-20⚡", inline=True)
+        embed.add_field(name="📍 현재 위치", value=f"**{해역.value}**", inline=True)
+        embed.set_image(url="https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800")
+        
+        await interaction.response.send_message(embed=embed)
+
     @app_commands.command(name="바다", description="현재 바다의 시간대와 날씨 환경을 확인합니다.")
     async def 바다(self, interaction: discord.Interaction):
         now_hour = datetime.datetime.now(kst).hour

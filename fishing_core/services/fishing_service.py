@@ -7,11 +7,11 @@ from fishing_core.shared import FISH_DATA
 class FishingService:
     # 해역별 특성 정의
     REGION_CONFIG: ClassVar[dict[str, Any]] = {
-        "연안": {"elements": ["표층", "무속성"], "grades": ["일반", "희귀", "피식자", "소형 포식자"], "bonus": 1.0},
-        "먼 바다": {"elements": ["표층", "암초", "무속성"], "grades": ["희귀", "초희귀", "소형 포식자", "대형 포식자"], "bonus": 1.2},
-        "심해": {"elements": ["심해", "무속성"], "grades": ["초희귀", "에픽", "대형 포식자", "레전드"], "bonus": 1.5},
-        "산호초": {"elements": ["암초", "표층"], "grades": ["희귀", "초희귀", "에픽"], "bonus": 1.3},
-        "북해": {"elements": ["심해", "표층", "무속성"], "grades": ["레전드", "신화", "태고", "환상", "미스터리"], "bonus": 2.0},
+        "연안": {"min_tier": 1, "elements": ["표층", "무속성"], "grades": ["일반", "희귀", "피식자", "소형 포식자"], "bonus": 1.0},
+        "먼 바다": {"min_tier": 2, "elements": ["표층", "암초", "무속성"], "grades": ["희귀", "초희귀", "소형 포식자", "대형 포식자"], "bonus": 1.2},
+        "산호초": {"min_tier": 3, "elements": ["암초", "표층"], "grades": ["희귀", "초희귀", "에픽"], "bonus": 1.3},
+        "심해": {"min_tier": 4, "elements": ["심해", "무속성"], "grades": ["초희귀", "에픽", "대형 포식자", "레전드"], "bonus": 1.5},
+        "북해": {"min_tier": 5, "elements": ["레전드", "신화", "태고", "환상", "미스터리"], "grades": ["레전드", "신화", "태고", "환상", "미스터리"], "bonus": 2.0},
     }
 
     @staticmethod
