@@ -388,68 +388,8 @@ class MarketCog(commands.Cog):
     ])
     @check_boat_tier(2)
     async def 구매(self, interaction: discord.Interaction, 아이템: app_commands.Choice[str], 수량: int = 1):
-        if 수량 <= 0:
-            return await interaction.response.send_message("❌ 수량은 1개 이상이어야 합니다.", ephemeral=True)
-
-        coins, _, _ = await db.get_user_data(interaction.user.id)
-
-        # 아이템별 가격 매핑
-        item_prices = {
-            "고급 미끼 🪱": 500,
-            "자석 미끼 🧲": 800,
-            "초급 그물망 🕸️": 500,
-            "튼튼한 그물망 🕸️": 1200,
-            "에너지 드링크 ⚡": 1500,
-            "가속 포션 💨": 3000,
-            "특수 떡밥 🎣": 2000,
-            "레이드 작살 🔱": 5000,
-        }
-
-        unit_price = item_prices.get(아이템.value, 500)
-        price = unit_price * 수량
-
-        if coins < price:
-            return await interaction.response.send_message(f"❌ 코인이 부족합니다! (필요: {price:,} C / 현재: {coins:,} C)", ephemeral=True)
-
-        # 에너지 드링크는 즉시 사용 (인벤토리 저장 대신 체력 회복)
-        if 아이템.value == "에너지 드링크 ⚡":
-            heal_amount = 50 * 수량
-            await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id = ?", (price, interaction.user.id))
-            await db.execute("UPDATE user_data SET stamina = MIN(max_stamina, stamina + ?) WHERE user_id = ?", (heal_amount, interaction.user.id))
-            await db.commit()
-            async with db.conn.execute("SELECT stamina, max_stamina FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
-                st_res = await cursor.fetchone()
-            return await interaction.response.send_message(f"⚡ 에너지 드링크를 {수량}개 마셨습니다! 체력 +{heal_amount}⚡ (현재: {st_res[0]}/{st_res[1]}⚡)")
-
-        # 가속 포션/특수 떡밥은 버프로 적용
-        import datetime
-
-        from fishing_core.shared import kst
-
-        if 아이템.value == "가속 포션 💨":
-            await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id = ?", (price, interaction.user.id))
-            end_time = datetime.datetime.now(kst) + datetime.timedelta(minutes=30 * 수량)
-            end_time_str = end_time.strftime('%Y-%m-%d %H:%M:%S')
-            await db.execute("INSERT OR REPLACE INTO active_buffs (user_id, buff_type, end_time) VALUES (?, ?, ?)",
-                             (interaction.user.id, "fishing_speed_up", end_time_str))
-            await db.commit()
-            return await interaction.response.send_message(f"💨 가속 포션을 사용했습니다! **{30*수량}분** 동안 낚시 대기 시간이 단축됩니다. (남은 코인: `{coins - price:,} C`)")
-
-        if 아이템.value == "특수 떡밥 🎣":
-            await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id = ?", (price, interaction.user.id))
-            end_time = datetime.datetime.now(kst) + datetime.timedelta(minutes=30 * 수량)
-            end_time_str = end_time.strftime('%Y-%m-%d %H:%M:%S')
-            await db.execute("INSERT OR REPLACE INTO active_buffs (user_id, buff_type, end_time) VALUES (?, ?, ?)",
-                             (interaction.user.id, "rare_boost", end_time_str))
-            await db.commit()
-            return await interaction.response.send_message(f"🎣 특수 떡밥을 뿌렸습니다! **{30*수량}분** 동안 희귀 이상 어종 확률이 1.5배 증가합니다. (남은 코인: `{coins - price:,} C`)")
-
-        # 나머지 아이템은 인벤토리 저장 (미끼, 레이드 작살)
-        await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id = ?", (price, interaction.user.id))
-        await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, ?) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?", (interaction.user.id, 아이템.value, 수량, 수량))
-        await db.commit()
-
-        await interaction.response.send_message(f"🛍️ **{아이템.value}** {수량}개를 구매했습니다! (남은 코인: `{coins - price:,} C`)")
+        result = await MarketService.process_purchase(interaction.user.id, 아이템.value, 수량)
+        await interaction.response.send_message(result["message"], ephemeral=not result["success"])
 
     @app_commands.command(name="잠금", description="특정 물고기나 아이템을 일괄 판매 대상에서 제외하고 배틀용으로 보호합니다.")
     @app_commands.autocomplete(물고기=inv_autocomplete)
