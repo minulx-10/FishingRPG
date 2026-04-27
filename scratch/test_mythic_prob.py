@@ -53,7 +53,7 @@ def test():
         candidates, weights = FishingService.calculate_fish_probabilities(1, 10, "없음", [], "", "☀️ 맑음", reg)
         
         # Sort by weight descending
-        results = sorted(zip(candidates, weights), key=lambda x: x[1], reverse=True)
+        results = sorted(zip(candidates, weights, strict=True), key=lambda x: x[1], reverse=True)
         
         total_w = sum(weights)
         print(f"Total Weight: {total_w}")
@@ -62,7 +62,7 @@ def test():
             print(f"  {name}: {weight:.4f} ({ (weight/total_w)*100 if total_w > 0 else 0 :.2f}%)")
         
         # Check Mythic distribution
-        mythic_w = sum(w for n, w in zip(candidates, weights) if FISH_DATA[n]["grade"] == "신화")
+        mythic_w = sum(w for n, w in zip(candidates, weights, strict=True) if FISH_DATA[n]["grade"] == "신화")
         print(f"Mythic total probability: { (mythic_w/total_w)*100 if total_w > 0 else 0 :.2f}%")
         print("\n")
 
