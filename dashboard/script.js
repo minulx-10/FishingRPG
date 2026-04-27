@@ -397,11 +397,15 @@ async function loadMarket() {
         if(res.success) {
             globalMarketData = res.data;
             renderMarketTable(globalMarketData);
-            
+        }
+
+        // 전체 아이템 리스트 (자동완성용) 가져오기
+        const itemsRes = await apiCall('/items/all');
+        if(itemsRes.success) {
             DOM.fishListDatlist.innerHTML = '';
-            res.data.forEach(f => {
+            itemsRes.data.forEach(name => {
                 const opt = document.createElement('option');
-                opt.value = f.fish_name;
+                opt.value = name;
                 DOM.fishListDatlist.appendChild(opt);
             });
         }

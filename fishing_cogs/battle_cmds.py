@@ -251,14 +251,20 @@ class BattleCog(commands.Cog):
             await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_DAMAGE_LOG', ?)", ('{}',))
             await db.commit()
         else:
-            boss_hp = int(res[0])
+            try:
+                # 소수점 포함 가능성(1.5e+06 등) 대비하여 float 후 int 변환
+                boss_hp = int(float(res[0]))
+            except (ValueError, TypeError):
+                boss_hp = boss_max_hp
 
         if boss_hp <= 0:
             boss_level += 1
             boss_max_hp = int(1000000 * (1.1 ** (boss_level - 1)))
             boss_hp = boss_max_hp
             await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_BOSS_LEVEL', ?)", (str(boss_level),))
+            await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_BOSS_HP', ?)", (str(boss_hp),))
             await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_DAMAGE_LOG', ?)", ('{}',))
+            await db.commit()
             await interaction.channel.send(f"📢 Lv.{boss_level} 월드 보스가 더 강해져서 깨어났습니다!")
 
         # 서비스 레이어를 통한 공격 처리

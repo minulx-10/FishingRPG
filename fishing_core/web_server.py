@@ -1,5 +1,6 @@
 import os
 import secrets
+import discord
 
 from aiohttp import web
 
@@ -41,6 +42,7 @@ class DashboardServer:
             web.post('/api/admin/weather', self.api_set_weather),
             web.get('/api/admin/logs', self.api_get_logs),
             web.get('/api/stats/history', self.api_stats_history),
+            web.get('/api/items/all', self.api_all_items),
             web.post('/api/users/bulk/items', self.api_bulk_modify_items),
         ])
         self.app.add_routes([
@@ -329,6 +331,17 @@ class DashboardServer:
                 success_count += 1
             await db.commit()
             return web.json_response({"success": True, "success_count": success_count})
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
+
+    @require_auth
+    async def api_all_items(self, request):
+        """시스템에 존재하는 모든 아이템 명칭을 반환합니다 (관리자용 자동완성)."""
+        try:
+            items = list(FISH_DATA.keys()) + list(RECIPES.keys())
+            shop_items = ["고급 미끼 🪱", "자석 미끼 🧲", "초급 그물망 🕸️", "튼튼한 그물망 🕸️", "에너지 드링크 ⚡", "가속 포션 💨", "특수 떡밥 🎣", "레이드 작살 🔱", "가라앉은 보물상자 🧰", "보물지도 🗺️"]
+            items.extend(shop_items)
+            return web.json_response({"success": True, "data": sorted(list(set(items)))})
         except Exception as e:
             return web.json_response({"error": str(e)}, status=500)
 

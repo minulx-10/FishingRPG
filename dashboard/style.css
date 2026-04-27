@@ -317,11 +317,16 @@ tr:hover {
 }
 @keyframes spin { 100% { transform: rotate(360deg); } }
 .panel-server {
-    padding-bottom: 50px;
+    padding-bottom: 80px;
+}
+.panel-server .grid-2col {
+    gap: 30px;
+    margin-top: 10px;
 }
 .panel-server .glass-panel {
-    padding: 1.5rem;
+    padding: 2rem;
     height: 100%;
+    margin-bottom: 20px;
 }
 .panel-server h2 {
     font-size: 1.2rem;
