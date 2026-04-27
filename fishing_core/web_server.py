@@ -6,7 +6,7 @@ from aiohttp import web
 
 from .database import db
 from .logger import logger
-from .shared import FISH_DATA, MARKET_PRICES, env_state
+from .shared import FISH_DATA, MARKET_PRICES, RECIPES, env_state
 
 
 def require_auth(func):
