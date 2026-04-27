@@ -78,6 +78,7 @@ env_state = {
 
 GRADE_STYLES: dict[str, dict[str, int | str | float]] = {
     "일반": {"icon": "⚪", "color": 0x95A5A6, "order": 1},
+    "피식자": {"icon": "⚪", "color": 0x95A5A6, "order": 1.5},
     "희귀": {"icon": "🟢", "color": 0x2ECC71, "order": 2},
     "초희귀": {"icon": "🔵", "color": 0x3498DB, "order": 3},
     "에픽": {"icon": "🟣", "color": 0x9B59B6, "order": 4},
