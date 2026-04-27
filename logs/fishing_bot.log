@@ -29,3 +29,18 @@
 [2026-04-27 09:43:47] [INFO] FishingBot: 🎣 수산시장 낚시 RPG 봇 로딩 완료: SyncTask
 [2026-04-27 09:43:47] [INFO] FishingBot: 날씨가 변경되었습니다: 🌧️ 비
 [2026-04-27 09:43:47] [INFO] FishingBot: 정기 시스템 점검 완료 (시세 변동 / 버프 정리 / 체력 15⚡ 회복)
+[2026-04-27 09:44:25] [INFO] FishingBot: 🚀 DB 마이그레이션 적용 완료: 버전 33
+[2026-04-27 09:44:25] [INFO] FishingBot: 비동기 데이터 초기화 완료 (총 262종)
+[2026-04-27 09:44:25] [INFO] FishingBot: Cog 로드 완료: fishing_cogs.fishing_cmds
+[2026-04-27 09:44:25] [INFO] FishingBot: Cog 로드 완료: fishing_cogs.market_cmds
+[2026-04-27 09:44:25] [INFO] FishingBot: Cog 로드 완료: fishing_cogs.ship_cmds
+[2026-04-27 09:44:25] [INFO] FishingBot: Cog 로드 완료: fishing_cogs.battle_cmds
+[2026-04-27 09:44:25] [INFO] FishingBot: Cog 로드 완료: fishing_cogs.quest_cmds
+[2026-04-27 09:44:25] [INFO] FishingBot: Cog 로드 완료: fishing_cogs.admin_cmds
+[2026-04-27 09:44:25] [INFO] FishingBot: Cog 로드 완료: fishing_cogs.help_cmds
+[2026-04-27 09:44:25] [INFO] FishingBot: Cog 로드 완료: fishing_cogs.prayer_cmds
+[2026-04-27 09:44:25] [INFO] FishingBot: Cog 로드 완료: fishing_cogs.collection_cmds
+[2026-04-27 09:44:25] [INFO] FishingBot: Cog 로드 완료: fishing_cogs.events
+[2026-04-27 09:44:28] [INFO] FishingBot: 🎣 수산시장 낚시 RPG 봇 로딩 완료: SyncTask
+[2026-04-27 09:44:28] [INFO] FishingBot: 날씨가 변경되었습니다: 🌧️ 비
+[2026-04-27 09:44:28] [INFO] FishingBot: 정기 시스템 점검 완료 (시세 변동 / 버프 정리 / 체력 15⚡ 회복)
