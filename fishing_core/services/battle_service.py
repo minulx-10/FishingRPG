@@ -6,6 +6,11 @@ from fishing_core.shared import FISH_DATA, get_element_multiplier
 
 
 class BattleService:
+    MULTIPLIERS = {
+        0: 0.0, 1: 1.0, 2: 2.4, 3: 4.2, 4: 6.6, 
+        5: 10.0, 6: 14.4, 7: 20.0, 8: 27.2
+    }
+
     @staticmethod
     def get_strongest_fish(inventory_items: list[tuple[str, int]]) -> tuple[str, int]:
         """잠금된 아이템 중 가장 전투력이 높은 물고기를 반환합니다."""
@@ -24,11 +29,7 @@ class BattleService:
     def get_ap_multiplier(points: int) -> float:
         """쥬라기 월드 스타일의 포인트별 데미지 배율을 반환합니다."""
         # 1pt: 1.0 | 2pt: 2.4 | 3pt: 4.2 | 4pt: 6.6 | 5pt: 10.0 | 6pt: 14.4 | 7pt: 20.0 | 8pt: 27.2
-        multipliers = {
-            0: 0.0, 1: 1.0, 2: 2.4, 3: 4.2, 4: 6.6, 
-            5: 10.0, 6: 14.4, 7: 20.0, 8: 27.2
-        }
-        return multipliers.get(points, points * 3.5)
+        return BattleService.MULTIPLIERS.get(points, points * 3.5)
 
     @staticmethod
     def calculate_ap_battle(atk_pwr: int, atk_pts: int, def_pts: int) -> dict[str, Any]:
