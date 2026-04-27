@@ -1,5 +1,6 @@
 import contextlib
 import datetime
+from typing import ClassVar
 
 import discord
 from discord import app_commands
@@ -8,8 +9,6 @@ from .database import db
 from .logger import logger
 from .shared import ADMIN_LOG_CHANNEL_ID, FISH_DATA, RECIPES, SUPER_ADMIN_IDS, kst
 
-
-from typing import ClassVar
 
 class EmbedFactory:
     """디스코드 임베드 디자인 일관성을 유지하기 위한 팩토리 클래스입니다."""
