@@ -3,8 +3,6 @@ import secrets
 
 from aiohttp import web
 
-from fishing_core.utils import EmbedFactory
-
 from .database import db
 from .logger import logger
 from .shared import FISH_DATA, MARKET_PRICES, env_state
