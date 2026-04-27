@@ -48,7 +48,7 @@ class InventoryView(View):
             col2 = "\n".join(item_list[half:])
             
             embed.add_field(name=f"📦 보유 물품 (필터: {self.filter_grade})", value=col1 or " ", inline=True)
-            embed.add_field(name="​", value=col2 or " ", inline=True)
+            embed.add_field(name="\u200b", value=col2 or " ", inline=True)
 
         total_pages = (len(self.all_items) - 1) // self.per_page + 1
         embed.set_footer(text=f"페이지 {self.current_page + 1} / {total_pages} | 총 {len(self.all_items)}종 보유")
