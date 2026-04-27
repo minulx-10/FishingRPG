@@ -65,11 +65,7 @@ const DOM = {
     btnConfirmCancel: document.getElementById('btn-confirm-cancel'),
     
     previewTitle: document.getElementById('preview-title'),
-    previewContent: document.getElementById('preview-content'),
-    
-    // Phase 3
-    logTerminal: document.getElementById('log-terminal'),
-    modalInvList: document.getElementById('modal-inventory-list')
+    previewContent: document.getElementById('preview-content')
 };
 
 let currentUserEditing = null;
@@ -186,51 +182,9 @@ function switchPanel(targetId) {
     if(targetId === 'panel-home') {
         loadStats();
         initCharts();
-        startLogPolling();
-    } else {
-        stopLogPolling();
     }
     if(targetId === 'panel-users') loadUsers();
     if(targetId === 'panel-market') loadMarket();
-}
-
-let logInterval = null;
-function startLogPolling() {
-    if (logInterval) return;
-    fetchLogs();
-    logInterval = setInterval(fetchLogs, 3000);
-}
-function stopLogPolling() {
-    if (logInterval) clearInterval(logInterval);
-    logInterval = null;
-}
-
-async function fetchLogs() {
-    try {
-        const res = await apiCall('/admin/logs');
-        if (res.success) {
-            const currentContent = DOM.logTerminal.innerHTML;
-            let newHtml = `<div class="terminal-header"><span>FISHING_BOT_OS v2.5</span><span>UTC+9 KST</span></div>`;
-            
-            res.data.forEach(log => {
-                const timeStr = log.time.split(' ')[1]; // HH:mm:ss
-                let levelClass = 'log-info';
-                if (log.level === 'SUCCESS') levelClass = 'log-success';
-                if (log.level === 'WARN') levelClass = 'log-warn';
-                if (log.level === 'ERROR') levelClass = 'log-error';
-                
-                newHtml += `
-                    <div class="log-entry">
-                        <span class="log-time">[${timeStr}]</span>
-                        <span class="${levelClass}">${log.level}</span>: ${log.message}
-                    </div>
-                `;
-            });
-            DOM.logTerminal.innerHTML = newHtml;
-            // Scroll to bottom if user hasn't scrolled up
-            DOM.logTerminal.scrollTop = DOM.logTerminal.scrollHeight;
-        }
-    } catch (e) {}
 }
 
 let marketChart = null;
@@ -373,32 +327,6 @@ function openModal(user) {
     DOM.mBoat.value = user.boat_tier;
     DOM.mRod.value = user.rod_tier;
     DOM.userModal.classList.remove('hidden');
-    loadUserInventory(user.user_id);
-}
-
-async function loadUserInventory(userId) {
-    DOM.modalInvList.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem;">정보를 불러오는 중...</div>';
-    try {
-        const res = await apiCall(`/users/${userId}/inventory`);
-        if (res.success) {
-            if (res.data.length === 0) {
-                DOM.modalInvList.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem;">인벤토리가 비어있습니다.</div>';
-                return;
-            }
-            DOM.modalInvList.innerHTML = '';
-            res.data.forEach(item => {
-                const div = document.createElement('div');
-                div.className = 'inventory-item';
-                div.innerHTML = `
-                    <span>${item.name}</span>
-                    <i>x${item.amount} ${item.locked ? '🔒' : ''}</i>
-                `;
-                DOM.modalInvList.appendChild(div);
-            });
-        }
-    } catch (e) {
-        DOM.modalInvList.innerHTML = '<div style="color: var(--danger); font-size: 0.8rem;">불러오기 실패</div>';
-    }
 }
 function closeModal() { DOM.userModal.classList.add('hidden'); }
 

@@ -40,8 +40,6 @@ class DashboardServer:
             web.post('/api/market', self.api_update_market),
             web.post('/api/admin/broadcast', self.api_broadcast),
             web.post('/api/admin/weather', self.api_set_weather),
-            web.get('/api/admin/logs', self.api_get_logs),
-            web.get('/api/users/{user_id}/inventory', self.api_get_user_inventory),
         ])
         self.app.add_routes([
             web.get('/', self.serve_index),
@@ -241,41 +239,6 @@ class DashboardServer:
             await db.commit()
             return web.json_response({"success": True, "current_weather": weather})
         return web.json_response({"error": "Invalid weather"}, status=400)
-
-    @require_auth
-    async def api_get_logs(self, request):
-        try:
-            log_path = "logs/fishing_bot.log"
-            logs = []
-            if os.path.exists(log_path):
-                with open(log_path, "r", encoding="utf-8") as f:
-                    lines = f.readlines()[-50:] # 최근 50줄
-                    for line in lines:
-                        # [2026-04-27 15:00:00] [INFO] Message format
-                        parts = line.strip().split("] [")
-                        if len(parts) >= 2:
-                            time = parts[0][1:]
-                            level = parts[1].split("]")[0]
-                            message = line.split("] ", 2)[-1]
-                            logs.append({"time": time, "level": level, "message": message})
-            return web.json_response({"success": True, "data": logs})
-        except Exception as e:
-            return web.json_response({"error": str(e)}, status=500)
-
-    @require_auth
-    async def api_get_user_inventory(self, request):
-        user_id = request.match_info['user_id']
-        try:
-            async with db.conn.execute("SELECT item_name, amount, is_locked FROM inventory WHERE user_id=? AND amount > 0 ORDER BY amount DESC", (int(user_id),)) as cursor:
-                rows = await cursor.fetchall()
-            
-            items = []
-            for name, amount, locked in rows:
-                items.append({"name": name, "amount": amount, "locked": bool(locked)})
-                
-            return web.json_response({"success": True, "data": items})
-        except Exception as e:
-            return web.json_response({"error": str(e)}, status=500)
 
 async def start_web_server(bot):
     port = int(os.getenv("WEB_PORT", "8888"))
