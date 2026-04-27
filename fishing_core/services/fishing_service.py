@@ -9,9 +9,9 @@ class FishingService:
     REGION_CONFIG: ClassVar[dict[str, Any]] = {
         "연안": {"min_tier": 1, "elements": ["표층", "무속성"], "grades": ["잡동사니", "피식자", "소형 포식자"], "bonus": 1.0},
         "먼 바다": {"min_tier": 2, "elements": ["표층", "암초", "무속성"], "grades": ["잡동사니", "피식자", "소형 포식자", "대형 포식자"], "bonus": 1.2},
-        "산호초": {"min_tier": 3, "elements": ["암초", "표층"], "grades": ["피식자", "소형 포식자", "대형 포식자", "포식자-상어"], "bonus": 1.3},
-        "심해": {"min_tier": 4, "elements": ["심해", "무속성"], "grades": ["소형 포식자", "대형 포식자", "포식자-상어", "레전드"], "bonus": 1.5},
-        "북해": {"min_tier": 5, "elements": ["레전드", "신화", "태고", "환상", "미스터리", "심해"], "grades": ["대형 포식자", "포식자-상어", "포식자-고래", "레전드", "신화", "태고", "환상", "미스터리"], "bonus": 2.0},
+        "산호초": {"min_tier": 3, "elements": ["암초", "표층"], "grades": ["잡동사니", "피식자", "소형 포식자", "대형 포식자", "포식자-상어"], "bonus": 1.3},
+        "심해": {"min_tier": 4, "elements": ["심해", "무속성"], "grades": ["잡동사니", "소형 포식자", "대형 포식자", "포식자-상어", "레전드"], "bonus": 1.5},
+        "북해": {"min_tier": 5, "elements": ["레전드", "신화", "태고", "환상", "미스터리", "심해"], "grades": ["잡동사니", "대형 포식자", "포식자-상어", "포식자-고래", "레전드", "신화", "태고", "환상", "미스터리"], "bonus": 2.0},
     }
 
     @staticmethod
@@ -43,8 +43,12 @@ class FishingService:
             is_element_match = (element in config["elements"] or element == "무속성")
             is_grade_match = (grade in config["grades"])
             
-            # 신화 등급은 3레역(산호초) 이상에서만 아주 낮은 확률로 등장 가능하도록 예외 허용
+            # 신화 등급은 3해역(산호초) 이상에서만 아주 낮은 확률로 등장 가능하도록 예외 허용
             if not is_grade_match and grade == "신화" and config["min_tier"] >= 3:
+                is_grade_match = True
+            
+            # 자석 미끼 사용 시 해역 제한에 관계없이 잡동사니 허용
+            if not is_grade_match and bait_used == "자석 미끼 🧲" and grade == "잡동사니":
                 is_grade_match = True
 
             if not is_element_match or not is_grade_match:
