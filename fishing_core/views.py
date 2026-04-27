@@ -549,14 +549,18 @@ class QuestDeliveryView(View):
 class InventoryView(View):
     def __init__(self, user, target_user, items, stats):
         super().__init__(timeout=120)
-        self.user, self.target_user, self.all_items, self.stats = user, target_user, items, stats
+        self.user, self.target_user, self.original_items, self.stats = user, target_user, items, stats
+        self.all_items = items
         self.current_page = 0
         self.per_page = 15
+        self.filter_grade = "전체"
 
     def make_embed(self):
         coins, rod, rating, boat, stam, max_stam, title = self.stats
         display_name = f"{title} {self.target_user.name}" if title else self.target_user.name
-        embed = EmbedFactory.build(title=f"🎒 {display_name}의 가방", type="info")
+        
+        filter_text = f" (필터: {self.filter_grade})" if self.filter_grade != "전체" else ""
+        embed = EmbedFactory.build(title=f"🎒 {display_name}의 가방{filter_text}", type="info")
         if self.target_user.avatar:
             embed.set_thumbnail(url=self.target_user.avatar.url)
 
@@ -571,29 +575,172 @@ class InventoryView(View):
         if title:
             embed.add_field(name="📛 칭호", value=f"`{title}`", inline=True)
 
-        # 아이템 목록
+        # 아이템 목록 (필터링 적용)
         start = self.current_page * self.per_page
         items = self.all_items[start:start+self.per_page]
         total_pages = max(1, (len(self.all_items) - 1) // self.per_page + 1)
+        
         if items:
             item_lines = []
             for n, a, locked in items:
                 lock_icon = "🔒 " if locked else ""
-                item_lines.append(f"{lock_icon}**{n}**: {a}개")
+                grade = FISH_DATA.get(n, {}).get("grade", "일반")
+                item_lines.append(f"{lock_icon}**{n}** `{format_grade_label(grade)}`: {a}개")
             embed.description = "\n".join(item_lines)
         else:
-            embed.description = "가방이 텅 비었습니다."
-        embed.set_footer(text=f"페이지 {self.current_page + 1} / {total_pages} · 총 {len(self.all_items)}종")
+            embed.description = "가방이 텅 비어있습니다... 🌬️\n\n💡 `/낚시` 명령어로 물고기를 잡아보세요!"
+        
+        embed.set_footer(text=f"페이지 {self.current_page + 1} / {total_pages} · 검색 결과 {len(self.all_items)}종")
         return embed
+
+    @discord.ui.select(
+        placeholder="등급별 필터링",
+        options=[
+            discord.SelectOption(label="전체 보기", value="전체", emoji="🌐"),
+            discord.SelectOption(label="일반", value="일반", emoji="⚪"),
+            discord.SelectOption(label="희귀", value="희귀", emoji="🔵"),
+            discord.SelectOption(label="초희귀", value="초희귀", emoji="🟣"),
+            discord.SelectOption(label="대형 포식자", value="대형 포식자", emoji="🔴"),
+            discord.SelectOption(label="레전드 이상", value="레전드+", emoji="✨")
+        ]
+    )
+    async def filter_select(self, interaction: discord.Interaction, select: discord.ui.Select):
+        if interaction.user != self.user: return
+        
+        val = select.values[0]
+        self.filter_grade = val
+        self.current_page = 0
+        
+        if val == "전체":
+            self.all_items = self.original_items
+        elif val == "레전드+":
+            target_grades = ["레전드", "신화", "히든", "태고", "환상", "미스터리", "해신(海神)"]
+            self.all_items = [i for i in self.original_items if FISH_DATA.get(i[0], {}).get("grade") in target_grades]
+        else:
+            self.all_items = [i for i in self.original_items if FISH_DATA.get(i[0], {}).get("grade") == val]
+            
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
 
     @discord.ui.button(label="◀ 이전", style=discord.ButtonStyle.secondary)
     async def prev(self, interaction, btn):
+        if interaction.user != self.user: return
         if self.current_page > 0:
             self.current_page -= 1
         await interaction.response.edit_message(embed=self.make_embed())
 
     @discord.ui.button(label="다음 ▶", style=discord.ButtonStyle.secondary)
     async def next(self, interaction, btn):
+        if interaction.user != self.user: return
         if (self.current_page+1)*self.per_page < len(self.all_items):
             self.current_page += 1
+        await interaction.response.edit_message(embed=self.make_embed())
+class ShopView(View):
+    def __init__(self, user, items_data):
+        super().__init__(timeout=60)
+        self.user = user
+        self.items_data = items_data # List of {"name": "...", "price": 0, "desc": "..."}
+
+    @discord.ui.select(
+        placeholder="구매할 아이템을 선택하세요",
+        options=[
+            discord.SelectOption(label="고급 미끼 🪱", value="고급 미끼 🪱", description="500 C"),
+            discord.SelectOption(label="자석 미끼 🧲", value="자석 미끼 🧲", description="800 C"),
+            discord.SelectOption(label="초급 그물망 🕸️", value="초급 그물망 🕸️", description="500 C"),
+            discord.SelectOption(label="튼튼한 그물망 🕸️", value="튼튼한 그물망 🕸️", description="1,200 C"),
+            discord.SelectOption(label="에너지 드링크 ⚡", value="에너지 드링크 ⚡", description="1,500 C"),
+            discord.SelectOption(label="가속 포션 💨", value="가속 포션 💨", description="3,000 C"),
+            discord.SelectOption(label="특수 떡밥 🎣", value="특수 떡밥 🎣", description="2,000 C"),
+            discord.SelectOption(label="레이드 작살 🔱", value="레이드 작살 🔱", description="5,000 C"),
+        ]
+    )
+    async def select_item(self, interaction: discord.Interaction, select: discord.ui.Select):
+        if interaction.user != self.user: return
+        
+        item_name = select.values[0]
+        # 수량 선택 모달 띄우기
+        await interaction.response.send_modal(ShopQuantityModal(item_name))
+
+class ShopQuantityModal(discord.ui.Modal):
+    def __init__(self, item_name):
+        super().__init__(title=f"🛒 {item_name} 구매")
+        self.item_name = item_name
+        self.quantity = discord.ui.TextInput(
+            label="구매 수량",
+            placeholder="구매할 수량을 입력하세요 (예: 1, 10, 50)",
+            min_length=1,
+            max_length=3,
+            default="1"
+        )
+        self.add_item(self.quantity)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            amt = int(self.quantity.value)
+            if amt <= 0: raise ValueError
+        except ValueError:
+            return await interaction.response.send_message("❌ 수량은 1 이상의 숫자여야 합니다.", ephemeral=True)
+            
+        from fishing_core.services.market_service import MarketService
+        result = await MarketService.process_purchase(interaction.user.id, self.item_name, amt)
+        await interaction.response.send_message(result["message"], ephemeral=not result["success"])
+class TutorialView(View):
+    def __init__(self, user):
+        super().__init__(timeout=120)
+        self.user = user
+        self.page = 0
+        self.pages = [
+            {
+                "title": "🔰 초보자 쾌속 성장 가이드 (1/4)",
+                "desc": "수산시장 RPG에 오신 것을 환영합니다! 아래 순서대로 따라오시면 금방 강태공이 될 수 있습니다.",
+                "fields": [
+                    ("1️⃣ 낚시의 기초 (잡기)", "`/낚시` 명령어를 입력하세요. 찌가 움직일 때 버튼을 눌러야 합니다.\n타이밍이 생명이니 집중하세요! (초보자는 체력 소모가 절반입니다)", False),
+                    ("2️⃣ 자금 확보 (팔기)", "잡은 물고기는 `/판매`로 한꺼번에 팔 수 있습니다.\n`/시세`를 확인해 비쌀 때 파는 것이 핵심입니다.", False),
+                ]
+            },
+            {
+                "title": "🛠️ 스펙업과 경제 (2/4)",
+                "desc": "더 큰 물고기, 더 많은 돈을 벌기 위한 필수 과정입니다.",
+                "fields": [
+                    ("📈 강화 (낚싯대)", "번 돈으로 `/강화`를 하세요. 낚싯대 레벨이 높을수록 전설급 물고기가 더 잘 낚입니다.", False),
+                    ("🛳️ 개조 (선박)", "`/선박개조`를 통해 최대 체력(⚡)과 해역 진입 권한을 늘리세요.", False),
+                    ("🏪 상점 활용", "`/상점`에서 미끼나 포션을 사면 낚시 효율이 극대화됩니다.", False),
+                ]
+            },
+            {
+                "title": "⚔️ 전투와 수족관 (3/4)",
+                "desc": "낚시는 시작일 뿐입니다. 진정한 바다의 주인이 되어보세요.",
+                "fields": [
+                    ("🔒 아이템 잠금", "강한 물고기를 잡았다면 `/잠금` 하세요! 일괄 판매에서 보호됩니다.", False),
+                    ("🤺 배틀 (NPC/PvP)", "잠금된 물고기를 데리고 `/배틀`이나 `/수산대전`에 참여하세요.", False),
+                    ("🐠 수족관", "`/수족관`에 물고기를 넣어두면 시간이 흐르며 자동으로 코인을 생산합니다.", False),
+                ]
+            },
+            {
+                "title": "📜 의뢰와 요리 (4/4)",
+                "desc": "단조로운 낚시에 활력을 불어넣는 시스템입니다.",
+                "fields": [
+                    ("📝 일일 의뢰", "`/의뢰`를 확인하고 목표 물고기를 가져가면 큰 보상을 얻습니다.", False),
+                    ("🍳 요리 시스템", "잡은 물고기로 `/요리`를 만드세요. 강력한 버프를 얻거나 비싸게 팔 수 있습니다.", False),
+                ]
+            }
+        ]
+
+    def make_embed(self):
+        p = self.pages[self.page]
+        embed = EmbedFactory.build(title=p["title"], description=p["desc"], type="success")
+        for name, val, inline in p["fields"]:
+            embed.add_field(name=name, value=val, inline=inline)
+        embed.set_footer(text=f"더 자세한 정보는 /도움말 을 확인하세요! (페이지 {self.page+1}/{len(self.pages)})")
+        return embed
+
+    @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary)
+    async def prev(self, interaction, btn):
+        if interaction.user != self.user: return
+        self.page = (self.page - 1) % len(self.pages)
+        await interaction.response.edit_message(embed=self.make_embed())
+
+    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary)
+    async def next(self, interaction, btn):
+        if interaction.user != self.user: return
+        self.page = (self.page + 1) % len(self.pages)
         await interaction.response.edit_message(embed=self.make_embed())

@@ -16,7 +16,7 @@ from fishing_core.utils import (
     inv_autocomplete,
     locked_autocomplete,
 )
-from fishing_core.views import MarketPaginationView
+from fishing_core.views import MarketPaginationView, ShopView
 
 
 class MarketCog(commands.Cog):
@@ -374,7 +374,8 @@ class MarketCog(commands.Cog):
         embed.add_field(name="가속 포션 💨 (가격: 3,000 C)", value="30분간 낚시 입질 대기 시간이 50% 단축됩니다.", inline=False)
         embed.add_field(name="특수 떡밥 🎣 (가격: 2,000 C)", value="30분간 희귀 등급 이상 물고기 확률이 1.5배 증가합니다.", inline=False)
         embed.add_field(name="레이드 작살 🔱 (가격: 5,000 C)", value="다음 레이드 공격 시 데미지가 2배로 증가합니다! (1회용)", inline=False)
-        await interaction.response.send_message(embed=embed)
+        view = ShopView(interaction.user, [])
+        await interaction.response.send_message(embed=embed, view=view)
 
     @app_commands.command(name="구매", description="상점에서 아이템을 구매합니다.")
     @app_commands.choices(아이템=[

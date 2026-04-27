@@ -4,6 +4,7 @@ from discord.ext import commands
 
 from fishing_core.shared import SUPER_ADMIN_IDS
 from fishing_core.utils import EmbedFactory
+from fishing_core.views import TutorialView
 
 
 class HelpView(discord.ui.View):
@@ -140,6 +141,7 @@ class HelpSelect(discord.ui.Select):
             embed.add_field(name="`/웹대시보드`", value="관리용 웹 인터페이스 접속 터널을 생성합니다.", inline=False)
             return embed
 
+
 class HelpCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -179,23 +181,9 @@ class HelpCog(commands.Cog):
 
     @app_commands.command(name="가이드", description="뉴비를 위한 수산시장 RPG 쾌속 성장 가이드를 확인합니다.")
     async def 가이드(self, interaction: discord.Interaction):
-        embed = EmbedFactory.build(title="🔰 초보자 쾌속 성장 가이드", type="success")
-        embed.description = "수산시장 RPG에 오신 것을 환영합니다! 아래 순서대로 따라오시면 금방 강태공이 될 수 있습니다."
-        
-        embed.add_field(name="1️⃣ 낚시의 기초 (잡기)", value="`/낚시` 명령어를 입력하세요. 찌가 움직일 때 버튼을 눌러야 합니다.\n"
-                                                         "타이밍이 생명이니 집중하세요! (초보자는 체력 소모가 절반입니다)", inline=False)
-        
-        embed.add_field(name="2️⃣ 자금 확보 (팔기)", value="잡은 물고기는 `/판매`로 한꺼번에 팔 수 있습니다.\n"
-                                                         "`/시세`를 확인해 비쌀 때 파는 것이 핵심입니다.", inline=False)
-        
-        embed.add_field(name="3️⃣ 스펙업 (강화)", value="번 돈으로 `/강화`를 하세요. 낚싯대 레벨이 높을수록 전설급 물고기가 더 잘 낚입니다.\n"
-                                                      "`/선박개조`를 통해 최대 체력(번개⚡)을 늘리는 것도 잊지 마세요.", inline=False)
-        
-        embed.add_field(name="4️⃣ 전투와 수집 (즐기기)", value="강한 물고기를 잡았다면 `/잠금`한 뒤 `/배틀`에 참여하세요.\n"
-                                                            "전국의 강태공들과 `/수산대전`에서 실력을 겨룰 수도 있습니다.", inline=False)
-        
-        embed.set_footer(text="더 자세한 내용은 /도움말 을 참고하세요!")
-        await interaction.response.send_message(embed=embed)
+        view = TutorialView(interaction.user)
+        await interaction.response.send_message(embed=view.make_embed(), view=view)
+
 
 async def setup(bot):
     await bot.add_cog(HelpCog(bot))
