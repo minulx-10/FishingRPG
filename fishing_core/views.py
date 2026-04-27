@@ -291,12 +291,21 @@ class BattleView(View):
         self.battle_log = "전투가 시작되었습니다!\n"
 
     def generate_embed(self):
-        embed = discord.Embed(title=f"⚔️ 수산 배틀 (Turn {self.turn})", color=0xff0000)
-        def hp_bar(hp, mhp): return "🟩" * max(0, int((hp/mhp)*5)) + "⬛" * (5-max(0, int((hp/mhp)*5)))
-        embed.add_field(name=f"🔵 {self.user.name}", value=f"**{self.my_fish}**\nHP: {self.my_hp}/{self.my_max_hp} {hp_bar(self.my_hp, self.my_max_hp)}", inline=True)
-        embed.add_field(name="VS", value="⚡", inline=True)
-        embed.add_field(name="🔴 야생", value=f"**{self.npc_fish}**\nHP: {self.npc_hp}/{self.npc_max_hp} {hp_bar(self.npc_hp, self.npc_max_hp)}", inline=True)
-        embed.add_field(name="📜 로그", value=self.battle_log.strip().split("\n")[-1], inline=False)
+        embed = discord.Embed(title=f"⚔️ 수산 배틀 (Turn {self.turn})", color=0xe74c3c)
+        
+        def hp_bar(hp, mhp):
+            pct = hp / mhp
+            blocks = max(0, min(10, int(pct * 10)))
+            color_block = "🟩" if pct > 0.5 else "🟨" if pct > 0.2 else "🟥"
+            return color_block * blocks + "⬛" * (10 - blocks)
+            
+        embed.add_field(name=f"🔵 {self.user.name}", value=f"**{self.my_fish}**\n`{self.my_hp}/{self.my_max_hp}`\n{hp_bar(self.my_hp, self.my_max_hp)}", inline=True)
+        embed.add_field(name="VS", value="🔥", inline=True)
+        embed.add_field(name="🔴 야생", value=f"**{self.npc_fish}**\n`{self.npc_hp}/{self.npc_max_hp}`\n{hp_bar(self.npc_hp, self.npc_max_hp)}", inline=True)
+        
+        log_lines = self.battle_log.strip().split("\n")[-3:]
+        embed.add_field(name="📜 최근 전투 로그", value="\n".join(log_lines), inline=False)
+        embed.set_image(url="https://images.unsplash.com/photo-1551244072-5d12893278ab?w=800") # 거친 파도 배경
         return embed
 
     async def execute_turn(self, interaction, action):
@@ -326,8 +335,26 @@ class BattleView(View):
 
     async def end_battle(self, interaction, is_win):
         self.stop()
-        msg = "🎉 승리!" if is_win else "💀 패배..."
-        await interaction.response.edit_message(content=msg, embed=None, view=None)
+        
+        embed = discord.Embed(
+            title="🏆 전투 종료" if is_win else "💀 전투 종료",
+            color=0x2ecc71 if is_win else 0xe74c3c
+        )
+        
+        status = "승리!" if is_win else "패배..."
+        embed.description = f"**{self.user.name}**님의 물고기가 전투에서 **{status}**"
+        
+        embed.add_field(name="🔵 내 물고기", value=f"{self.my_fish}\nHP: {max(0, self.my_hp)}", inline=True)
+        embed.add_field(name="🔴 적 물고기", value=f"{self.npc_fish}\nHP: {max(0, self.npc_hp)}", inline=True)
+        
+        if is_win:
+            embed.set_image(url="https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=800") # 승리 테마 (불꽃놀이)
+            embed.set_footer(text="강력한 수중 생물을 제압했습니다!")
+        else:
+            embed.set_image(url="https://images.unsplash.com/photo-1518101645466-7795885ff8f8?w=800") # 패배 테마 (어두운 바다)
+            embed.set_footer(text="다음에는 더 강한 낚싯대와 물고기로 도전하세요.")
+
+        await interaction.response.edit_message(content=None, embed=embed, view=None)
 
     @discord.ui.button(label="공격", style=discord.ButtonStyle.danger)
     async def btn_attack(self, interaction: discord.Interaction, button: Button):
@@ -366,11 +393,20 @@ class PvPBattleView(View):
             self.p2_elem = FISH_DATA.get(name, {}).get("element", "무")
 
     def generate_embed(self):
-        embed = discord.Embed(title=f"⚔️ 3v3 PvP (Turn {self.turn_count})", color=0xff0000)
+        embed = discord.Embed(title=f"⚔️ 3v3 PvP 수산대전 (Turn {self.turn_count})", color=0xf1c40f)
+        
+        def hp_bar(hp, mhp):
+            pct = hp / mhp
+            blocks = max(0, min(10, int(pct * 10)))
+            color_block = "🟩" if pct > 0.5 else "🟨" if pct > 0.2 else "🟥"
+            return color_block * blocks + "⬛" * (10 - blocks)
+
         embed.description = f"현재 턴: {self.current_turn_user.mention}"
-        embed.add_field(name=f"🔵 {self.p1.name}", value=f"**{self.p1_fish}**\nHP: {self.p1_hp}/{self.p1_max_hp}", inline=True)
+        embed.add_field(name=f"🔵 {self.p1.name}", value=f"**{self.p1_fish}**\n`{self.p1_hp}/{self.p1_max_hp}`\n{hp_bar(self.p1_hp, self.p1_max_hp)}", inline=True)
         embed.add_field(name="VS", value="⚡", inline=True)
-        embed.add_field(name=f"🔴 {self.p2.name}", value=f"**{self.p2_fish}**\nHP: {self.p2_hp}/{self.p2_max_hp}", inline=True)
+        embed.add_field(name=f"🔴 {self.p2.name}", value=f"**{self.p2_fish}**\n`{self.p2_hp}/{self.p2_max_hp}`\n{hp_bar(self.p2_hp, self.p2_max_hp)}", inline=True)
+        
+        embed.set_image(url="https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800")
         return embed
 
     async def execute_turn(self, interaction, action):
@@ -409,31 +445,38 @@ class PvPBattleView(View):
     async def end_battle(self, interaction, winner, loser):
         self.stop()
         
-        # 코인 약탈 로직 (패배자 코인의 5~10%)
+        # 코인 약탈 로직
         async with db.conn.execute("SELECT coins FROM user_data WHERE user_id=?", (loser.id,)) as cursor:
             res = await cursor.fetchone()
         loser_coins = res[0] if res else 0
         
         steal_amount = int(loser_coins * random.uniform(0.05, 0.10))
         if getattr(self, "is_offline_target", False):
-            steal_amount = int(steal_amount * 0.5) # 오프라인 시 50%만 약탈
+            steal_amount = int(steal_amount * 0.5) 
             
         if steal_amount > 0:
             await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id=?", (steal_amount, loser.id))
             await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id=?", (steal_amount, winner.id))
             await db.log_action(winner.id, "PVP_WIN", f"Winner: {winner.name}, Loser: {loser.name}, Stole: {steal_amount} C")
             await db.log_action(loser.id, "PVP_LOSS", f"Winner: {winner.name}, Loser: {loser.name}, Lost: {steal_amount} C")
-            
-            # [업적] 수산대전 첫 승리
             await AchievementService.check_achievement(winner.id, "BATTLE_WARRIOR")
-            
             await db.commit()
-            
-            msg = f"🏆 {winner.mention} 승리! ({loser.name}님으로부터 `{steal_amount:,} C`를 약탈했습니다!)"
-        else:
-            msg = f"🏆 {winner.mention} 승리!"
-            
-        await interaction.response.edit_message(content=msg, embed=None, view=None)
+
+        embed = discord.Embed(title="⚔️ 수산대전 결과", color=0xf1c40f)
+        embed.set_thumbnail(url=winner.display_avatar.url)
+        
+        embed.add_field(name="🥇 승리자", value=f"{winner.mention}", inline=True)
+        embed.add_field(name="🥈 패배자", value=f"{loser.mention}", inline=True)
+        
+        result_desc = f"치열한 접전 끝에 **{winner.name}**님이 승리하셨습니다!"
+        if steal_amount > 0:
+            result_desc += f"\n\n💰 **전리품 획득**\n패배자의 주머니에서 `{steal_amount:,} C`를 가져왔습니다!"
+        
+        embed.description = result_desc
+        embed.set_image(url="https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800") # 경쟁 테마
+        embed.set_footer(text=f"전투 종료 시각: {datetime.datetime.now(kst).strftime('%H:%M:%S')}")
+
+        await interaction.response.edit_message(content=None, embed=embed, view=None)
 
     @discord.ui.button(label="공격", style=discord.ButtonStyle.danger)
     async def btn_attack(self, interaction: discord.Interaction, button: Button):
