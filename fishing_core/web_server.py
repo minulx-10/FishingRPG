@@ -1,3 +1,4 @@
+from fishing_core.utils import EmbedFactory
 import os
 import secrets
 
@@ -207,7 +208,7 @@ class DashboardServer:
         content = data.get("content", "")
 
         try:
-            embed = discord.Embed(title=f"📢 [시스템 공지] {title}", description=content, color=0xff0000)
+            embed = EmbedFactory.build(title=f"📢 [시스템 공지] {title}", description=content, type="error")
             embed.set_footer(text="수산시장 웹 통제실에서 발송된 메시지입니다.")
 
             # 모든 서버의 첫 번째 텍스트 채널에 발송 (혹은 특정 채널 ID 지정 가능)

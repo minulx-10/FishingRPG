@@ -1,3 +1,4 @@
+from fishing_core.utils import EmbedFactory
 import asyncio
 import datetime
 import io
@@ -46,7 +47,7 @@ class QuestCog(commands.Cog):
         title = await db.get_user_title(target.id)
         display_name = f"{title} {target.name}" if title else target.name
 
-        embed = discord.Embed(title=f"🏛️ {display_name}님의 수족관", color=0x00ffff)
+        embed = EmbedFactory.build(title=f"🏛️ {display_name}님의 수족관", type="info")
         if not items:
             embed.description = "수족관이 텅 비어있습니다... 휑~ 🌬️\n(`/전시` 명령어로 물고기를 전시해보세요!)"
             return await interaction.followup.send(embed=embed)
@@ -202,7 +203,7 @@ class QuestCog(commands.Cog):
         title = await db.get_user_title(target.id)
         display_name = f"{title} {target.name}" if title else target.name
 
-        embed = discord.Embed(title=f"📖 {display_name}님의 낚시 도감", color=0x9b59b6)
+        embed = EmbedFactory.build(title=f"📖 {display_name}님의 낚시 도감", type="default")
         if target.avatar:
             embed.set_thumbnail(url=target.avatar.url)
 
@@ -254,7 +255,7 @@ class QuestCog(commands.Cog):
                             if site not in latest_data:
                                 latest_data[site] = item
 
-                        embed = discord.Embed(title="🌊 한강 주요 지점 실시간 수온", color=0x00a8ff)
+                        embed = EmbedFactory.build(title="🌊 한강 주요 지점 실시간 수온", type="info")
 
                         operational_sites = 0
                         for site, info in latest_data.items():
@@ -387,11 +388,11 @@ class QuestCog(commands.Cog):
             await db.commit()
 
         if q_cleared == 1:
-            embed = discord.Embed(title="📜 오늘의 항구 의뢰", description="오늘의 의뢰는 이미 완료했습니다!\n마을이 평화롭네요. 내일 다시 와주세요.", color=0x95a5a6)
+            embed = EmbedFactory.build(title="📜 오늘의 항구 의뢰", description="오늘의 의뢰는 이미 완료했습니다!\n마을이 평화롭네요. 내일 다시 와주세요.", type="default")
             return await interaction.response.send_message(embed=embed)
 
         q_grade = FISH_DATA.get(q_item, {}).get("grade", "일반")
-        embed = discord.Embed(title="📜 오늘의 항구 의뢰", description="마을 촌장님이 급하게 생선을 찾고 있습니다!", color=get_grade_color(q_grade))
+        embed = EmbedFactory.build(title="📜 오늘의 항구 의뢰", description="마을 촌장님이 급하게 생선을 찾고 있습니다!", color=get_grade_color(q_grade))
         embed.add_field(name="🎯 타겟 어종", value=f"**{q_item}**\n`{format_grade_label(q_grade)}`", inline=True)
         embed.add_field(name="🔢 필요 수량", value=f"`{q_amount}마리`", inline=True)
         embed.add_field(name="💰 납품 보상", value=f"`{q_reward:,} C`", inline=False)
@@ -500,7 +501,7 @@ class QuestCog(commands.Cog):
         await db.commit()
         
         harvest_str = "\n".join([f"• {name} 🐟" for name in harvested])
-        embed = discord.Embed(title="🧺 양식 수확 완료!", description=f"수족관에서 정성껏 키운 물고기들이 새끼를 쳤습니다!\n\n**[획득 목록]**\n{harvest_str}", color=0x2ecc71)
+        embed = EmbedFactory.build(title="🧺 양식 수확 완료!", description=f"수족관에서 정성껏 키운 물고기들이 새끼를 쳤습니다!\n\n**[획득 목록]**\n{harvest_str}", type="success")
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="수족관확장", description="코인을 지불하여 수족관 전시 슬롯을 하나 추가합니다.")
@@ -625,7 +626,7 @@ class QuestCog(commands.Cog):
         await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, ?) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?", (interaction.user.id, "고대 해적의 보물지도 🗺️", 수량, 수량))
         await db.commit()
 
-        embed = discord.Embed(title=f"🗺️ 보물지도 {수량}장 합성 성공!", description=f"보유 중인 조각들을 이어 붙여 **고대 해적의 보물지도 🗺️** {수량}장을 대량으로 완성했습니다!\n`/지도사용` 명령어를 통해 망자의 해역으로 떠나보세요.", color=0xf1c40f)
+        embed = EmbedFactory.build(title=f"🗺️ 보물지도 {수량}장 합성 성공!", description=f"보유 중인 조각들을 이어 붙여 **고대 해적의 보물지도 🗺️** {수량}장을 대량으로 완성했습니다!\n`/지도사용` 명령어를 통해 망자의 해역으로 떠나보세요.", type="warning")
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="지도사용", description="'고대 해적의 보물지도'를 사용하여 특별한 해역 버프(30분)를 개방합니다.")
@@ -649,11 +650,11 @@ class QuestCog(commands.Cog):
         await db.commit()
 
         if chosen_buff == "ghost_sea_open":
-            embed = discord.Embed(title="☠️ 망자의 해역 개방...", description="지도의 낡은 좌표를 따라 안개가 자욱한 해역에 도착했습니다.\n\n앞으로 **30분 동안**, 당신의 낚싯대에는 물고기 대신 **해적의 금화 🪙, 낡은 고철 ⚙️, 가라앉은 보물상자 🧰**만 걸려 올라올 것입니다!", color=0x2c3e50)
+            embed = EmbedFactory.build(title="☠️ 망자의 해역 개방...", description="지도의 낡은 좌표를 따라 안개가 자욱한 해역에 도착했습니다.\n\n앞으로 **30분 동안**, 당신의 낚싯대에는 물고기 대신 **해적의 금화 🪙, 낡은 고철 ⚙️, 가라앉은 보물상자 🧰**만 걸려 올라올 것입니다!", type="default")
         elif chosen_buff == "deep_sea_rift":
-            embed = discord.Embed(title="🌊 심해의 균열 발견!", description="지도가 가리킨 곳에서 바다가 갈라진 깊은 심연이 보입니다.\n\n앞으로 **30분 동안**, **[심해] 속성** 어종들의 낚시 등장 확률이 3배 상승합니다!", color=0x1abc9c)
+            embed = EmbedFactory.build(title="🌊 심해의 균열 발견!", description="지도가 가리킨 곳에서 바다가 갈라진 깊은 심연이 보입니다.\n\n앞으로 **30분 동안**, **[심해] 속성** 어종들의 낚시 등장 확률이 3배 상승합니다!", type="info")
         else:
-            embed = discord.Embed(title="✨ 황금 조류 발견!", description="지도를 따라가니 눈부시게 빛나는 따뜻한 해류를 만났습니다.\n\n앞으로 **30분 동안**, 낚시 타이밍 판정 시간이 매우 넉넉해져 물고기를 낚을 확률이 대폭 상승합니다!", color=0xf1c40f)
+            embed = EmbedFactory.build(title="✨ 황금 조류 발견!", description="지도를 따라가니 눈부시게 빛나는 따뜻한 해류를 만났습니다.\n\n앞으로 **30분 동안**, 낚시 타이밍 판정 시간이 매우 넉넉해져 물고기를 낚을 확률이 대폭 상승합니다!", type="warning")
 
         await interaction.response.send_message(embed=embed)
 
@@ -707,7 +708,7 @@ class QuestCog(commands.Cog):
         total_species = len(FISH_DATA)
         milestones.append({"count": total_species, "reward_c": 1000000, "title": "전설의 낚시꾼", "id": "full"})
 
-        embed = discord.Embed(title="📜 어종 도감 수집 보상", color=0x3498db)
+        embed = EmbedFactory.build(title="📜 어종 도감 수집 보상", type="info")
         embed.description = f"현재 수집한 어종: **{dex_count} / {total_species}** 종\n\n"
 
         can_claim = False
@@ -749,7 +750,7 @@ class QuestCog(commands.Cog):
             res = await cursor.fetchone()
         claimed = json.loads(res[0]) if res and res[0] else {}
 
-        embed = discord.Embed(title="📜 어류 수집 세트 컬렉션", color=0xf1c40f)
+        embed = EmbedFactory.build(title="📜 어류 수집 세트 컬렉션", type="warning")
         embed.description = "특정 물고기들을 모두 도감에 등록하면 특별한 보상을 드립니다!\n\n"
 
         can_claim_any = False

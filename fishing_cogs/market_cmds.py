@@ -1,3 +1,4 @@
+from fishing_core.utils import EmbedFactory
 import datetime
 import json
 import random
@@ -145,7 +146,7 @@ class MarketCog(commands.Cog):
             await self._save_user_merchant_state(interaction.user.id, user_state)
             await db.commit()
 
-        embed = discord.Embed(title="🧳 떠돌이 상인", color=0xE67E22)
+        embed = EmbedFactory.build(title="🧳 떠돌이 상인", type="warning")
         embed.description = (
             "먼 바다를 떠돌던 상인이 잠시 정박했습니다.\n"
             "이번 물건은 재고가 적고, 1인 구매 제한이 있습니다."
@@ -230,7 +231,7 @@ class MarketCog(commands.Cog):
             status_info = MarketService.get_price_status(검색어)
             grade = FISH_DATA[검색어].get("grade", "일반")
 
-            embed = discord.Embed(title=f"📊 {검색어} 시세 정보", color=0xf1c40f)
+            embed = EmbedFactory.build(title=f"📊 {검색어} 시세 정보", type="warning")
             embed.add_field(name="등급", value=f"**{format_grade_label(grade)}**", inline=True)
             embed.add_field(name="현재 시장가", value=f"**{status_info['current']} C**", inline=True)
             embed.add_field(name="시세 상태", value=status_info['status'], inline=True)
@@ -364,7 +365,7 @@ class MarketCog(commands.Cog):
     @app_commands.command(name="상점", description="유용한 아이템을 구경할 수 있는 상점입니다.")
     @check_boat_tier(2)
     async def 상점(self, interaction: discord.Interaction):
-        embed = discord.Embed(title="🏪 수산시장 아이템 상점", color=0xf1c40f)
+        embed = EmbedFactory.build(title="🏪 수산시장 아이템 상점", type="warning")
         embed.add_field(name="고급 미끼 🪱 (가격: 500 C)", value="다음 낚시 때 일반 어종을 피하고 희귀 어종 등장 확률을 올려줍니다.", inline=False)
         embed.add_field(name="자석 미끼 🧲 (가격: 800 C)", value="물고기는 낚이지 않지만, 바다 밑에 가라앉은 고철이나 보물을 확정적으로 건져냅니다.", inline=False)
         embed.add_field(name="초급 그물망 🕸️ (가격: 500 C)", value="얕은 바다를 훑어 잡어, 조개류, 고철을 한 번에 5개까지 건져올립니다.", inline=False)
@@ -437,7 +438,7 @@ class MarketCog(commands.Cog):
 
     @app_commands.command(name="칭호상점", description="어마어마한 코인을 지불하여 명예로운 칭호를 구매합니다. (엔드게임 콘텐츠)")
     async def 칭호상점(self, interaction: discord.Interaction):
-        embed = discord.Embed(title="🎖️ 명예의 전당 - 칭호 상점", color=0xe67e22)
+        embed = EmbedFactory.build(title="🎖️ 명예의 전당 - 칭호 상점", type="warning")
         embed.description = "부와 명예를 모두 가진 자만이 달 수 있는 특별한 칭호들입니다."
         embed.add_field(name="[갑부] 💰", value="가격: `1,000,000 C`", inline=False)
         embed.add_field(name="[강태공] 🎣", value="가격: `5,000,000 C`", inline=False)

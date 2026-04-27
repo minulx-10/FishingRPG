@@ -1,3 +1,4 @@
+from fishing_core.utils import EmbedFactory
 import datetime as dt
 import json
 import random
@@ -10,7 +11,7 @@ from fishing_core.database import db
 from fishing_core.logger import logger
 from fishing_core.services.battle_service import BattleService
 from fishing_core.shared import FISH_DATA, format_grade_label, kst
-from fishing_core.utils import check_boat_tier, inv_autocomplete
+from fishing_core.utils import check_boat_tier, inv_autocomplete, create_progress_bar
 from fishing_core.views import BattleView, PvPBattleView
 
 
@@ -22,7 +23,7 @@ class BattleCog(commands.Cog):
         async with db.conn.execute("SELECT item_name, amount FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (target.id,)) as cursor:
             items = await cursor.fetchall()
 
-        embed = discord.Embed(title=f"🔒 {target.name}의 잠금(보호) 목록", color=0x2ecc71)
+        embed = EmbedFactory.build(title=f"🔒 {target.name}의 잠금(보호) 목록", type="success")
         if items:
             item_list = ""
             for name, amt in items:
@@ -272,10 +273,8 @@ class BattleCog(commands.Cog):
 
         # 임베드 구성
         fish_grade = FISH_DATA.get(strongest_fish, {}).get("grade", "일반")
-        embed = discord.Embed(title=f"🌌 월드 보스 레이드 (Lv.{boss_level})", color=0x9932cc)
-        bar_len = 20
-        filled = int((result['new_hp'] / boss_max_hp) * bar_len) if boss_max_hp > 0 else 0
-        health_bar = "🟥" * filled + "⬛" * (bar_len - filled)
+        embed = EmbedFactory.build(title=f"🌌 월드 보스 레이드 (Lv.{boss_level})", type="default")
+        health_bar = create_progress_bar(result['new_hp'], boss_max_hp, length=20)
         
         crit_msg = "💥 **[치명타!]** " if result['is_crit'] else "⚔️ "
         harpoon_msg = "🔱 **[작살 강화]** " if result['used_harpoon'] else ""

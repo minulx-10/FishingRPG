@@ -9,6 +9,64 @@ from .logger import logger
 from .shared import ADMIN_LOG_CHANNEL_ID, FISH_DATA, RECIPES, SUPER_ADMIN_IDS, kst
 
 
+class EmbedFactory:
+    """디스코드 임베드 디자인 일관성을 유지하기 위한 팩토리 클래스입니다."""
+    COLORS = {
+        "success": 0x2ECC71,  # 초록색
+        "error": 0xE74C3C,    # 빨간색
+        "warning": 0xF1C40F,  # 노란색
+        "info": 0x3498DB,     # 파란색
+        "default": 0x2B2D31,  # 디스코드 기본 다크
+    }
+
+    @staticmethod
+    def build(title: str, description: str = "", type: str = "default", **kwargs) -> EmbedFactory.build:
+        """
+        주어진 상태 타입에 맞는 색상과 레이아웃으로 임베드를 생성합니다.
+        사용 가능한 타입: success, error, warning, info, default
+        """
+        color = EmbedFactory.COLORS.get(type, EmbedFactory.COLORS["default"])
+        embed = EmbedFactory.build(title=title, description=description, color=color, type="default")
+        
+        if "author_name" in kwargs:
+            embed.set_author(name=kwargs["author_name"], icon_url=kwargs.get("author_icon", ""))
+        
+        if "thumbnail_url" in kwargs:
+            embed.set_thumbnail(url=kwargs["thumbnail_url"])
+            
+        if "image_url" in kwargs:
+            embed.set_image(url=kwargs["image_url"])
+            
+        if "footer_text" in kwargs:
+            embed.set_footer(text=kwargs["footer_text"], icon_url=kwargs.get("footer_icon", ""))
+            
+        return embed
+
+def create_progress_bar(current: float, maximum: float, length: int = 10, reverse_color: bool = False) -> str:
+    """
+    시각적 상태 표시바(이모지 프로그레스 바)를 생성합니다.
+    reverse_color: True일 경우 수치가 높을수록 위험(빨간색)으로 표시합니다 (예: 텐션바).
+                   False일 경우 수치가 낮을수록 위험(빨간색)으로 표시합니다 (예: 체력, HP바).
+    """
+    if maximum <= 0:
+        pct = 0
+    else:
+        pct = max(0.0, min(1.0, current / maximum))
+        
+    filled = int(pct * length)
+    
+    if reverse_color:
+        if pct > 0.8: color = "🟥"
+        elif pct > 0.5: color = "🟨"
+        else: color = "🟩"
+    else:
+        if pct > 0.5: color = "🟩"
+        elif pct > 0.2: color = "🟨"
+        else: color = "🟥"
+        
+    return color * filled + "⬛" * (length - filled)
+
+
 async def log_admin_action(bot, admin_user, target_user, action_name, detail):
     """관리자 행동을 특정 채널에 로그로 남깁니다."""
     if not ADMIN_LOG_CHANNEL_ID:
@@ -19,7 +77,7 @@ async def log_admin_action(bot, admin_user, target_user, action_name, detail):
     if not channel:
         return
 
-    embed = discord.Embed(title="🛡️ 관리자 작업 로그", color=0xe74c3c, timestamp=datetime.datetime.now(kst))
+    embed = EmbedFactory.build(title="🛡️ 관리자 작업 로그", type="error", timestamp=datetime.datetime.now(kst))
     embed.add_field(name="실행자", value=f"{admin_user.mention} ({admin_user.id})", inline=True)
     if target_user:
         embed.add_field(name="대상", value=f"{target_user.mention} ({target_user.id})", inline=True)
@@ -85,7 +143,7 @@ def check_boat_tier(min_tier: int):
             req_name = tier_names.get(min_tier, f"Lv.{min_tier}")
             current_name = tier_names.get(tier, f"Lv.{tier}")
 
-            embed = discord.Embed(title="🚫 탑승 권한 부족!", description=f"이 명령어를 사용하려면 **[{req_name}]** 이상이 필요합니다.\n(현재 선박: **{current_name}**)", color=0xe74c3c)
+            embed = EmbedFactory.build(title="🚫 탑승 권한 부족!", description=f"이 명령어를 사용하려면 **[{req_name}]** 이상이 필요합니다.\n(현재 선박: **{current_name}**, type="default")", type="error")
             embed.set_footer(text="💡 '/선박개조' 명령어를 통해 배를 업그레이드하세요!")
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return False

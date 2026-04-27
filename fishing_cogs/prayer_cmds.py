@@ -1,3 +1,4 @@
+from fishing_core.utils import EmbedFactory
 import datetime
 import random
 
@@ -143,10 +144,10 @@ class PrayerCommands(commands.Cog):
 
             await db.commit()
 
-            embed = discord.Embed(
+            embed = EmbedFactory.build(
                 title="🌊 심연의 바다가 요동칩니다!",
                 description=f"간절한 기도가 바다의 심장부에 닿았습니다.\n수평선 너머에서 **전설 속의 신수**가 모습을 드러냅니다!\n\n🎉 **획득:** `{caught_fish}` (`{fish_size} cm`)",
-                color=0x00FFFF,
+                type="info",
             )
             embed.set_thumbnail(url="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExOHJqZ3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/l41lTfuxV5RWRsBPO/giphy.gif")
             embed.set_footer(text=f"적용 확률: {total_success_chance*100:.1f}% (보너스: +{bonus_chance*100:.1f}%)")
@@ -157,10 +158,10 @@ class PrayerCommands(commands.Cog):
                 await interaction.channel.send(f"📢 **[전설]** {interaction.user.name}님이 기도를 통해 바다의 진정한 주인, **{caught_fish}**를 알현했습니다!!!")
 
         else:
-            embed = discord.Embed(
+            embed = EmbedFactory.build(
                 title="🌑 바다가 고요하게 가라앉습니다...",
                 description="당신의 정성은 거품이 되어 심해로 흩어졌습니다. 바다는 아무런 응답이 없습니다.",
-                color=0x2b2d31,
+                type="default",
             )
             embed.set_footer(text=f"성공 확률: {total_success_chance*100:.1f}% | 꽝 확률: {(1-total_success_chance)*100:.1f}%")
             await interaction.followup.send(content=f"{interaction.user.mention}", embed=embed)
@@ -206,10 +207,10 @@ class PrayerCommands(commands.Cog):
         )
         await db.commit()
 
-        embed = discord.Embed(
+        embed = EmbedFactory.build(
             title="🙏 오늘의 기도 결과",
             description="바다에 정성스럽게 기도를 올렸습니다.\n수평선 너머에서 어떤 기운이 느껴집니다...",
-            color=0x00FF00 if is_blessing else 0xFFA500
+            type="success" if is_blessing else "warning"
         )
         
         status = "✨ **축복**" if is_blessing else "⚠️ **고난**"

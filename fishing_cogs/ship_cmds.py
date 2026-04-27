@@ -1,3 +1,4 @@
+from fishing_core.utils import EmbedFactory
 import datetime as dt
 import random
 
@@ -157,7 +158,7 @@ class ShipCog(commands.Cog):
         req = upgrade_costs[current_tier]
 
         if coins < req["coins"] or scrap_amount < req["scrap"]:
-            embed = discord.Embed(title="❌ 재료 부족", description="선박을 개조하기 위한 자원이 부족합니다.", color=0xe74c3c)
+            embed = EmbedFactory.build(title="❌ 재료 부족", description="선박을 개조하기 위한 자원이 부족합니다.", type="error")
             embed.add_field(name="필요 코인", value=f"`{req['coins']:,} C` (보유: `{coins:,} C`)", inline=True)
             if req["scrap"] > 0:
                 embed.add_field(name="필요 고철 ⚙️", value=f"`{req['scrap']}개` (보유: `{scrap_amount}개`)", inline=True)
@@ -177,7 +178,7 @@ class ShipCog(commands.Cog):
         await db.log_action(interaction.user.id, "SHIP_UPGRADE_SUCCESS", f"Tier: {current_tier} -> {new_tier}, Boat: {req['next']}")
         await db.commit()
 
-        embed = discord.Embed(title="🎉 선박 개조 완료!", description=f"뚝딱뚝딱... 쾅!\n배가 **[{req['next']}]**(으)로 업그레이드 되었습니다!", color=0x2ecc71)
+        embed = EmbedFactory.build(title="🎉 선박 개조 완료!", description=f"뚝딱뚝딱... 쾅!\n배가 **[{req['next']}]**(으)로 업그레이드 되었습니다!", type="success")
         embed.add_field(name="🔓 새로운 기능 해금!", value=f"`{req['unlock']}` 명령어를 이제 사용할 수 있습니다.", inline=False)
         embed.add_field(name="⚡ 체력 최대치 증가!", value=f"최대 체력이 **{new_max_stamina}⚡**로 증가했습니다! (전부 회복됨)", inline=False)
         await interaction.response.send_message(embed=embed)

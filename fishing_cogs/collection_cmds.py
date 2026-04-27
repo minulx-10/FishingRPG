@@ -1,3 +1,4 @@
+from fishing_core.utils import EmbedFactory
 import random
 
 import discord
@@ -64,7 +65,7 @@ class CollectionCog(commands.Cog):
 
         await db.commit()
 
-        embed = discord.Embed(title="🐚 조개 열기 결과", color=0xFFFFFF if success_count == 0 else 0x00FFFF)
+        embed = EmbedFactory.build(title="🐚 조개 열기 결과", type="info")
         embed.description = f"**{조개종류}** {수량}개를 정성스럽게 열어보았습니다."
         
         if success_count > 0:
@@ -84,7 +85,7 @@ class CollectionCog(commands.Cog):
             row = await cursor.fetchone()
         pearl_count = row[0] if row else 0
 
-        embed = discord.Embed(title="⚪ 진주 비밀 상점", color=0x00FFFF)
+        embed = EmbedFactory.build(title="⚪ 진주 비밀 상점", type="info")
         embed.description = f"바다의 눈물이라 불리는 진주를 모아오셨군요.\n현재 보유 중인 진주: **{pearl_count}개**"
         
         shop_items = {
@@ -180,7 +181,7 @@ class CollectionCog(commands.Cog):
             }
         ]
 
-        embed = discord.Embed(title="📜 컬렉션 세트 효과", color=0xf1c40f)
+        embed = EmbedFactory.build(title="📜 컬렉션 세트 효과", type="warning")
         embed.description = "특정 조건을 만족하면 자동으로 효과가 상시 적용됩니다."
 
         for s in sets:

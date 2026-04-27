@@ -1,3 +1,4 @@
+from fishing_core.utils import EmbedFactory
 import asyncio
 import datetime
 import random
@@ -104,7 +105,7 @@ class FishingCog(commands.Cog):
             total_value += unit_price * amount
             result_lines.append(f"• **{item}** x{amount}")
 
-        embed = discord.Embed(title=f"🕸️ {net_name} {수량}개 투망 결과", color=0x1ABC9C)
+        embed = EmbedFactory.build(title=f"🕸️ {net_name} {수량}개 투망 결과", type="info")
         embed.description = "그물망을 넓게 던져 한 번에 여러 자원을 건져 올렸습니다."
         embed.add_field(name="획득 목록", value="\n".join(result_lines), inline=False)
         embed.add_field(name="예상 판매 가치", value=f"`{total_value:,} C`", inline=True)
@@ -174,7 +175,7 @@ class FishingCog(commands.Cog):
             env_state["WEATHER_QUEUE"] = [random.choices(WEATHER_TYPES, weights=[40, 25, 20, 5, 10], k=1)[0] for _ in range(3)]
 
         q = env_state["WEATHER_QUEUE"]
-        embed = discord.Embed(title="📡 수산시장 기상청 정밀 예보", color=0x3498db)
+        embed = EmbedFactory.build(title="📡 수산시장 기상청 정밀 예보", type="info")
         embed.description = "위성 사진과 기압골 데이터를 분석한 결과입니다."
         embed.add_field(name="1시간 뒤", value=q[0], inline=True)
         embed.add_field(name="2시간 뒤", value=q[1], inline=True)
@@ -296,7 +297,7 @@ class FishingCog(commands.Cog):
 
         view = FishingView(interaction.user, target_fish, effective_rod_tier, self.bot)
         view.double_catch = double_catch
-        embed = discord.Embed(title="🎣 찌를 던졌습니다!", description=f"**{display_name}**님이 미끼를 던지고 입질을 기다립니다...{bait_text}", color=0x3498db)
+        embed = EmbedFactory.build(title="🎣 찌를 던졌습니다!", description=f"**{display_name}**님이 미끼를 던지고 입질을 기다립니다...{bait_text}", type="info")
         embed.set_image(url="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/l41lTfuxV5RWRsBPO/giphy.gif")
         embed.set_footer(text=f"내 낚싯대: Lv.{rod_tier} | 체력: {current_stamina-stamina_cost}⚡")
 
@@ -330,7 +331,7 @@ class FishingCog(commands.Cog):
             item.emoji = "‼️"
 
         try:
-            embed = discord.Embed(title="❗ 입질 발생!!!!", description="**찌가 격렬하게 흔들립니다! 지금 당기세요!!!**", color=0xff0000)
+            embed = EmbedFactory.build(title="❗ 입질 발생!!!!", description="**찌가 격렬하게 흔들립니다! 지금 당기세요!!!**", type="error")
             embed.set_image(url="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/l41lTfuxV5RWRsBPO/giphy.gif")
             msg = await interaction.edit_original_response(content=None, embed=embed, view=view)
             view.message = msg
@@ -402,7 +403,7 @@ class FishingCog(commands.Cog):
         await db.execute("UPDATE user_data SET current_region = ?, stamina = stamina - 20 WHERE user_id = ?", (해역.value, user_id))
         await db.commit()
         
-        embed = discord.Embed(title="🛳️ 항해를 시작합니다!", description=f"**{current_region}**에서 출발하여 **{해역.value}**에 무사히 도착했습니다!", color=0x3498db)
+        embed = EmbedFactory.build(title="🛳️ 항해를 시작합니다!", description=f"**{current_region}**에서 출발하여 **{해역.value}**에 무사히 도착했습니다!", type="info")
         embed.add_field(name="⛽ 소모 체력", value="-20⚡", inline=True)
         embed.add_field(name="📍 현재 위치", value=f"**{해역.value}**", inline=True)
         embed.set_image(url="https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800")
@@ -414,7 +415,7 @@ class FishingCog(commands.Cog):
         from fishing_core.services.achievement_service import AchievementService
         achievements = await AchievementService.get_user_achievements(interaction.user.id)
         
-        embed = discord.Embed(title=f"🏆 {interaction.user.name}님의 업적 현황", color=0xf1c40f)
+        embed = EmbedFactory.build(title=f"🏆 {interaction.user.name}님의 업적 현황", type="warning")
         
         comp_count = sum(1 for a in achievements if a["is_completed"])
         embed.description = f"현재 **{len(achievements)}개** 중 **{comp_count}개**의 업적을 달성했습니다."
@@ -480,7 +481,7 @@ class FishingCog(commands.Cog):
             res = await cursor.fetchone()
         region = res[0] if res else "연안"
 
-        embed = discord.Embed(title=f"🌊 {region} - 현재 바다 상황", color=0x3498db)
+        embed = EmbedFactory.build(title=f"🌊 {region} - 현재 바다 상황", type="info")
         embed.add_field(name="현재 시간대", value=f"**{time_str}** (`{now_hour}시`)", inline=True)
         embed.add_field(name="현재 날씨", value=f"**{weather}**", inline=True)
         embed.add_field(name="현재 해역", value=f"**{region}**", inline=True)
@@ -540,13 +541,13 @@ class FishingCog(commands.Cog):
             env_state.pop("WEATHER_QUEUE", None)
             await db.commit()
 
-            embed = discord.Embed(title="🌩️ 기우제 성공! 하늘이 응답했습니다!", color=0xffd700)
+            embed = EmbedFactory.build(title="🌩️ 기우제 성공! 하늘이 응답했습니다!", type="warning")
             embed.description = f"**{interaction.user.name}**님의 마지막 정성이 닿았습니다!\n총 `{new_total:,} C`가 모여 바다에 **강력한 폭풍우**가 몰아치기 시작합니다!"
             embed.set_image(url="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/l41lTfuxV5RWRsBPO/giphy.gif") # 천둥 이미지 (예시)
             await interaction.response.send_message(embed=embed)
             await interaction.channel.send("📢 **[시스템]** 기우제 성공으로 인해 날씨가 **🌩️ 폭풍우**로 고정되었습니다! (1시간 지속)")
         else:
-            embed = discord.Embed(title="🙏 기우제 정성 모집 중...", color=0x3498db)
+            embed = EmbedFactory.build(title="🙏 기우제 정성 모집 중...", type="info")
             embed.description = f"**{interaction.user.name}**님이 `{기부금:,} C`를 기부하셨습니다!\n\n현재 모인 정성: `{new_total:,} / {target_amount:,} C`\n목표 도달 시 바다에 **폭풍우**가 찾아옵니다!"
             progress = int((new_total / target_amount) * 10)
             bar = "🟦" * progress + "⬜" * (10 - progress)

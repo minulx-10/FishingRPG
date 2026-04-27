@@ -1,3 +1,4 @@
+from fishing_core.utils import EmbedFactory
 import datetime
 import random
 
@@ -77,7 +78,7 @@ class FishingView(View):
         if not self.is_bite:
             self.resolved = True
             self.stop()
-            embed = discord.Embed(title="💨 너무 일찍 당겼습니다!", description=f"낚싯줄을 던지자마자 당겨버렸습니다.\n잠시 입질을 기다리던 **{self.target_fish}**(이)가 놀라 도망갔습니다.", color=0x95a5a6)
+            embed = EmbedFactory.build(title="💨 너무 일찍 당겼습니다!", description=f"낚싯줄을 던지자마자 당겨버렸습니다.\n잠시 입질을 기다리던 **{self.target_fish}**(이)가 놀라 도망갔습니다.", type="default")
             return await interaction.response.edit_message(content=None, embed=embed, view=None)
         
         self.resolved = True
@@ -97,7 +98,7 @@ class FishingView(View):
         time_limit = limit_map.get(grade, 2.0)
         
         if elapsed > time_limit:
-            embed = discord.Embed(title="💨 타이밍이 늦었습니다!", description=f"찰나의 순간, **{self.target_fish}**(이)가 미끼만 쏙 빼먹고 깊은 바다로 도망갔습니다.\n(반응 속도: `{elapsed:.2f}초` / 제한: `{time_limit}초`)", color=0x95a5a6)
+            embed = EmbedFactory.build(title="💨 타이밍이 늦었습니다!", description=f"찰나의 순간, **{self.target_fish}**(이)가 미끼만 쏙 빼먹고 깊은 바다로 도망갔습니다.\n(반응 속도: `{elapsed:.2f}초` / 제한: `{time_limit}초`)", type="default")
             return await interaction.response.edit_message(content=None, embed=embed, view=None)
         
         if grade in ["대형 포식자", "레전드", "신화", "태고", "환상", "미스터리"]:
@@ -115,7 +116,7 @@ class FishingView(View):
             price = MARKET_PRICES.get(self.target_fish, FISH_DATA.get(self.target_fish, {}).get("price", 100))
 
             # 2. 임베드 생성
-            embed = discord.Embed(title="✨ 낚시 성공! 월척입니다!", color=0x2ecc71)
+            embed = EmbedFactory.build(title="✨ 낚시 성공! 월척입니다!", type="success")
             embed.set_author(name=f"{self.user.name}님의 포획 기록", icon_url=self.user.display_avatar.url)
             embed.description = f"**{self.target_fish}** (을)를 성공적으로 낚아올렸습니다!\n입질 반응 속도: `{elapsed:.2f}초`"
             embed.add_field(name="🧬 어종 등급", value=format_grade_label(grade), inline=True)
@@ -167,17 +168,17 @@ class FishingView(View):
                 await AchievementService.check_achievement(self.user.id, "LEGENDARY_FISHER")
 
             if dex_count == 1:
-                tutorial_embed = discord.Embed(title="🌱 첫 낚시 성공을 축하합니다!", color=0x2ecc71)
+                tutorial_embed = EmbedFactory.build(title="🌱 첫 낚시 성공을 축하합니다!", type="success")
                 tutorial_embed.description = "방금 낚은 물고기는 당신의 첫 기록이 되었습니다!\n\n💡 `/가이드`를 통해 성장 로드맵을 확인하세요!"
                 await interaction.followup.send(embed=tutorial_embed, ephemeral=True)
 
             if grade in ["태고", "환상", "미스터리", "신화"]:
                 await db.log_action(self.user.id, "CATCH_RARE_FISH", f"Fish: {self.target_fish}, Grade: {grade}")
                 if self.target_fish == "메갈로돈 🦈":
-                    alert_embed = discord.Embed(title="🦖 [경고] 바다가 공포에 질려 침묵합니다...", description=f"**{self.user.mention}**님이 거대 포식자 **{self.target_fish}**를 포획했습니다!", color=0x8b4513)
+                    alert_embed = EmbedFactory.build(title="🦖 [경고] 바다가 공포에 질려 침묵합니다...", description=f"**{self.user.mention}**님이 거대 포식자 **{self.target_fish}**를 포획했습니다!", type="warning")
                     await interaction.channel.send(content="@here", embed=alert_embed)
                 elif self.target_fish == "심해의 파멸, 크라켄 🦑":
-                    alert_embed = discord.Embed(title="🦑 [재앙 경고] 거대한 촉수가 솟구칩니다!!!", description=f"**{self.user.mention}**님이 전설의 재앙 **{self.target_fish}**를 심연에서 끌어올렸습니다!!!", color=0xff0000)
+                    alert_embed = EmbedFactory.build(title="🦑 [재앙 경고] 거대한 촉수가 솟구칩니다!!!", description=f"**{self.user.mention}**님이 전설의 재앙 **{self.target_fish}**를 심연에서 끌어올렸습니다!!!", type="error")
                     await interaction.channel.send(content="@here", embed=alert_embed)
 
         except Exception as e:
@@ -203,7 +204,7 @@ class TensionFishingView(View):
         self.max_turns = 3 if grade == "대형 포식자" else (4 if grade == "레전드" else 5)
 
     def get_embed(self):
-        embed = discord.Embed(title="🎣 거대 괴수와 힘겨루기!", color=0x3498db)
+        embed = EmbedFactory.build(title="🎣 거대 괴수와 힘겨루기!", type="info")
         embed.description = f"물고기가 강하게 저항합니다! 텐션을 **20% ~ 80%** 사이로 유지하세요!\n(남은 턴: {self.max_turns - self.turn + 1})"
         bar_count = 10
         filled_segments = int(self.tension / 10)
@@ -237,7 +238,7 @@ class TensionFishingView(View):
                 await db.execute("INSERT INTO active_buffs (user_id, buff_type, end_time) VALUES (?, 'wet_clothes', ?) ON CONFLICT(user_id, buff_type) DO UPDATE SET end_time = ?", (self.user.id, end_time, end_time))
                 await db.commit()
                 
-                fall_embed = discord.Embed(title="🌊 으아아아! 바다에 빠졌습니다!!", color=0xe74c3c)
+                fall_embed = EmbedFactory.build(title="🌊 으아아아! 바다에 빠졌습니다!!", type="error")
                 fall_embed.description = f"**{self.target_fish}**의 엄청난 괴력에 이기지 못하고 배 밖으로 튕겨 나갔습니다!\n\n**[효과]**\n- 💨 **젖은 옷 (디버프)**: {duration_minutes}분 동안 낚시 대기 시간이 증가합니다.\n- 💔 **체력 감소**: 충격으로 인해 체력이 `20` 감소합니다."
                 fall_embed.set_image(url="https://images.unsplash.com/photo-1519046904884-53103b34b206?w=800") # 거친 파도 이미지
                 
@@ -247,13 +248,13 @@ class TensionFishingView(View):
                 return await interaction.response.edit_message(content=None, embed=fall_embed, view=None)
             
             await db.commit()
-            fail_embed = discord.Embed(title="❌ 포획 실패!", description=msg, color=0x95a5a6)
+            fail_embed = EmbedFactory.build(title="❌ 포획 실패!", description=msg, type="default")
             return await interaction.response.edit_message(content=None, embed=fail_embed, view=None)
 
         if self.turn >= self.max_turns:
             if not (20 <= self.tension <= 80):
                 self.stop()
-                fail_embed = discord.Embed(title="❌ 힘싸움 패배!", description=f"끝내 기력을 다한 **{self.target_fish}**를 제압하지 못했습니다. 물고기가 바늘을 털고 도망갔습니다.", color=0x95a5a6)
+                fail_embed = EmbedFactory.build(title="❌ 힘싸움 패배!", description=f"끝내 기력을 다한 **{self.target_fish}**를 제압하지 못했습니다. 물고기가 바늘을 털고 도망갔습니다.", type="default")
                 return await interaction.response.edit_message(content=None, embed=fail_embed, view=None)
             self.stop()
             await self.parent_view.on_bite_success(interaction, self.elapsed, self.grade)
@@ -291,13 +292,10 @@ class BattleView(View):
         self.battle_log = "전투가 시작되었습니다!\n"
 
     def generate_embed(self):
-        embed = discord.Embed(title=f"⚔️ 수산 배틀 (Turn {self.turn})", color=0xe74c3c)
+        embed = EmbedFactory.build(title=f"⚔️ 수산 배틀 (Turn {self.turn})", type="error")
         
         def hp_bar(hp, mhp):
-            pct = hp / mhp
-            blocks = max(0, min(8, int(pct * 8)))
-            color_block = "🟩" if pct > 0.5 else "🟨" if pct > 0.2 else "🟥"
-            return color_block * blocks + "⬛" * (8 - blocks)
+            return create_progress_bar(hp, mhp, length=8)
             
         embed.add_field(name=f"🔵 {self.user.name}", value=f"**{self.my_fish}**\n`{self.my_hp}/{self.my_max_hp}`\n{hp_bar(self.my_hp, self.my_max_hp)}", inline=True)
         embed.add_field(name="VS", value="🔥", inline=True)
@@ -336,9 +334,9 @@ class BattleView(View):
     async def end_battle(self, interaction, is_win):
         self.stop()
         
-        embed = discord.Embed(
+        embed = EmbedFactory.build(
             title="🏆 전투 종료" if is_win else "💀 전투 종료",
-            color=0x2ecc71 if is_win else 0xe74c3c
+            type="success" if is_win else 0xe74c3c
         )
         
         status = "승리!" if is_win else "패배..."
@@ -399,13 +397,10 @@ class PvPBattleView(View):
             self.p2_elem = FISH_DATA.get(name, {}).get("element", "무")
 
     def generate_embed(self):
-        embed = discord.Embed(title=f"⚔️ 3v3 PvP 수산대전 (Turn {self.turn_count})", color=0xf1c40f)
+        embed = EmbedFactory.build(title=f"⚔️ 3v3 PvP 수산대전 (Turn {self.turn_count})", type="warning")
         
         def hp_bar(hp, mhp):
-            pct = hp / mhp
-            blocks = max(0, min(8, int(pct * 8)))
-            color_block = "🟩" if pct > 0.5 else "🟨" if pct > 0.2 else "🟥"
-            return color_block * blocks + "⬛" * (8 - blocks)
+            return create_progress_bar(hp, mhp, length=8)
 
         embed.description = f"현재 턴: {self.current_turn_user.mention}"
         embed.add_field(name=f"🔵 {self.p1.name}", value=f"**{self.p1_fish}**\n`{self.p1_hp}/{self.p1_max_hp}`\n{hp_bar(self.p1_hp, self.p1_max_hp)}", inline=True)
@@ -468,7 +463,7 @@ class PvPBattleView(View):
             await AchievementService.check_achievement(winner.id, "BATTLE_WARRIOR")
             await db.commit()
 
-        embed = discord.Embed(title="⚔️ 수산대전 결과", color=0xf1c40f)
+        embed = EmbedFactory.build(title="⚔️ 수산대전 결과", type="warning")
         embed.set_thumbnail(url=winner.display_avatar.url)
         
         embed.add_field(name="🥇 승리자", value=f"{winner.mention}", inline=True)
@@ -498,7 +493,7 @@ class MarketPaginationView(View):
     def make_embed(self):
         start = self.current_page * self.per_page
         items = self.all_items[start:start+self.per_page]
-        embed = discord.Embed(title="📊 수산시장 시세", color=0xf1c40f)
+        embed = EmbedFactory.build(title="📊 수산시장 시세", type="warning")
         for f, p in items: embed.add_field(name=f, value=f"{p} C", inline=True)
         return embed
 
@@ -561,16 +556,12 @@ class InventoryView(View):
     def make_embed(self):
         coins, rod, rating, boat, stam, max_stam, title = self.stats
         display_name = f"{title} {self.target_user.name}" if title else self.target_user.name
-        embed = discord.Embed(title=f"🎒 {display_name}의 가방", color=0x3498db)
+        embed = EmbedFactory.build(title=f"🎒 {display_name}의 가방", type="info")
         if self.target_user.avatar:
             embed.set_thumbnail(url=self.target_user.avatar.url)
 
         # 스탯 요약 영역
-        stam_pct = stam / max_stam if max_stam > 0 else 0
-        stam_bar_len = 10
-        stam_filled = int(stam_pct * stam_bar_len)
-        stam_color = "🟩" if stam_pct > 0.5 else "🟨" if stam_pct > 0.2 else "🟥"
-        stam_bar = stam_color * stam_filled + "⬛" * (stam_bar_len - stam_filled)
+        stam_bar = create_progress_bar(stam, max_stam, length=10)
 
         embed.add_field(name="💰 코인", value=f"`{coins:,} C`", inline=True)
         embed.add_field(name="🎣 낚싯대", value=f"Lv.`{rod}`", inline=True)
