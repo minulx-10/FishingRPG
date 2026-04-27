@@ -39,7 +39,13 @@ class QuestCog(commands.Cog):
             self.collections = {}
 
     async def _show_aquarium(self, interaction: discord.Interaction, target: discord.Member):
-        await interaction.response.defer()
+        # 1. 로딩 상태 표시 (Phase 2)
+        loading_embed = EmbedFactory.build(
+            title="🏛️ 수족관 입장 중...",
+            description="⏳ 수족관의 물을 채우고 물고기들을 배치하는 중입니다. 잠시만 기다려주세요!",
+            type="info"
+        )
+        await interaction.response.send_message(embed=loading_embed)
 
         async with db.conn.execute("SELECT item_name, amount FROM aquarium WHERE user_id=?", (target.id,)) as cursor:
             items = await cursor.fetchall()
@@ -47,10 +53,17 @@ class QuestCog(commands.Cog):
         title = await db.get_user_title(target.id)
         display_name = f"{title} {target.name}" if title else target.name
 
-        embed = EmbedFactory.build(title=f"🏛️ {display_name}님의 수족관", type="info")
         if not items:
-            embed.description = "수족관이 텅 비어있습니다... 휑~ 🌬️\n(`/전시` 명령어로 물고기를 전시해보세요!)"
-            return await interaction.followup.send(embed=embed)
+            # 2. Empty State 디자인 강화 (Phase 2)
+            empty_embed = EmbedFactory.build(
+                title=f"🏛️ {display_name}님의 수족관",
+                description="수족관이 텅 비어있습니다... 휑~ 🌬️\n\n💡 `/전시` 명령어로 잡은 물고기를 이곳에 뽐내보세요!",
+                type="warning"
+            )
+            return await interaction.edit_original_response(embed=empty_embed)
+
+        # 최종 결과용 임베드 미리 생성
+        embed = EmbedFactory.build(title=f"🏛️ {display_name}님의 수족관", type="info")
 
         try:
             width, height = 800, 600
@@ -153,17 +166,20 @@ class QuestCog(commands.Cog):
             embed.set_image(url="attachment://aquarium.png")
             embed.set_footer(text=f"수족관 공간: {len(items)} / (확장 가능)")
 
-            await interaction.followup.send(embed=embed, file=file)
+            await interaction.edit_original_response(embed=embed, attachments=[file])
 
         except Exception:
             import traceback
             logger.error(f"수족관 렌더링 에러: {traceback.format_exc()}")
-            desc = ""
+            
+            fish_list_str = ""
             for name, amt in items:
-                grade = FISH_DATA[name]["grade"]
-                desc += f"**{name}** `{format_grade_label(grade)}` x{amt}마리\n"
-            embed.description = f"*(이미지 렌더링 오류 발생. 텍스트로 대체합니다)*\n\n{desc}"
-            await interaction.followup.send(embed=embed)
+                grade = FISH_DATA.get(name, {}).get("grade", "일반")
+                fish_list_str += f"• **{name}** `{format_grade_label(grade)}` x{amt}마리\n"
+            
+            embed.description = f"⚠️ **이미지 렌더링 중 문제가 발생했습니다.**\n*(물고기 정보를 텍스트로 대신 표시합니다)*\n\n{fish_list_str}"
+            embed.set_footer(text="💡 기술적 문제로 이미지를 불러올 수 없었습니다.")
+            await interaction.edit_original_response(embed=embed, attachments=[])
 
     @app_commands.command(name="출석", description="하루에 한 번 출석체크하고 1000 코인을 받습니다!")
     async def 출석(self, interaction: discord.Interaction):

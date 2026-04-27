@@ -582,7 +582,7 @@ class InventoryView(View):
                 item_lines.append(f"{lock_icon}**{n}**: {a}개")
             embed.description = "\n".join(item_lines)
         else:
-            embed.description = "가방이 텅 비었습니다."
+            embed.description = "가방이 텅 비어있습니다... 🌬️\n\n💡 `/낚시` 명령어로 물고기를 잡아보세요!"
         embed.set_footer(text=f"페이지 {self.current_page + 1} / {total_pages} · 총 {len(self.all_items)}종")
         return embed
 
