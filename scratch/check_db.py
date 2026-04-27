@@ -1,4 +1,5 @@
 import sqlite3
+
 conn = sqlite3.connect('fishing_rpg.db')
 cursor = conn.cursor()
 cursor.execute("PRAGMA table_info(user_data)")

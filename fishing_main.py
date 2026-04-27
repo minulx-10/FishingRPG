@@ -88,9 +88,7 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
             await interaction.followup.send("❌ 명령어를 처리하는 중에 오류가 발생했습니다. 잠시 후 다시 시도해주세요.", ephemeral=True)
 
 if __name__ == "__main__":
-    from pathlib import Path
-    env_path = Path(__file__).parent / ".env"
-    load_dotenv(dotenv_path=env_path)
+    load_dotenv() 
     TOKEN = os.getenv('DISCORD_TOKEN') 
     if not TOKEN:
         logger.critical("DISCORD_TOKEN이 .env 파일에 설정되어 있지 않습니다!")
