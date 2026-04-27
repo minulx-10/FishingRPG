@@ -1,9 +1,9 @@
-from fishing_core.utils import EmbedFactory
 import os
 import secrets
 
-import discord
 from aiohttp import web
+
+from fishing_core.utils import EmbedFactory
 
 from .database import db
 from .logger import logger

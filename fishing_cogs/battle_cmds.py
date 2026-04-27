@@ -1,4 +1,3 @@
-from fishing_core.utils import EmbedFactory
 import datetime as dt
 import json
 import random
@@ -11,7 +10,7 @@ from fishing_core.database import db
 from fishing_core.logger import logger
 from fishing_core.services.battle_service import BattleService
 from fishing_core.shared import FISH_DATA, format_grade_label, kst
-from fishing_core.utils import check_boat_tier, inv_autocomplete, create_progress_bar
+from fishing_core.utils import EmbedFactory, check_boat_tier, create_progress_bar, inv_autocomplete
 from fishing_core.views import BattleView, PvPBattleView
 
 

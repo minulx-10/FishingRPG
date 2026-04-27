@@ -1,4 +1,3 @@
-from fishing_core.utils import EmbedFactory
 import random
 
 import discord
@@ -7,6 +6,7 @@ from discord.ext import commands
 
 from fishing_core.database import db
 from fishing_core.shared import kst
+from fishing_core.utils import EmbedFactory
 
 
 class CollectionCog(commands.Cog):

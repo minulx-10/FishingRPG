@@ -1,4 +1,3 @@
-from fishing_core.utils import EmbedFactory
 import datetime as dt
 import random
 
@@ -7,6 +6,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from fishing_core.database import db
+from fishing_core.utils import EmbedFactory
 
 # 선박 티어별 스태미나 최대치 매핑
 TIER_MAX_STAMINA = {1: 100, 2: 120, 3: 150, 4: 180, 5: 220, 6: 300}

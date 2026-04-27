@@ -1,4 +1,3 @@
-from fishing_core.utils import EmbedFactory
 import datetime
 import random
 
@@ -14,6 +13,7 @@ from fishing_core.shared import (
     format_grade_label,
     kst,
 )
+from fishing_core.utils import EmbedFactory
 
 
 class FishActionView(View):

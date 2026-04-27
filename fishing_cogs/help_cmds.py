@@ -1,9 +1,9 @@
-from fishing_core.utils import EmbedFactory
 import discord
 from discord import app_commands
 from discord.ext import commands
 
 from fishing_core.shared import SUPER_ADMIN_IDS
+from fishing_core.utils import EmbedFactory
 
 
 class HelpView(discord.ui.View):
