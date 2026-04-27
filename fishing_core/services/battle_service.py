@@ -47,11 +47,14 @@ class BattleService:
             
         final_dmg = int(base_dmg)
         
+        status = f"{'🔥 크리티컬! ' if is_crit else ''}{'🔺 상성 우위!' if elem_mult > 1.0 else ('🔻 상성 열세...' if elem_mult < 1.0 else '')}"
+        if not status: status = "⚡ 보통"
+        
         return {
             "damage": final_dmg,
             "is_crit": is_crit,
             "elem_mult": elem_mult,
-            "description": f"{'🔥 크리티컬! ' if is_crit else ''}{'🔺 상성 우위!' if elem_mult > 1.0 else ('🔻 상성 열세...' if elem_mult < 1.0 else '')}"
+            "description": status
         }
 
     @staticmethod

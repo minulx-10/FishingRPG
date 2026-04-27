@@ -309,30 +309,39 @@ class BattleView(View):
         return embed, file
 
     async def execute_turn(self, interaction, action):
-        if action == "attack":
-            res = BattleService.calculate_damage(self.my_fish, self.npc_fish, is_defending=self.is_npc_defending)
-            dmg = res["damage"]
-            self.npc_hp -= dmg
-            self.battle_log += f"🔵 {self.my_fish} 공격! {dmg} 피해! ({res['description']})\n"
-            self.is_npc_defending = False # 리셋
-        else:
-            self.is_my_defending = True
-            self.battle_log += f"🔵 {self.my_fish} 방어 자세!\n"
+        if interaction.user != self.user: return
+        
+        try:
+            # 상호작용 실패 방지를 위해 우선 지연 처리
+            await interaction.response.defer()
             
-        if self.npc_hp <= 0: return await self.end_battle(interaction, True)
-        
-        # NPC의 반격 (단순화)
-        npc_res = BattleService.calculate_damage(self.npc_fish, self.my_fish, is_defending=self.is_my_defending)
-        npc_dmg = npc_res["damage"]
-        self.my_hp -= npc_dmg
-        self.battle_log += f"🔴 {self.npc_fish} 반격! {npc_dmg} 피해! ({npc_res['description']})\n"
-        self.is_my_defending = False # 리셋
-        
-        if self.my_hp <= 0: return await self.end_battle(interaction, False)
-        
-        self.turn += 1
-        embed, file = self.generate_embed()
-        await interaction.response.edit_message(embed=embed, attachments=[file], view=self)
+            if action == "attack":
+                res = BattleService.calculate_damage(self.my_fish, self.npc_fish, is_defending=self.is_npc_defending)
+                dmg = res["damage"]
+                self.npc_hp -= dmg
+                self.battle_log += f"🔵 {self.my_fish} 공격! {dmg} 피해! ({res['description']})\n"
+                self.is_npc_defending = False # 리셋
+            else:
+                self.is_my_defending = True
+                self.battle_log += f"🔵 {self.my_fish} 방어 자세!\n"
+                
+            if self.npc_hp <= 0: return await self.end_battle(interaction, True)
+            
+            # NPC의 반격 (단순화)
+            npc_res = BattleService.calculate_damage(self.npc_fish, self.my_fish, is_defending=self.is_my_defending)
+            npc_dmg = npc_res["damage"]
+            self.my_hp -= npc_dmg
+            self.battle_log += f"🔴 {self.npc_fish} 반격! {npc_dmg} 피해! ({npc_res['description']})\n"
+            self.is_my_defending = False # 리셋
+            
+            if self.my_hp <= 0: return await self.end_battle(interaction, False)
+            
+            self.turn += 1
+            embed, file = self.generate_embed()
+            await interaction.edit_original_response(embed=embed, attachments=[file], view=self)
+        except Exception as e:
+            logger.error(f"PvE Battle execute_turn Error: {e}", exc_info=True)
+            await interaction.followup.send("❌ 전투 처리 중 오류가 발생했습니다.", ephemeral=True)
 
     async def end_battle(self, interaction, is_win):
         self.stop()
@@ -364,7 +373,10 @@ class BattleView(View):
             embed.set_image(url="attachment://battle_defeat.png")
             embed.set_footer(text="바다는 냉혹합니다. 더 강해져서 돌아오세요.")
 
-        await interaction.response.edit_message(content=None, embed=embed, attachments=[file], view=None)
+        if interaction.response.is_done():
+            await interaction.edit_original_response(content=None, embed=embed, attachments=[file], view=None)
+        else:
+            await interaction.response.edit_message(content=None, embed=embed, attachments=[file], view=None)
 
     @discord.ui.button(label="공격", style=discord.ButtonStyle.danger)
     async def btn_attack(self, interaction: discord.Interaction, button: Button):
@@ -419,36 +431,42 @@ class PvPBattleView(View):
 
     async def execute_turn(self, interaction, action):
         if interaction.user != self.current_turn_user: return
-        is_p1 = (interaction.user == self.p1)
         
-        attacker_fish = self.p1_fish if is_p1 else self.p2_fish
-        defender_fish = self.p2_fish if is_p1 else self.p1_fish
-        
-        if action == "attack":
-            res = BattleService.calculate_damage(attacker_fish, defender_fish)
-            dmg = res["damage"]
-            if is_p1: self.p2_hp -= dmg
-            else: self.p1_hp -= dmg
-            self.battle_log = f"{'🔵' if is_p1 else '🔴'} {attacker_fish}의 공격! {dmg} 피해! ({res['description']})"
+        try:
+            await interaction.response.defer()
+            is_p1 = (interaction.user == self.p1)
             
-        if self.p1_hp <= 0:
-            self.p1_idx += 1
-            if self.p1_idx >= len(self.p1_deck): return await self.end_battle(interaction, self.p2, self.p1)
-            self._init_fish(1)
-            self.battle_log += f"\n🔵 {self.p1.name}님의 다음 물고기 {self.p1_fish} 출격!"
+            attacker_fish = self.p1_fish if is_p1 else self.p2_fish
+            defender_fish = self.p2_fish if is_p1 else self.p1_fish
             
-        if self.p2_hp <= 0:
-            self.p2_idx += 1
-            if self.p2_idx >= len(self.p2_deck): return await self.end_battle(interaction, self.p1, self.p2)
-            self._init_fish(2)
-            self.battle_log += f"\n🔴 {self.p2.name}님의 다음 물고기 {self.p2_fish} 출격!"
+            if action == "attack":
+                res = BattleService.calculate_damage(attacker_fish, defender_fish)
+                dmg = res["damage"]
+                if is_p1: self.p2_hp -= dmg
+                else: self.p1_hp -= dmg
+                self.battle_log = f"{'🔵' if is_p1 else '🔴'} {attacker_fish}의 공격! {dmg} 피해! ({res['description']})"
+                
+            if self.p1_hp <= 0:
+                self.p1_idx += 1
+                if self.p1_idx >= len(self.p1_deck): return await self.end_battle(interaction, self.p2, self.p1)
+                self._init_fish(1)
+                self.battle_log += f"\n🔵 {self.p1.name}님의 다음 물고기 {self.p1_fish} 출격!"
+                
+            if self.p2_hp <= 0:
+                self.p2_idx += 1
+                if self.p2_idx >= len(self.p2_deck): return await self.end_battle(interaction, self.p1, self.p2)
+                self._init_fish(2)
+                self.battle_log += f"\n🔴 {self.p2.name}님의 다음 물고기 {self.p2_fish} 출격!"
+                
+            self.current_turn_user = self.p2 if is_p1 else self.p1
+            self.turn_count += 1
             
-        self.current_turn_user = self.p2 if is_p1 else self.p1
-        self.turn_count += 1
-        
-        embed, file = self.generate_embed()
-        embed.add_field(name="📜 로그", value=self.battle_log, inline=False)
-        await interaction.response.edit_message(embed=embed, attachments=[file], view=self)
+            embed, file = self.generate_embed()
+            embed.add_field(name="📜 로그", value=self.battle_log, inline=False)
+            await interaction.edit_original_response(embed=embed, attachments=[file], view=self)
+        except Exception as e:
+            logger.error(f"PvP Battle execute_turn Error: {e}", exc_info=True)
+            await interaction.followup.send("❌ 전투 처리 중 오류가 발생했습니다.", ephemeral=True)
 
     async def end_battle(self, interaction, winner, loser):
         self.stop()
@@ -488,7 +506,10 @@ class PvPBattleView(View):
         
         embed.set_footer(text=f"전투 종료 시각: {datetime.datetime.now(kst).strftime('%H:%M:%S')}")
 
-        await interaction.response.edit_message(content=None, embed=embed, attachments=[file], view=None)
+        if interaction.response.is_done():
+            await interaction.edit_original_response(content=None, embed=embed, attachments=[file], view=None)
+        else:
+            await interaction.response.edit_message(content=None, embed=embed, attachments=[file], view=None)
 
     @discord.ui.button(label="공격", style=discord.ButtonStyle.danger)
     async def btn_attack(self, interaction: discord.Interaction, button: Button):
