@@ -42,6 +42,8 @@ class DashboardServer:
             web.post('/api/admin/broadcast', self.api_broadcast),
             web.post('/api/admin/weather', self.api_set_weather),
             web.get('/api/admin/logs', self.api_get_logs),
+            web.get('/api/stats/history', self.api_stats_history),
+            web.post('/api/users/bulk/items', self.api_bulk_modify_items),
         ])
         self.app.add_routes([
             web.get('/', self.serve_index),
@@ -277,7 +279,69 @@ class DashboardServer:
         except Exception as e:
             return web.json_response({"error": str(e)}, status=500)
 
+    @require_auth
+    async def api_stats_history(self, request):
+        try:
+            async with db.conn.execute("SELECT recorded_at, total_coins, avg_fish_price FROM stats_history ORDER BY recorded_at DESC LIMIT 20") as cursor:
+                rows = await cursor.fetchall()
+            
+            rows = rows[::-1] # 시간순 정렬
+            labels = [r[0].split(" ")[1][:5] for r in rows] # HH:MM
+            coins = [r[1] for r in rows]
+            prices = [r[2] for r in rows]
+
+            return web.json_response({
+                "success": True, 
+                "data": {
+                    "labels": labels,
+                    "prices": prices,
+                    "total_coins": coins[-1] if coins else 0,
+                    "coins": coins
+                }
+            })
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
+
+    @require_auth
+    async def api_bulk_modify_items(self, request):
+        data = await request.json()
+        user_ids = data.get("user_ids", [])
+        item_name = data.get("item_name")
+        amount = int(data.get("amount", 1))
+
+        if not user_ids or not item_name:
+            return web.json_response({"error": "Missing params"}, status=400)
+
+        success_count = 0
+        try:
+            for uid in user_ids:
+                await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, ?) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?", (int(uid), item_name, amount, amount))
+                success_count += 1
+            await db.commit()
+            return web.json_response({"success": True, "success_count": success_count})
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
+
+async def _record_stats_task(bot):
+    import asyncio
+    while True:
+        try:
+            async with db.conn.execute("SELECT COUNT(*), SUM(coins) FROM user_data") as cursor:
+                res = await cursor.fetchone()
+                total_users, total_coins = res if res and res[0] else (0, 0)
+            
+            avg_price = sum(MARKET_PRICES.values()) / len(MARKET_PRICES) if MARKET_PRICES else 0
+            
+            await db.execute("INSERT INTO stats_history (total_users, total_coins, avg_fish_price) VALUES (?, ?, ?)", 
+                             (total_users, int(total_coins) if total_coins else 0, int(avg_price)))
+            await db.commit()
+        except Exception as e:
+            logger.error(f"Error in stats recording task: {e}")
+        
+        await asyncio.sleep(1800) # 30분마다
+
 async def start_web_server(bot):
+    import asyncio
     port = int(os.getenv("WEB_PORT", "8888"))
 
     # 서버 기동 시 DB에서 날씨 상태 복구
@@ -292,3 +356,6 @@ async def start_web_server(bot):
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
     logger.info(f"✨ 웹 관리자 대시보드가 포트 {port} 에서 백그라운드 구동됩니다.")
+    
+    # 통계 기록 태스크 시작
+    asyncio.create_task(_record_stats_task(bot))

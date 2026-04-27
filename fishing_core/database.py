@@ -112,6 +112,17 @@ class DBManager:
                     current_price INTEGER DEFAULT 0
                 )
             '''),
+
+            # --- [웹 대시보드 통계 히스토리] ---
+            (50, '''
+                CREATE TABLE IF NOT EXISTS stats_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    total_users INTEGER,
+                    total_coins INTEGER,
+                    avg_fish_price INTEGER
+                )
+            '''),
         ]
 
         # 3. 마이그레이션 실행

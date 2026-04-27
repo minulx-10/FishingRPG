@@ -124,6 +124,21 @@ async def locked_autocomplete(interaction: discord.Interaction, current: str) ->
 async def recipe_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
     return [app_commands.Choice(name=r, value=r) for r in RECIPES if current.lower() in r.lower()][:25]
 
+async def usable_item_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    """가방에 있는 아이템 중 레시피(요리)나 사용 가능한 소모품만 표시합니다."""
+    # 상점 아이템 + 요리 아이템 목록
+    shop_items = ["에너지 드링크 ⚡", "가속 포션 💨", "특수 떡밥 🎣", "초급 그물망 🕸️", "튼튼한 그물망 🕸️", "레이드 작살 🔱", "레이드 작살 🔱"]
+    
+    async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0", (interaction.user.id,)) as cursor:
+        items = await cursor.fetchall()
+        
+    choices = []
+    for (name,) in items:
+        # 요리이거나 위 소모품 리스트에 있으면 추천
+        if (name in RECIPES or name in shop_items) and current.lower() in name.lower():
+            choices.append(app_commands.Choice(name=name, value=name))
+    return choices[:25]
+
 
 def is_developer():
     return app_commands.check(lambda i: i.user.id in SUPER_ADMIN_IDS)

@@ -244,7 +244,14 @@ class BattleCog(commands.Cog):
 
         async with db.conn.execute("SELECT value FROM server_state WHERE key='RAID_BOSS_HP'") as cursor:
             res = await cursor.fetchone()
-        boss_hp = int(res[0]) if res else boss_max_hp
+        
+        if not res:
+            boss_hp = boss_max_hp
+            await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_BOSS_HP', ?)", (str(boss_hp),))
+            await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_DAMAGE_LOG', ?)", ('{}',))
+            await db.commit()
+        else:
+            boss_hp = int(res[0])
 
         if boss_hp <= 0:
             boss_level += 1

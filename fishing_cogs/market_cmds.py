@@ -82,27 +82,9 @@ class MarketCog(commands.Cog):
 
     async def trigger_merchant_encounter(self, interaction: discord.Interaction):
         """낚시 중 떠돌이 상인 소식을 발견했을 때 호출됩니다."""
-        now = datetime.datetime.now(kst)
-        async with db.conn.execute("SELECT value FROM server_state WHERE key='WANDERING_MERCHANT_STATE'") as cursor:
-            row = await cursor.fetchone()
-
-        should_refresh = True
-        if row:
-            try:
-                state = json.loads(row[0])
-                expires_at = datetime.datetime.fromisoformat(state.get("expires_at", ""))
-                # 아직 시간이 1시간 이상 넉넉히 남았다면 굳이 갱신하지 않고 소식만 전함
-                if expires_at - now > datetime.timedelta(hours=1):
-                    should_refresh = False
-            except Exception:
-                pass
-
-        if should_refresh:
-            await self._get_wandering_merchant_state(force_refresh=True)
-            msg = "📢 **[소문]** 근처 해역에 새로운 떠돌이 상인이 나타났다는 소식이 들려옵니다! `/떠상` 명령어로 확인해보세요."
-        else:
-            msg = "📢 **[소문]** 떠돌이 상인이 아직 이 근처 해역에 머물고 있다는 소식이 들려옵니다! `/떠상` 명령어로 확인해보세요."
-
+        # Phase 5: 소문이 발견될 때마다 품목을 무조건 새로 갱신 (사용자 요청: 매번 변경)
+        await self._get_wandering_merchant_state(force_refresh=True)
+        msg = "📢 **[소문]** 근처 해역에 새로운 떠돌이 상인이 나타났다는 소식이 들려옵니다! `/떠상` 명령어로 확인해보세요."
         await interaction.channel.send(msg)
 
 

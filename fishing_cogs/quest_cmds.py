@@ -26,6 +26,7 @@ from fishing_core.utils import (
     check_boat_tier,
     inv_autocomplete,
     recipe_autocomplete,
+    usable_item_autocomplete,
 )
 from fishing_core.views import QuestDeliveryView
 
@@ -338,31 +339,71 @@ class QuestCog(commands.Cog):
         for item, amt in to_consume:
             await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name=?", (amt, interaction.user.id, item))
 
-        if recipe["buff_type"] == "sell_only":
-            await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id, 선택))
-            msg = f"👨‍🍳 **{선택}** 완성! 가방에 보관되었습니다. 시장에 비싸게 파세요!"
-        else:
+        # 요리 완성 및 인벤토리 지급 (Phase 5: 모든 요리가 가방으로 보관됨)
+        await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id, 선택))
+        await db.commit()
+        
+        await interaction.response.send_message(f"👨‍🍳 **{선택}** 완성! 가방에 보관되었습니다. `/사용` 명령어로 효과를 얻거나 시장에 비싸게 파세요!")
+
+    @app_commands.command(name="사용", description="가방에 있는 요리나 소모품을 사용하여 버프를 얻거나 효과를 발동합니다.")
+    @app_commands.autocomplete(아이템=usable_item_autocomplete)
+    async def 사용(self, interaction: discord.Interaction, 아이템: str):
+        async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, 아이템)) as cursor:
+            res = await cursor.fetchone()
+        
+        if not res or res[0] <= 0:
+            return await interaction.response.send_message(f"❌ 가방에 **{아이템}**이(가) 없습니다!", ephemeral=True)
+
+        # 아이템 종류별 처리
+        # 1. 요리 (RECIPES)
+        if 아이템 in RECIPES:
+            recipe = RECIPES[아이템]
+            if recipe["buff_type"] == "sell_only":
+                return await interaction.response.send_message("💰 이 요리는 판매 전용입니다! 시장에 가서 파세요.", ephemeral=True)
+
             end_time = datetime.datetime.now(kst) + datetime.timedelta(minutes=recipe["duration"])
             end_time_str = end_time.strftime('%Y-%m-%d %H:%M:%S')
 
-            if 선택 == "복어 지리탕 🍲" and random.random() < 0.1:
+            # 특수 연출 (복어 지리탕 등)
+            extra_msg = ""
+            if 아이템 == "복어 지리탕 🍲" and random.random() < 0.1:
                 async with db.conn.execute("SELECT coins FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
                     c_coins = (await cursor.fetchone())[0]
 
                 if c_coins < 5000:
                     await db.execute("UPDATE user_data SET stamina = 0 WHERE user_id=?", (interaction.user.id,))
-                    msg = "🤢 **독극물 중독!!** 복어 독에 쓰러졌습니다... 병원비조차 없어 바닥에 쓰러져 기절합니다! (체력 0 초기화)\n*버프는 적용되었습니다.*"
+                    extra_msg = "\n🤢 **독극물 중독!!** 복어 독에 쓰러졌습니다... 병원비조차 없어 바닥에 쓰러져 기절합니다! (체력 0 초기화)"
                 else:
                     await db.execute("UPDATE user_data SET coins = coins - 5000 WHERE user_id=?", (interaction.user.id,))
-                    msg = "🤢 **아야!** 복어 독에 당했습니다... 해독비로 `5,000C`를 썼지만, 버프는 적용되었습니다."
-            else:
-                msg = f"😋 **{선택}**을(를) 맛있게 먹었습니다!\n**효과:** {recipe['description']}"
+                    extra_msg = "\n🤢 **아야!** 복어 독에 당했습니다... 해독비로 `5,000C`를 썼습니다."
 
             await db.execute("INSERT OR REPLACE INTO active_buffs (user_id, buff_type, end_time) VALUES (?, ?, ?)",
                              (interaction.user.id, recipe["buff_type"], end_time_str))
+            
+            await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (interaction.user.id, 아이템))
+            await db.commit()
+            
+            await interaction.response.send_message(f"😋 **{아이템}**을(를) 맛있게 먹었습니다!{extra_msg}\n**효과:** {recipe['description']}")
 
-        await db.commit()
-        await interaction.response.send_message(msg)
+        # 2. 상점 소모품
+        elif 아이템 == "에너지 드링크 ⚡":
+            await db.execute("UPDATE user_data SET stamina = MIN(max_stamina, stamina + 50) WHERE user_id=?", (interaction.user.id,))
+            await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (interaction.user.id, 아이템))
+            await db.commit()
+            async with db.conn.execute("SELECT stamina, max_stamina FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+                st = await cursor.fetchone()
+            await interaction.response.send_message(f"⚡ **에너지 드링크**를 마셨습니다! 체력 +50⚡ (현재: {st[0]}/{st[1]}⚡)")
+            
+        elif 아이템 in ["가속 포션 💨", "특수 떡밥 🎣"]:
+            buff_type = "fishing_speed_up" if 아이템 == "가속 포션 💨" else "rare_boost"
+            end_time = (datetime.datetime.now(kst) + datetime.timedelta(minutes=30)).strftime('%Y-%m-%d %H:%M:%S')
+            await db.execute("INSERT OR REPLACE INTO active_buffs (user_id, buff_type, end_time) VALUES (?, ?, ?)", (interaction.user.id, buff_type, end_time))
+            await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (interaction.user.id, 아이템))
+            await db.commit()
+            await interaction.response.send_message(f"✨ **{아이템}**을 사용하여 30분간 버프가 적용됩니다!")
+        
+        else:
+            await interaction.response.send_message("❌ 사용할 수 없는 아이템입니다.", ephemeral=True)
 
     @app_commands.command(name="의뢰", description="항구 게시판에서 오늘의 특별한 낚시 의뢰를 확인합니다.")
     @check_boat_tier(2)

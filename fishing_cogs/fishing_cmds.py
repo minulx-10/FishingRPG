@@ -302,8 +302,8 @@ class FishingCog(commands.Cog):
 
         await interaction.response.send_message(embed=embed, view=view)
 
-        # [신규] 떠돌이 상인 소문 시스템 (3% 확률로 상인 출현/유지 소식)
-        if random.random() < 0.03:
+        # [신규] 떠돌이 상인 소문 시스템 (1% 확률로 상인 출현/유지 소식)
+        if random.random() < 0.01:
             market_cog = self.bot.get_cog("MarketCog")
             if market_cog:
                 try:
