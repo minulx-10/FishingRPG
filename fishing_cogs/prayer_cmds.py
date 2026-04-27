@@ -1,4 +1,3 @@
-from fishing_core.utils import EmbedFactory
 import datetime
 import random
 
@@ -8,6 +7,7 @@ from discord.ext import commands
 
 from fishing_core.database import db
 from fishing_core.shared import FISH_DATA, kst
+from fishing_core.utils import EmbedFactory
 
 
 class PrayerCommands(commands.Cog):
