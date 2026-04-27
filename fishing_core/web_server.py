@@ -1,7 +1,7 @@
 import os
 import secrets
-import discord
 
+import discord
 from aiohttp import web
 
 from .database import db
