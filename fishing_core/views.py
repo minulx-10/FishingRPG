@@ -295,9 +295,9 @@ class BattleView(View):
         
         def hp_bar(hp, mhp):
             pct = hp / mhp
-            blocks = max(0, min(10, int(pct * 10)))
+            blocks = max(0, min(8, int(pct * 8)))
             color_block = "🟩" if pct > 0.5 else "🟨" if pct > 0.2 else "🟥"
-            return color_block * blocks + "⬛" * (10 - blocks)
+            return color_block * blocks + "⬛" * (8 - blocks)
             
         embed.add_field(name=f"🔵 {self.user.name}", value=f"**{self.my_fish}**\n`{self.my_hp}/{self.my_max_hp}`\n{hp_bar(self.my_hp, self.my_max_hp)}", inline=True)
         embed.add_field(name="VS", value="🔥", inline=True)
@@ -397,9 +397,9 @@ class PvPBattleView(View):
         
         def hp_bar(hp, mhp):
             pct = hp / mhp
-            blocks = max(0, min(10, int(pct * 10)))
+            blocks = max(0, min(8, int(pct * 8)))
             color_block = "🟩" if pct > 0.5 else "🟨" if pct > 0.2 else "🟥"
-            return color_block * blocks + "⬛" * (10 - blocks)
+            return color_block * blocks + "⬛" * (8 - blocks)
 
         embed.description = f"현재 턴: {self.current_turn_user.mention}"
         embed.add_field(name=f"🔵 {self.p1.name}", value=f"**{self.p1_fish}**\n`{self.p1_hp}/{self.p1_max_hp}`\n{hp_bar(self.p1_hp, self.p1_max_hp)}", inline=True)
