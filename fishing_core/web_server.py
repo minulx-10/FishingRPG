@@ -248,7 +248,7 @@ class DashboardServer:
             log_path = "logs/fishing_bot.log"
             logs = []
             if os.path.exists(log_path):
-                with open(log_path, "r", encoding="utf-8") as f:
+                with open(log_path, encoding="utf-8") as f:
                     lines = f.readlines()[-50:] # 최근 50줄
                     for line in lines:
                         # [2026-04-27 15:00:00] [INFO] Message format

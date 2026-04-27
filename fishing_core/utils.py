@@ -59,10 +59,9 @@ def create_progress_bar(current: float, maximum: float, length: int = 10, revers
         if pct > 0.8: color = "🟥"
         elif pct > 0.5: color = "🟨"
         else: color = "🟩"
-    else:
-        if pct > 0.5: color = "🟩"
-        elif pct > 0.2: color = "🟨"
-        else: color = "🟥"
+    elif pct > 0.5: color = "🟩"
+    elif pct > 0.2: color = "🟨"
+    else: color = "🟥"
         
     return color * filled + "⬛" * (length - filled)
 
