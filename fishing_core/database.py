@@ -180,7 +180,7 @@ class DBManager:
         async with self.conn.execute("SELECT coins, rod_tier, rating FROM user_data WHERE user_id=?", (user_id,)) as cursor:
             res = await cursor.fetchone()
             if not res:
-                await self.conn.execute("INSERT INTO user_data (user_id, coins, rod_tier, rating, max_stamina, stamina) VALUES (?, 0, 1, 1000, 100, 100)", (user_id,))
+                await self.conn.execute("INSERT INTO user_data (user_id, coins, rod_tier, rating, max_stamina, stamina) VALUES (?, 0, 1, 1000, 150, 150)", (user_id,))
                 await self.conn.commit()
                 return (0, 1, 1000)
             return res

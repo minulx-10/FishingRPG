@@ -74,8 +74,8 @@ class MarketService:
         # 밤/새벽(18시~06시)은 회복률 감소 (5⚡), 낮 시간은 15⚡
         stamina_regen = 5 if (now_hour >= 18 or now_hour < 6) else 15
         
+        # 자연 회복은 최대치까지만 (이미 최대치를 넘은 유저는 깎지 않음)
         await db.execute("UPDATE user_data SET stamina = MIN(max_stamina, stamina + ?) WHERE stamina < max_stamina", (stamina_regen,))
-        await db.execute("UPDATE user_data SET stamina = max_stamina WHERE stamina > max_stamina")
         await db.commit()
         return stamina_regen
 
@@ -149,7 +149,8 @@ class MarketService:
         
         if item_name == "에너지 드링크 ⚡":
             heal = 50 * amount
-            await db.execute("UPDATE user_data SET stamina = MIN(max_stamina, stamina + ?) WHERE user_id=?", (heal, user_id))
+            # 드링크는 최대 1000까지 오버플로우 허용 (유저가 돈 날리는 느낌 안 들게)
+            await db.execute("UPDATE user_data SET stamina = MIN(1000, stamina + ?) WHERE user_id=?", (heal, user_id))
             async with db.conn.execute("SELECT stamina, max_stamina FROM user_data WHERE user_id=?", (user_id,)) as cursor:
                 st = await cursor.fetchone()
             msg = f"⚡ 에너지 드링크를 {amount}개 마셨습니다! 체력 +{heal}⚡ (현재: {st[0]}/{st[1]}⚡)\n(소모: {total_price:,} C)"
