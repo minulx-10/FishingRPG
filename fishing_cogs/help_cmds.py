@@ -137,9 +137,17 @@ class HelpCog(commands.Cog):
         self.bot = bot
 
     @app_commands.command(name="도움말", description="수산시장 RPG의 모든 명령어 설명과 사용법을 확인합니다.")
-    async def 도움말(self, interaction: discord.Interaction):
-        is_admin = interaction.user.id in SUPER_ADMIN_IDS
-        view = HelpView(interaction.user, is_admin)
+    async def 도움말_slash(self, interaction: discord.Interaction):
+        await self._send_help(interaction)
+
+    @commands.command(name="도움말", aliases=["help", "도움"])
+    async def 도움말_prefix(self, ctx: commands.Context):
+        await self._send_help(ctx)
+
+    async def _send_help(self, ctx_or_inter):
+        user = ctx_or_inter.user if isinstance(ctx_or_inter, discord.Interaction) else ctx_or_inter.author
+        is_admin = user.id in SUPER_ADMIN_IDS
+        view = HelpView(user, is_admin)
 
         embed = discord.Embed(title="🎣 수산시장 RPG 도움말 센터", color=0x3498db)
         embed.description = "아래 드롭다운 메뉴를 클릭하여 카테고리별 명령어 설명을 확인하세요!\n\n" \
@@ -156,7 +164,10 @@ class HelpCog(commands.Cog):
         if is_admin:
             embed.set_footer(text="🛡️ 관리자 권한이 감지되었습니다. 전용 카테고리가 활성화되었습니다.")
 
-        await interaction.response.send_message(embed=embed, view=view)
+        if isinstance(ctx_or_inter, discord.Interaction):
+            await ctx_or_inter.response.send_message(embed=embed, view=view)
+        else:
+            await ctx_or_inter.send(embed=embed, view=view)
 
     @app_commands.command(name="가이드", description="뉴비를 위한 수산시장 RPG 쾌속 성장 가이드를 확인합니다.")
     async def 가이드(self, interaction: discord.Interaction):
