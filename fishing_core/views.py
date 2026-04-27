@@ -326,7 +326,6 @@ class BattleView(View):
             return await interaction.response.send_message('⚠️ **AP 부족!** 더 이상 포인트를 배분할 수 없습니다.', ephemeral=True)
         
         self.my_alloc[type] += 1
-        from fishing_core.services.battle_service import BattleService
         mult = BattleService.MULTIPLIERS.get(self.my_alloc['atk'], 0.0)
         
         # 예쁜 전략 확인 메시지
@@ -362,7 +361,6 @@ class BattleView(View):
         if interaction.user != self.user: return
         await interaction.response.defer()
         
-        from fishing_core.services.battle_service import BattleService
         npc_alloc = {'atk': 0, 'blk': 0}
         temp_ap = self.npc_ap
         while temp_ap > 0:
@@ -478,7 +476,6 @@ class PvPBattleView(View):
             return await interaction.response.send_message('⚠️ **AP 부족!**', ephemeral=True)
         
         alloc[type] += 1
-        from fishing_core.services.battle_service import BattleService
         mult = BattleService.MULTIPLIERS.get(alloc['atk'], 0.0)
         
         status_embed = EmbedFactory.build(title='🛡️ 내 전략 확인', type='info')
@@ -523,7 +520,6 @@ class PvPBattleView(View):
             await self._update_view(interaction)
 
     async def resolve_turn(self, interaction):
-        from fishing_core.services.battle_service import BattleService
         p1_res = BattleService.calculate_ap_battle(self.p1_pwr, self.p1_alloc['atk'], self.p2_alloc['blk'])
         p2_res = BattleService.calculate_ap_battle(self.p2_pwr, self.p2_alloc['atk'], self.p1_alloc['blk'])
         d1, d2 = p1_res['damage'], p2_res['damage']
@@ -622,7 +618,7 @@ class InventoryView(View):
             col2 = "\n".join(item_list[half:])
             
             embed.add_field(name=f"📦 보유 물품 (필터: {self.filter_grade})", value=col1 or " ", inline=True)
-            embed.add_field(name="​", value=col2 or " ", inline=True)
+            embed.add_field(name="\u200b", value=col2 or " ", inline=True)
 
         total_pages = (len(self.all_items) - 1) // self.per_page + 1
         embed.set_footer(text=f"페이지 {self.current_page + 1} / {total_pages} | 총 {len(self.all_items)}종 보유")

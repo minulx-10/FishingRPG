@@ -1,9 +1,8 @@
-import os
 
 file_path = r'c:\Users\master\Documents\Server\fishing_core\views.py'
 
 # 1. Read the file
-with open(file_path, 'r', encoding='utf-8') as f:
+with open(file_path, encoding='utf-8') as f:
     lines = f.readlines()
 
 # 2. Find and replace BattleView
