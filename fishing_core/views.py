@@ -13,7 +13,7 @@ from fishing_core.shared import (
     format_grade_label,
     kst,
 )
-from fishing_core.utils import EmbedFactory
+from fishing_core.utils import EmbedFactory, create_progress_bar
 
 
 class FishActionView(View):
