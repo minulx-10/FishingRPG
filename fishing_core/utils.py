@@ -143,7 +143,7 @@ def check_boat_tier(min_tier: int):
             req_name = tier_names.get(min_tier, f"Lv.{min_tier}")
             current_name = tier_names.get(tier, f"Lv.{tier}")
 
-            embed = EmbedFactory.build(title="🚫 탑승 권한 부족!", description=f"이 명령어를 사용하려면 **[{req_name}]** 이상이 필요합니다.\n(현재 선박: **{current_name}**, type="default")", type="error")
+            embed = EmbedFactory.build(title="🚫 탑승 권한 부족!", description=f"이 명령어를 사용하려면 **[{req_name}]** 이상이 필요합니다.\n(현재 선박: **{current_name}**)", type="error")
             embed.set_footer(text="💡 '/선박개조' 명령어를 통해 배를 업그레이드하세요!")
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return False

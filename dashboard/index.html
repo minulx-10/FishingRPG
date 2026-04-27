@@ -64,15 +64,20 @@
                     </div>
                 </div>
 
-                <!-- 차트 영역 추가 -->
-                <div class="grid-2col" style="margin-top: 2rem;">
-                    <div class="glass-panel" style="padding: 1.5rem;">
-                        <h3>📈 주요 어종 시세 변동 (실시간)</h3>
-                        <canvas id="marketChart"></canvas>
+                </div>
+
+                <!-- 실시간 로그 터미널 (Phase 3) -->
+                <div class="glass-panel" style="margin-top: 2rem; padding: 1.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3>📟 실시간 시스템 무전 (Live Logs)</h3>
+                        <span id="log-status" style="font-size: 0.75rem; color: var(--success);">● LIVE</span>
                     </div>
-                    <div class="glass-panel" style="padding: 1.5rem;">
-                        <h3>🪙 서버 경제 지표 (통화 유통량)</h3>
-                        <canvas id="economyChart"></canvas>
+                    <div class="terminal-container" id="log-terminal">
+                        <div class="terminal-header">
+                            <span>FISHING_BOT_OS v2.5</span>
+                            <span>UTC+9 KST</span>
+                        </div>
+                        <!-- Log entries will be injected here -->
                     </div>
                 </div>
             </section>
@@ -206,11 +211,19 @@
             <hr style="margin: 20px 0; border-color: rgba(255,255,255,0.1);">
             
             <h3>인벤토리 개입 (아이템 지급/압수)</h3>
-            <div class="input-group" style="display: flex; gap: 10px;">
+            <div class="input-group" style="display: flex; gap: 10px; margin-bottom: 10px;">
                 <input type="text" id="mod-item-name" list="fish-list" placeholder="아이템 또는 어종 검색..." style="flex: 2;">
                 <input type="number" id="mod-item-amt" value="1" style="flex: 1;">
                 <button id="btn-mod-give" class="btn-success">지급</button>
                 <button id="btn-mod-take" class="btn-danger">회수</button>
+            </div>
+
+            <div id="modal-inventory-container">
+                <label style="font-size: 0.8rem; color: var(--text-muted);">현재 보유 인벤토리 (실시간)</label>
+                <div class="inventory-grid" id="modal-inventory-list">
+                    <!-- Items injected here -->
+                    <div style="color: var(--text-muted); font-size: 0.8rem;">정보를 불러오는 중...</div>
+                </div>
             </div>
 
             <div style="margin-top: 30px; display: flex; justify-content: flex-end; gap: 10px;">
