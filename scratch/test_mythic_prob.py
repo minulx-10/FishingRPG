@@ -1,9 +1,8 @@
-import asyncio
 import json
 from typing import Any, ClassVar
 
 # Mock FISH_DATA and other dependencies
-with open('fish_data.json', 'r', encoding='utf-8') as f:
+with open('fish_data.json', encoding='utf-8') as f:
     FISH_DATA = json.load(f)
 
 class FishingService:
