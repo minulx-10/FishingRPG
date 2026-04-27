@@ -14,6 +14,7 @@ from fishing_core.shared import ADMIN_LOG_CHANNEL_ID, init_shared_data, kst
 from fishing_core.web_server import start_web_server
 
 intents = discord.Intents.default()
+intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 bot.remove_command('help')
 
