@@ -9,9 +9,11 @@ from .logger import logger
 from .shared import ADMIN_LOG_CHANNEL_ID, FISH_DATA, RECIPES, SUPER_ADMIN_IDS, kst
 
 
+from typing import ClassVar
+
 class EmbedFactory:
     """디스코드 임베드 디자인 일관성을 유지하기 위한 팩토리 클래스입니다."""
-    COLORS = {
+    COLORS: ClassVar[dict[str, int]] = {
         "success": 0x2ECC71,  # 초록색
         "error": 0xE74C3C,    # 빨간색
         "warning": 0xF1C40F,  # 노란색
@@ -20,13 +22,13 @@ class EmbedFactory:
     }
 
     @staticmethod
-    def build(title: str, description: str = "", type: str = "default", **kwargs) -> EmbedFactory.build:
+    def build(title: str, description: str = "", type: str = "default", **kwargs) -> discord.Embed:
         """
         주어진 상태 타입에 맞는 색상과 레이아웃으로 임베드를 생성합니다.
         사용 가능한 타입: success, error, warning, info, default
         """
         color = EmbedFactory.COLORS.get(type, EmbedFactory.COLORS["default"])
-        embed = EmbedFactory.build(title=title, description=description, color=color, type="default")
+        embed = discord.Embed(title=title, description=description, color=color)
         
         if "author_name" in kwargs:
             embed.set_author(name=kwargs["author_name"], icon_url=kwargs.get("author_icon", ""))
@@ -48,10 +50,7 @@ def create_progress_bar(current: float, maximum: float, length: int = 10, revers
     reverse_color: True일 경우 수치가 높을수록 위험(빨간색)으로 표시합니다 (예: 텐션바).
                    False일 경우 수치가 낮을수록 위험(빨간색)으로 표시합니다 (예: 체력, HP바).
     """
-    if maximum <= 0:
-        pct = 0
-    else:
-        pct = max(0.0, min(1.0, current / maximum))
+    pct = 0 if maximum <= 0 else max(0.0, min(1.0, current / maximum))
         
     filled = int(pct * length)
     
