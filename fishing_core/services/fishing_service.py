@@ -7,11 +7,11 @@ from fishing_core.shared import FISH_DATA
 class FishingService:
     # 해역별 특성 정의
     REGION_CONFIG: ClassVar[dict[str, Any]] = {
-        "연안": {"min_tier": 1, "elements": ["표층", "무속성"], "grades": ["일반", "희귀", "피식자", "소형 포식자"], "bonus": 1.0},
-        "먼 바다": {"min_tier": 2, "elements": ["표층", "암초", "무속성"], "grades": ["일반", "희귀", "초희귀", "소형 포식자", "대형 포식자"], "bonus": 1.2},
-        "산호초": {"min_tier": 3, "elements": ["암초", "표층"], "grades": ["희귀", "초희귀", "에픽"], "bonus": 1.3},
-        "심해": {"min_tier": 4, "elements": ["심해", "무속성"], "grades": ["희귀", "초희귀", "에픽", "대형 포식자", "레전드"], "bonus": 1.5},
-        "북해": {"min_tier": 5, "elements": ["레전드", "신화", "태고", "환상", "미스터리", "심해"], "grades": ["초희귀", "에픽", "레전드", "신화", "태고", "환상", "미스터리"], "bonus": 2.0},
+        "연안": {"min_tier": 1, "elements": ["표층", "무속성"], "grades": ["잡동사니", "피식자", "소형 포식자"], "bonus": 1.0},
+        "먼 바다": {"min_tier": 2, "elements": ["표층", "암초", "무속성"], "grades": ["잡동사니", "피식자", "소형 포식자", "대형 포식자"], "bonus": 1.2},
+        "산호초": {"min_tier": 3, "elements": ["암초", "표층"], "grades": ["피식자", "소형 포식자", "대형 포식자", "포식자-상어"], "bonus": 1.3},
+        "심해": {"min_tier": 4, "elements": ["심해", "무속성"], "grades": ["소형 포식자", "대형 포식자", "포식자-상어", "레전드"], "bonus": 1.5},
+        "북해": {"min_tier": 5, "elements": ["레전드", "신화", "태고", "환상", "미스터리", "심해"], "grades": ["대형 포식자", "포식자-상어", "포식자-고래", "레전드", "신화", "태고", "환상", "미스터리"], "bonus": 2.0},
     }
 
     @staticmethod
@@ -39,8 +39,15 @@ class FishingService:
             grade = data["grade"]
             element = data.get("element", "무속성")
 
-            # 1. 해역 필터링
-            if not (element in config["elements"] or element == "무속성") or not (grade in config["grades"] or "신화" in grade):
+            # 1. 해역 필터링 (속성 및 등급)
+            is_element_match = (element in config["elements"] or element == "무속성")
+            is_grade_match = (grade in config["grades"])
+            
+            # 신화 등급은 3레역(산호초) 이상에서만 아주 낮은 확률로 등장 가능하도록 예외 허용
+            if not is_grade_match and grade == "신화" and config["min_tier"] >= 3:
+                is_grade_match = True
+
+            if not is_element_match or not is_grade_match:
                 continue
 
             base_prob = data["prob"] * config["bonus"]
