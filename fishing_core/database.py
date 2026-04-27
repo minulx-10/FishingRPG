@@ -79,6 +79,7 @@ class DBManager:
                     PRIMARY KEY (user_id, achievement_id)
                 )
             '''),
+            (33, "ALTER TABLE user_data ADD COLUMN last_active TEXT DEFAULT ''"),
         ]
 
         # 3. 마이그레이션 실행
