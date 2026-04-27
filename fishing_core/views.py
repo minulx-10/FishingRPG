@@ -1,4 +1,4 @@
-import datetime
+﻿import datetime
 import random
 
 import discord
@@ -274,129 +274,161 @@ class TensionFishingView(View):
 
 class BattleView(View):
     def __init__(self, user, my_fish, npc_fish):
-        super().__init__(timeout=60)
+        super().__init__(timeout=120)
         self.user = user
         self.my_fish = my_fish
         self.npc_fish = npc_fish
-        self.my_max_hp = self.my_hp = FISH_DATA[my_fish]["power"] * 10
-        self.my_atk = FISH_DATA[my_fish]["power"]
-        self.my_ap = 1
-        self.my_elem = FISH_DATA[my_fish]["element"]
-        self.is_my_defending = False
-        self.npc_max_hp = self.npc_hp = FISH_DATA[npc_fish]["power"] * 10
-        self.npc_atk = FISH_DATA[npc_fish]["power"]
-        self.npc_ap = 1
-        self.npc_elem = FISH_DATA[npc_fish]["element"]
-        self.is_npc_defending = False
         self.turn = 1
-        self.battle_log = "전투가 시작되었습니다!\n"
+        self.ap_gain = 1
+        self.my_ap = 1
+        self.npc_ap = 1
+        self.my_alloc = {'atk': 0, 'blk': 0}
+        
+        # 능력치 초기화
+        p1_pwr = FISH_DATA.get(my_fish, {}).get('power', 10)
+        p2_pwr = FISH_DATA.get(npc_fish, {}).get('power', 10)
+        self.my_hp = self.my_max_hp = p1_pwr * 12
+        self.npc_hp = self.npc_max_hp = p2_pwr * 12
+        self.my_pwr = p1_pwr
+        self.npc_pwr = p2_pwr
+        
+        self.battle_log = f'🌊 야생의 **{npc_fish}**와(과) 마주쳤습니다!\n'
 
     def generate_embed(self):
-        embed = EmbedFactory.build(title=f"⚔️ 수산 배틀 (Turn {self.turn})", type="error")
+        embed = EmbedFactory.build(title=f'⚔️ 전략 수산 배틀 (Turn {self.turn})', type='error')
         
-        def hp_bar(hp, mhp):
-            return create_progress_bar(hp, mhp, length=8)
+        def hp_bar(hp, mhp): return create_progress_bar(hp, mhp, length=8)
+        def ap_bar(ap): return '●' * ap + '○' * (8 - ap)
             
-        embed.add_field(name=f"🔵 {self.user.name}", value=f"**{self.my_fish}**\n`{self.my_hp}/{self.my_max_hp}`\n{hp_bar(self.my_hp, self.my_max_hp)}", inline=True)
-        embed.add_field(name="VS", value="🔥", inline=True)
-        embed.add_field(name="🔴 야생", value=f"**{self.npc_fish}**\n`{self.npc_hp}/{self.npc_max_hp}`\n{hp_bar(self.npc_hp, self.npc_max_hp)}", inline=True)
+        embed.add_field(name=f'🔵 {self.user.name}', value=f'**{self.my_fish}**\nHP: {hp_bar(self.my_hp, self.my_max_hp)}\nAP: `{ap_bar(self.my_ap)}` ({self.my_ap})', inline=True)
+        embed.add_field(name='VS', value='🔥', inline=True)
+        embed.add_field(name='🔴 야생', value=f'**{self.npc_fish}**\nHP: {hp_bar(self.npc_hp, self.npc_max_hp)}\nAP: `{ap_bar(self.npc_ap)}` ({self.npc_ap})', inline=True)
         
-        log_lines = self.battle_log.strip().split("\n")[-3:]
-        embed.add_field(name="📜 최근 전투 로그", value="\n".join(log_lines), inline=False)
+        embed.add_field(name='📜 최근 전투 로그', value=self.battle_log, inline=False)
         
-        file = discord.File("assets/battle/battle_start.png", filename="battle_start.png")
-        embed.set_image(url="attachment://battle_start.png")
+        file = discord.File('assets/battle/battle_start.png', filename='battle_start.png')
+        embed.set_image(url='attachment://battle_start.png')
         return embed, file
 
-    async def execute_turn(self, interaction, action):
+    async def _update_view(self, interaction):
+        embed, file = self.generate_embed()
+        await interaction.edit_original_response(embed=embed, attachments=[file], view=self)
+
+    async def _handle_point(self, interaction, type):
+        await interaction.response.defer()
         if interaction.user != self.user: return
         
-        try:
-            # 상호작용 실패 방지를 위해 우선 지연 처리
-            await interaction.response.defer()
+        current_spent = self.my_alloc['atk'] + self.my_alloc['blk']
+        if current_spent >= self.my_ap: return await interaction.followup.send('보유한 AP를 모두 사용했습니다!', ephemeral=True)
+        
+        self.my_alloc[type] += 1
+        status_msg = f'현재 배분 - 공격: {self.my_alloc["atk"]} | 방어: {self.my_alloc["blk"]} | 남은 AP: {self.my_ap - (self.my_alloc["atk"] + self.my_alloc["blk"])}'
+        await interaction.followup.send(status_msg, ephemeral=True)
+        await self._update_view(interaction)
+
+    @discord.ui.button(label='공격+', style=discord.ButtonStyle.danger)
+    async def btn_atk_plus(self, interaction, button):
+        await self._handle_point(interaction, 'atk')
+
+    @discord.ui.button(label='방어+', style=discord.ButtonStyle.primary)
+    async def btn_blk_plus(self, interaction, button):
+        await self._handle_point(interaction, 'blk')
+
+    @discord.ui.button(label='초기화', style=discord.ButtonStyle.secondary)
+    async def btn_reset(self, interaction, button):
+        await interaction.response.defer()
+        self.my_alloc = {'atk': 0, 'blk': 0}
+        await self._update_view(interaction)
+
+    @discord.ui.button(label='✅ 결정', style=discord.ButtonStyle.success)
+    async def btn_confirm(self, interaction, button):
+        await interaction.response.defer()
+        if interaction.user != self.user: return
+        
+        from fishing_core.services.battle_service import BattleService
+        # 1. NPC AI (단순: 랜덤 배분)
+        npc_alloc = {'atk': 0, 'blk': 0}
+        temp_ap = self.npc_ap
+        while temp_ap > 0:
+            choice = random.choice(['atk', 'blk', 'rsv'])
+            if choice == 'rsv': break
+            npc_alloc[choice] += 1
+            temp_ap -= 1
             
-            if action == "attack":
-                res = BattleService.calculate_damage(self.my_fish, self.npc_fish, is_defending=self.is_npc_defending)
-                dmg = res["damage"]
-                self.npc_hp -= dmg
-                self.battle_log += f"🔵 {self.my_fish} 공격! {dmg} 피해! ({res['description']})\n"
-                self.is_npc_defending = False # 리셋
-            else:
-                self.is_my_defending = True
-                self.battle_log += f"🔵 {self.my_fish} 방어 자세!\n"
-                
-            if self.npc_hp <= 0: return await self.end_battle(interaction, True)
-            
-            # NPC의 반격 (단순화)
-            npc_res = BattleService.calculate_damage(self.npc_fish, self.my_fish, is_defending=self.is_my_defending)
-            npc_dmg = npc_res["damage"]
-            self.my_hp -= npc_dmg
-            self.battle_log += f"🔴 {self.npc_fish} 반격! {npc_dmg} 피해! ({npc_res['description']})\n"
-            self.is_my_defending = False # 리셋
-            
-            if self.my_hp <= 0: return await self.end_battle(interaction, False)
-            
-            self.turn += 1
-            embed, file = self.generate_embed()
-            await interaction.edit_original_response(embed=embed, attachments=[file], view=self)
-        except Exception as e:
-            logger.error(f"PvE Battle execute_turn Error: {e}", exc_info=True)
-            await interaction.followup.send("❌ 전투 처리 중 오류가 발생했습니다.", ephemeral=True)
+        # 2. 결과 정산
+        my_res = BattleService.calculate_ap_battle(self.my_pwr, self.my_alloc['atk'], npc_alloc['blk'])
+        npc_res = BattleService.calculate_ap_battle(self.npc_pwr, npc_alloc['atk'], self.my_alloc['blk'])
+        
+        d1 = my_res['damage']
+        d2 = npc_res['damage']
+        
+        self.npc_hp -= d1
+        self.my_hp -= d2
+        
+        log = f'**[Turn {self.turn} 결과]**\n'
+        log += f'🔵 나: 공격 {self.my_alloc["atk"]}pt, 방어 {self.my_alloc["blk"]}pt'
+        if d1 > 0: log += f' -> **{d1:,}** 피해!\n'
+        else: log += ' -> 막힘!\n'
+        
+        log += f'🔴 야생: 공격 {npc_alloc["atk"]}pt, 방어 {npc_alloc["blk"]}pt'
+        if d2 > 0: log += f' -> **{d2:,}** 피해!\n'
+        else: log += ' -> 막힘!\n'
+        
+        self.battle_log = log
+        
+        if self.npc_hp <= 0: return await self.end_battle(interaction, True)
+        if self.my_hp <= 0: return await self.end_battle(interaction, False)
+        
+        # 3. 턴 갱신
+        self.my_ap = min(8, (self.my_ap - (self.my_alloc['atk'] + self.my_alloc['blk'])) + self.ap_gain + 1)
+        self.npc_ap = min(8, (self.npc_ap - (npc_alloc['atk'] + npc_alloc['blk'])) + self.ap_gain + 1)
+        if self.ap_gain < 3: self.ap_gain += 1
+        
+        self.turn += 1
+        self.my_alloc = {'atk': 0, 'blk': 0}
+        
+        embed, file = self.generate_embed()
+        await interaction.edit_original_response(embed=embed, attachments=[file], view=self)
 
     async def end_battle(self, interaction, is_win):
         self.stop()
-        
-        embed = EmbedFactory.build(
-            title="🏆 전투 종료" if is_win else "💀 전투 종료",
-            type="success" if is_win else 0xe74c3c
-        )
-        
-        status = "승리!" if is_win else "패배..."
-        embed.description = f"**{self.user.name}**님의 물고기가 전투에서 **{status}**"
-        
-        embed.add_field(name="🔵 내 물고기", value=f"{self.my_fish}\nHP: {max(0, self.my_hp)}", inline=True)
-        embed.add_field(name="🔴 적 물고기", value=f"{self.npc_fish}\nHP: {max(0, self.npc_hp)}", inline=True)
+        embed = EmbedFactory.build(title='🏆 전투 종료' if is_win else '💀 전투 종료', type='success' if is_win else 0xe74c3c)
+        embed.description = f'**{self.user.name}**님의 전투 결과: **{"승리!" if is_win else "패배..."}**'
         
         if is_win:
-            # PvE 승리 보상 지급 (NPC 전투력 비례)
-            npc_power = FISH_DATA.get(self.npc_fish, {}).get("power", 10)
-            reward = int(npc_power * random.randint(3, 8))
-            await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (reward, self.user.id))
+            reward = int(self.npc_pwr * random.randint(5, 10))
+            await db.execute('UPDATE user_data SET coins = coins + ? WHERE user_id = ?', (reward, self.user.id))
             await db.commit()
-            embed.add_field(name="💰 전투 보상", value=f"`{reward:,} C` 획득!", inline=False)
+            embed.add_field(name='💰 전투 보상', value=f'`{reward:,} C` 획득!', inline=False)
+            file_name = 'battle_victory.png'
+        else:
+            file_name = 'battle_defeat.png'
             
-            file = discord.File("assets/battle/battle_victory.png", filename="battle_victory.png")
-            embed.set_image(url="attachment://battle_victory.png")
-            embed.set_footer(text="전설적인 승리를 거두었습니다!")
-        else:
-            file = discord.File("assets/battle/battle_defeat.png", filename="battle_defeat.png")
-            embed.set_image(url="attachment://battle_defeat.png")
-            embed.set_footer(text="바다는 냉혹합니다. 더 강해져서 돌아오세요.")
-
-        if interaction.response.is_done():
-            await interaction.edit_original_response(content=None, embed=embed, attachments=[file], view=None)
-        else:
-            await interaction.response.edit_message(content=None, embed=embed, attachments=[file], view=None)
-
-    @discord.ui.button(label="공격", style=discord.ButtonStyle.danger)
-    async def btn_attack(self, interaction: discord.Interaction, button: Button):
-        if interaction.user != self.user: return
-        await self.execute_turn(interaction, "attack")
-
-    @discord.ui.button(label="방어", style=discord.ButtonStyle.primary)
-    async def btn_defend(self, interaction: discord.Interaction, button: Button):
-        if interaction.user != self.user: return
-        await self.execute_turn(interaction, "defend")
-
+        file = discord.File(f'assets/battle/{file_name}', filename=file_name)
+        embed.set_image(url=f'attachment://{file_name}')
+        await interaction.edit_original_response(content=None, embed=embed, attachments=[file], view=None)
 class PvPBattleView(View):
     def __init__(self, p1, p2, p1_deck, p2_deck):
-        super().__init__(timeout=120)
+        super().__init__(timeout=300) # 전략 게임이므로 타임아웃 연장
         self.p1, self.p2 = p1, p2
         self.p1_deck, self.p2_deck = p1_deck, p2_deck
         self.p1_idx, self.p2_idx = 0, 0
         self.turn_count = 1
-        self.current_turn_user = p1
-        self.battle_log = "전투 시작!\n"
+        self.ap_gain = 1
+        
+        # AP 상태 (최대 8)
+        self.p1_ap = 1
+        self.p2_ap = 1
+        
+        # 현재 턴 배분 상태
+        self.p1_alloc = {'atk': 0, 'blk': 0}
+        self.p2_alloc = {'atk': 0, 'blk': 0}
+        
+        # 준비 상태
+        self.p1_ready = False
+        self.p2_ready = False
+        
+        self.battle_log = '⚔️ 수산대전이 시작되었습니다! 전략적으로 AP를 배분하세요.'
         self._init_fish(1)
         self._init_fish(2)
 
@@ -404,117 +436,168 @@ class PvPBattleView(View):
         if p_num == 1:
             name, pwr = self.p1_deck[self.p1_idx]
             self.p1_fish = name
-            self.p1_hp = self.p1_max_hp = pwr * 10
-            self.p1_atk = pwr
-            self.p1_elem = FISH_DATA.get(name, {}).get("element", "무")
+            self.p1_hp = self.p1_max_hp = pwr * 12
+            self.p1_pwr = pwr
         else:
             name, pwr = self.p2_deck[self.p2_idx]
             self.p2_fish = name
-            self.p2_hp = self.p2_max_hp = pwr * 10
-            self.p2_atk = pwr
-            self.p2_elem = FISH_DATA.get(name, {}).get("element", "무")
+            self.p2_hp = self.p2_max_hp = pwr * 12
+            self.p2_pwr = pwr
 
-    def generate_embed(self):
-        embed = EmbedFactory.build(title=f"⚔️ 3v3 PvP 수산대전 (Turn {self.turn_count})", type="warning")
+    def generate_embed(self, reveal=False):
+        embed = EmbedFactory.build(title=f'⚔️ 전략 수산대전 (Turn {self.turn_count})', type='warning')
         
-        def hp_bar(hp, mhp):
-            return create_progress_bar(hp, mhp, length=8)
+        def hp_bar(hp, mhp): return create_progress_bar(hp, mhp, length=8)
+        def ap_bar(ap): return '●' * ap + '○' * (8 - ap)
 
-        embed.description = f"현재 턴: {self.current_turn_user.mention}"
-        embed.add_field(name=f"🔵 {self.p1.name}", value=f"**{self.p1_fish}**\n`{self.p1_hp}/{self.p1_max_hp}`\n{hp_bar(self.p1_hp, self.p1_max_hp)}", inline=True)
-        embed.add_field(name="VS", value="⚡", inline=True)
-        embed.add_field(name=f"🔴 {self.p2.name}", value=f"**{self.p2_fish}**\n`{self.p2_hp}/{self.p2_max_hp}`\n{hp_bar(self.p2_hp, self.p2_max_hp)}", inline=True)
+        embed.add_field(name=f'🔵 {self.p1.name}', value=f'**{self.p1_fish}**\nHP: {hp_bar(self.p1_hp, self.p1_max_hp)}\nAP: `{ap_bar(self.p1_ap)}` ({self.p1_ap})', inline=True)
+        embed.add_field(name='VS', value='⚡', inline=True)
+        embed.add_field(name=f'🔴 {self.p2.name}', value=f'**{self.p2_fish}**\nHP: {hp_bar(self.p2_hp, self.p2_max_hp)}\nAP: `{ap_bar(self.p2_ap)}` ({self.p2_ap})', inline=True)
         
-        file = discord.File("assets/battle/battle_start.png", filename="battle_start.png")
-        embed.set_image(url="attachment://battle_start.png")
+        if not reveal:
+            p1_status = '✅ 준비 완료!' if self.p1_ready else '🤔 고민 중...'
+            p2_status = '✅ 준비 완료!' if self.p2_ready else '🤔 고민 중...'
+            embed.add_field(name='🛡️ 준비 상태', value=f'{self.p1.name}: {p1_status}\n{self.p2.name}: {p2_status}', inline=False)
+        
+        embed.add_field(name='📜 로그', value=self.battle_log, inline=False)
+        
+        if not reveal:
+            embed.set_footer(text='⚔️공격: 데미지 | 🛡️방어: 공격 상쇄 | 남은 AP는 자동으로 저장됩니다.')
+        
+        file = discord.File('assets/battle/battle_start.png', filename='battle_start.png')
+        embed.set_image(url='attachment://battle_start.png')
         return embed, file
 
-    async def execute_turn(self, interaction, action):
-        if interaction.user != self.current_turn_user: return
+    async def _update_view(self, interaction):
+        embed, file = self.generate_embed()
+        await interaction.edit_original_response(embed=embed, attachments=[file], view=self)
+
+    async def _handle_point(self, interaction, type, value):
+        await interaction.response.defer()
+        is_p1 = (interaction.user == self.p1)
+        is_p2 = (interaction.user == self.p2)
         
-        try:
-            await interaction.response.defer()
-            is_p1 = (interaction.user == self.p1)
+        if not is_p1 and not is_p2: return
+        
+        ready = self.p1_ready if is_p1 else self.p2_ready
+        if ready: return await interaction.followup.send('이미 결정을 마쳤습니다!', ephemeral=True)
+        
+        alloc = self.p1_alloc if is_p1 else self.p2_alloc
+        ap = self.p1_ap if is_p1 else self.p2_ap
+        
+        current_spent = alloc['atk'] + alloc['blk']
+        
+        if value > 0: 
+            if current_spent >= ap: return await interaction.followup.send('보유한 AP를 모두 사용했습니다!', ephemeral=True)
+            alloc[type] += 1
+        else: 
+            if alloc[type] <= 0: return
+            alloc[type] -= 1
             
-            attacker_fish = self.p1_fish if is_p1 else self.p2_fish
-            defender_fish = self.p2_fish if is_p1 else self.p1_fish
+        status_msg = f'현재 배분 - 공격: {alloc["atk"]} | 방어: {alloc["blk"]} | 남은 AP: {ap - (alloc["atk"] + alloc["blk"])}'
+        await interaction.followup.send(status_msg, ephemeral=True)
+        await self._update_view(interaction)
+
+    @discord.ui.button(label='공격+', style=discord.ButtonStyle.danger)
+    async def btn_atk_plus(self, interaction, button):
+        await self._handle_point(interaction, 'atk', 1)
+
+    @discord.ui.button(label='방어+', style=discord.ButtonStyle.primary)
+    async def btn_blk_plus(self, interaction, button):
+        await self._handle_point(interaction, 'blk', 1)
+
+    @discord.ui.button(label='초기화', style=discord.ButtonStyle.secondary)
+    async def btn_reset(self, interaction, button):
+        await interaction.response.defer()
+        if interaction.user == self.p1: self.p1_alloc = {'atk': 0, 'blk': 0}
+        elif interaction.user == self.p2: self.p2_alloc = {'atk': 0, 'blk': 0}
+        await self._update_view(interaction)
+
+    @discord.ui.button(label='✅ 결정', style=discord.ButtonStyle.success)
+    async def btn_confirm(self, interaction, button):
+        await interaction.response.defer()
+        if interaction.user == self.p1: self.p1_ready = True
+        elif interaction.user == self.p2: self.p2_ready = True
+        else: return
+        
+        if self.p1_ready and self.p2_ready:
+            await self.resolve_turn(interaction)
+        else:
+            await self._update_view(interaction)
+
+    async def resolve_turn(self, interaction):
+        from fishing_core.services.battle_service import BattleService
+        p1_res = BattleService.calculate_ap_battle(self.p1_pwr, self.p1_alloc['atk'], self.p2_alloc['blk'])
+        p2_res = BattleService.calculate_ap_battle(self.p2_pwr, self.p2_alloc['atk'], self.p1_alloc['blk'])
+        
+        d1 = p1_res['damage']
+        d2 = p2_res['damage']
+        
+        self.p2_hp -= d1
+        self.p1_hp -= d2
+        
+        log = f'**[Turn {self.turn_count} 결과]**\n'
+        log += f'🔵 {self.p1.name}: 공격 {self.p1_alloc["atk"]}pt, 방어 {self.p1_alloc["blk"]}pt'
+        if d1 > 0: log += f' -> **{d1:,}** 피해!\n'
+        else: log += ' -> 막힘!\n'
+        
+        log += f'🔴 {self.p2.name}: 공격 {self.p2_alloc["atk"]}pt, 방어 {self.p2_alloc["blk"]}pt'
+        if d2 > 0: log += f' -> **{d2:,}** 피해!\n'
+        else: log += ' -> 막힘!\n'
+        
+        self.battle_log = log
+        
+        if self.p1_hp <= 0:
+            self.p1_idx += 1
+            if self.p1_idx >= len(self.p1_deck): return await self.end_battle(interaction, self.p2, self.p1)
+            self._init_fish(1)
+            self.battle_log += f'\n🔵 {self.p1.name}님의 다음 물고기 {self.p1_fish} 출격!'
             
-            if action == "attack":
-                res = BattleService.calculate_damage(attacker_fish, defender_fish)
-                dmg = res["damage"]
-                if is_p1: self.p2_hp -= dmg
-                else: self.p1_hp -= dmg
-                self.battle_log = f"{'🔵' if is_p1 else '🔴'} {attacker_fish}의 공격! {dmg} 피해! ({res['description']})"
-                
-            if self.p1_hp <= 0:
-                self.p1_idx += 1
-                if self.p1_idx >= len(self.p1_deck): return await self.end_battle(interaction, self.p2, self.p1)
-                self._init_fish(1)
-                self.battle_log += f"\n🔵 {self.p1.name}님의 다음 물고기 {self.p1_fish} 출격!"
-                
-            if self.p2_hp <= 0:
-                self.p2_idx += 1
-                if self.p2_idx >= len(self.p2_deck): return await self.end_battle(interaction, self.p1, self.p2)
-                self._init_fish(2)
-                self.battle_log += f"\n🔴 {self.p2.name}님의 다음 물고기 {self.p2_fish} 출격!"
-                
-            self.current_turn_user = self.p2 if is_p1 else self.p1
-            self.turn_count += 1
-            
-            embed, file = self.generate_embed()
-            embed.add_field(name="📜 로그", value=self.battle_log, inline=False)
-            await interaction.edit_original_response(embed=embed, attachments=[file], view=self)
-        except Exception as e:
-            logger.error(f"PvP Battle execute_turn Error: {e}", exc_info=True)
-            await interaction.followup.send("❌ 전투 처리 중 오류가 발생했습니다.", ephemeral=True)
+        if self.p2_hp <= 0:
+            self.p2_idx += 1
+            if self.p2_idx >= len(self.p2_deck): return await self.end_battle(interaction, self.p1, self.p2)
+            self._init_fish(2)
+            self.battle_log += f'\n🔴 {self.p2.name}님의 다음 물고기 {self.p2_fish} 출격!'
+
+        self.p1_ap = min(8, (self.p1_ap - (self.p1_alloc['atk'] + self.p1_alloc['blk'])) + self.ap_gain + 1)
+        self.p2_ap = min(8, (self.p2_ap - (self.p2_alloc['atk'] + self.p2_alloc['blk'])) + self.ap_gain + 1)
+        
+        if self.ap_gain < 3: self.ap_gain += 1
+        
+        self.turn_count += 1
+        self.p1_ready = self.p2_ready = False
+        self.p1_alloc = {'atk': 0, 'blk': 0}
+        self.p2_alloc = {'atk': 0, 'blk': 0}
+        
+        embed, file = self.generate_embed(reveal=True)
+        await interaction.edit_original_response(embed=embed, attachments=[file], view=self)
 
     async def end_battle(self, interaction, winner, loser):
+        from fishing_core.database import db
+        from fishing_core.services.achievement_service import AchievementService
         self.stop()
-        
-        # 코인 약탈 로직
-        async with db.conn.execute("SELECT coins FROM user_data WHERE user_id=?", (loser.id,)) as cursor:
+        async with db.conn.execute('SELECT coins FROM user_data WHERE user_id=?', (loser.id,)) as cursor:
             res = await cursor.fetchone()
         loser_coins = res[0] if res else 0
-        
         steal_amount = int(loser_coins * random.uniform(0.05, 0.10))
-        if getattr(self, "is_offline_target", False):
-            steal_amount = int(steal_amount * 0.5) 
-            
+        if getattr(self, 'is_offline_target', False): steal_amount = int(steal_amount * 0.5) 
         if steal_amount > 0:
-            await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id=?", (steal_amount, loser.id))
-            await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id=?", (steal_amount, winner.id))
-            await db.log_action(winner.id, "PVP_WIN", f"Winner: {winner.name}, Loser: {loser.name}, Stole: {steal_amount} C")
-            await db.log_action(loser.id, "PVP_LOSS", f"Winner: {winner.name}, Loser: {loser.name}, Lost: {steal_amount} C")
-            await AchievementService.check_achievement(winner.id, "BATTLE_WARRIOR")
+            await db.execute('UPDATE user_data SET coins = coins - ? WHERE user_id=?', (steal_amount, loser.id))
+            await db.execute('UPDATE user_data SET coins = coins + ? WHERE user_id=?', (steal_amount, winner.id))
             await db.commit()
-
-        embed = EmbedFactory.build(title="⚔️ 수산대전 결과", type="warning")
+        embed = EmbedFactory.build(title='⚔️ 전략 수산대전 결과', type='warning')
         embed.set_thumbnail(url=winner.display_avatar.url)
-        
-        embed.add_field(name="🥇 승리자", value=f"{winner.mention}", inline=True)
-        embed.add_field(name="🥈 패배자", value=f"{loser.mention}", inline=True)
-        
-        result_desc = f"치열한 접전 끝에 **{winner.name}**님이 승리하셨습니다!"
-        if steal_amount > 0:
-            result_desc += f"\n\n💰 **전리품 획득**\n패배자의 주머니에서 `{steal_amount:,} C`를 가져왔습니다!"
-        
+        embed.add_field(name='🥇 승리자', value=f'{winner.mention}', inline=True)
+        embed.add_field(name='🥈 패배자', value=f'{loser.mention}', inline=True)
+        result_desc = f'치열한 접전 끝에 **{winner.name}**님이 승리하셨습니다!'
+        if steal_amount > 0: result_desc += f'\n\n💰 **전리품 획득**\n패배자의 주머니에서 `{steal_amount:,} C`를 가져왔습니다!'
         embed.description = result_desc
-        
-        # 승리자와 패배자 구분 (관점은 승리자 위주로 연출)
-        file = discord.File("assets/battle/battle_victory.png", filename="battle_victory.png")
-        embed.set_image(url="attachment://battle_victory.png")
-        
-        embed.set_footer(text=f"전투 종료 시각: {datetime.datetime.now(kst).strftime('%H:%M:%S')}")
-
+        file = discord.File('assets/battle/battle_victory.png', filename='battle_victory.png')
+        embed.set_image(url='attachment://battle_victory.png')
         if interaction.response.is_done():
             await interaction.edit_original_response(content=None, embed=embed, attachments=[file], view=None)
         else:
             await interaction.response.edit_message(content=None, embed=embed, attachments=[file], view=None)
-
-    @discord.ui.button(label="공격", style=discord.ButtonStyle.danger)
-    async def btn_attack(self, interaction: discord.Interaction, button: Button):
-        await self.execute_turn(interaction, "attack")
-
 class MarketPaginationView(View):
     def __init__(self, items, per_page=10):
         super().__init__(timeout=120)

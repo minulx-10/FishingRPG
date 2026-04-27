@@ -21,6 +21,36 @@ class BattleService:
         return best_fish, max_power
 
     @staticmethod
+    def get_ap_multiplier(points: int) -> float:
+        """쥬라기 월드 스타일의 포인트별 데미지 배율을 반환합니다."""
+        # 1pt: 1.0 | 2pt: 2.4 | 3pt: 4.2 | 4pt: 6.6 | 5pt: 10.0 | 6pt: 14.4 | 7pt: 20.0 | 8pt: 27.2
+        multipliers = {
+            0: 0.0, 1: 1.0, 2: 2.4, 3: 4.2, 4: 6.6, 
+            5: 10.0, 6: 14.4, 7: 20.0, 8: 27.2
+        }
+        return multipliers.get(points, points * 3.5)
+
+    @staticmethod
+    def calculate_ap_battle(atk_pwr: int, atk_pts: int, def_pts: int) -> dict[str, Any]:
+        """AP 시스템 기반 데미지 계산"""
+        # 공격 포인트에서 방어 포인트를 차감
+        effective_pts = max(0, atk_pts - def_pts)
+        
+        if effective_pts <= 0:
+            return {"damage": 0, "is_blocked": True, "effective_pts": 0}
+            
+        base_dmg = atk_pwr * BattleService.get_ap_multiplier(effective_pts)
+        
+        # 난수 적용 (소폭)
+        final_dmg = int(base_dmg * random.uniform(0.95, 1.05))
+        
+        return {
+            "damage": final_dmg,
+            "is_blocked": False,
+            "effective_pts": effective_pts
+        }
+
+    @staticmethod
     def calculate_damage(attacker_name: str, defender_name: str, multiplier: float = 1.0, is_defending: bool = False) -> dict[str, Any]:
         """속성 상성을 반영하여 최종 데미지를 계산합니다."""
         atk_data = FISH_DATA.get(attacker_name, {"power": 10, "element": "무속성"})
