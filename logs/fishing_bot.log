@@ -45,3 +45,30 @@
 [2026-04-27 09:44:28] [INFO] FishingBot: 날씨가 변경되었습니다: 🌧️ 비
 [2026-04-27 09:44:28] [INFO] FishingBot: 정기 시스템 점검 완료 (시세 변동 / 버프 정리 / 체력 15⚡ 회복)
 [2026-04-27 09:53:47] [INFO] FishingBot: 정기 시스템 점검 완료 (시세 변동 / 버프 정리 / 체력 15⚡ 회복)
+[2026-04-27 09:54:28] [INFO] FishingBot: 정기 시스템 점검 완료 (시세 변동 / 버프 정리 / 체력 15⚡ 회복)
+[2026-04-27 10:03:47] [INFO] FishingBot: 정기 시스템 점검 완료 (시세 변동 / 버프 정리 / 체력 15⚡ 회복)
+[2026-04-27 10:04:28] [INFO] FishingBot: 정기 시스템 점검 완료 (시세 변동 / 버프 정리 / 체력 15⚡ 회복)
+[2026-04-27 10:13:47] [INFO] FishingBot: 정기 시스템 점검 완료 (시세 변동 / 버프 정리 / 체력 15⚡ 회복)
+[2026-04-27 10:14:28] [INFO] FishingBot: 정기 시스템 점검 완료 (시세 변동 / 버프 정리 / 체력 15⚡ 회복)
+[2026-04-27 10:17:35] [ERROR] FishingBot: 명령어 실행 중 예외 발생: 알 수 없음
+Traceback (most recent call last):
+  File "C:\Users\master\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\discord\app_commands\tree.py", line 1138, in wrapper
+    await self._call(interaction)
+  File "C:\Users\master\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\discord\app_commands\tree.py", line 1270, in _call
+    command, options = self._get_app_command_options(data)
+                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\master\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\discord\app_commands\tree.py", line 1174, in _get_app_command_options
+    raise CommandNotFound(name, parents)
+discord.app_commands.errors.CommandNotFound: Application command '수행평가' not found
+[2026-04-27 10:17:35] [ERROR] FishingBot: 명령어 실행 중 예외 발생: 알 수 없음
+Traceback (most recent call last):
+  File "C:\Users\master\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\discord\app_commands\tree.py", line 1138, in wrapper
+    await self._call(interaction)
+  File "C:\Users\master\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\discord\app_commands\tree.py", line 1270, in _call
+    command, options = self._get_app_command_options(data)
+                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\master\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\discord\app_commands\tree.py", line 1174, in _get_app_command_options
+    raise CommandNotFound(name, parents)
+discord.app_commands.errors.CommandNotFound: Application command '수행평가' not found
+[2026-04-27 10:23:47] [INFO] FishingBot: 정기 시스템 점검 완료 (시세 변동 / 버프 정리 / 체력 15⚡ 회복)
+[2026-04-27 10:24:28] [INFO] FishingBot: 정기 시스템 점검 완료 (시세 변동 / 버프 정리 / 체력 15⚡ 회복)
