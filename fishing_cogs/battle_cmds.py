@@ -64,7 +64,8 @@ class BattleCog(commands.Cog):
         npc_fish = random.choice(npc_pool)
 
         view = BattleView(interaction.user, my_best_fish, npc_fish)
-        await interaction.response.send_message(embed=view.generate_embed(), view=view)
+        embed, file = view.generate_embed()
+        await interaction.response.send_message(embed=embed, file=file, view=view)
 
     @app_commands.command(name="잠금목록", description="나 또는 특정 유저의 가방에서 잠금(보호 및 배틀용) 처리된 목록을 확인합니다.")
     async def 잠금목록(self, interaction: discord.Interaction, 유저: discord.Member = None):
@@ -177,10 +178,12 @@ class BattleCog(commands.Cog):
 
             view = PvPBattleView(interaction.user, 상대, p1_deck, p2_deck)
             view.is_offline_target = is_p2_offline
+            embed, file = view.generate_embed()
 
             await interaction.response.send_message(
                 f"⚔️ {상대.mention}! **{display_name1}**님이 3v3 릴레이 수산대전을 걸어왔습니다!{offline_msg}{guard_msg}",
-                embed=view.generate_embed(),
+                embed=embed,
+                file=file,
                 view=view,
             )
         except Exception as e:

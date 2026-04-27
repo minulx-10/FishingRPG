@@ -303,8 +303,10 @@ class BattleView(View):
         
         log_lines = self.battle_log.strip().split("\n")[-3:]
         embed.add_field(name="📜 최근 전투 로그", value="\n".join(log_lines), inline=False)
-        embed.set_image(url="https://images.unsplash.com/photo-1551244072-5d12893278ab?w=800") # 거친 파도 배경
-        return embed
+        
+        file = discord.File("assets/battle/battle_start.png", filename="battle_start.png")
+        embed.set_image(url="attachment://battle_start.png")
+        return embed, file
 
     async def execute_turn(self, interaction, action):
         if action == "attack":
@@ -329,7 +331,8 @@ class BattleView(View):
         if self.my_hp <= 0: return await self.end_battle(interaction, False)
         
         self.turn += 1
-        await interaction.response.edit_message(embed=self.generate_embed(), view=self)
+        embed, file = self.generate_embed()
+        await interaction.response.edit_message(embed=embed, attachments=[file], view=self)
 
     async def end_battle(self, interaction, is_win):
         self.stop()
@@ -352,13 +355,16 @@ class BattleView(View):
             await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (reward, self.user.id))
             await db.commit()
             embed.add_field(name="💰 전투 보상", value=f"`{reward:,} C` 획득!", inline=False)
-            embed.set_image(url="https://images.unsplash.com/photo-1589487391730-58f20eb2c308?w=800")
+            
+            file = discord.File("assets/battle/battle_victory.png", filename="battle_victory.png")
+            embed.set_image(url="attachment://battle_victory.png")
             embed.set_footer(text="전설적인 승리를 거두었습니다!")
         else:
-            embed.set_image(url="https://images.unsplash.com/photo-1551244072-5d12893278ab?w=800")
+            file = discord.File("assets/battle/battle_defeat.png", filename="battle_defeat.png")
+            embed.set_image(url="attachment://battle_defeat.png")
             embed.set_footer(text="바다는 냉혹합니다. 더 강해져서 돌아오세요.")
 
-        await interaction.response.edit_message(content=None, embed=embed, view=None)
+        await interaction.response.edit_message(content=None, embed=embed, attachments=[file], view=None)
 
     @discord.ui.button(label="공격", style=discord.ButtonStyle.danger)
     async def btn_attack(self, interaction: discord.Interaction, button: Button):
@@ -407,8 +413,9 @@ class PvPBattleView(View):
         embed.add_field(name="VS", value="⚡", inline=True)
         embed.add_field(name=f"🔴 {self.p2.name}", value=f"**{self.p2_fish}**\n`{self.p2_hp}/{self.p2_max_hp}`\n{hp_bar(self.p2_hp, self.p2_max_hp)}", inline=True)
         
-        embed.set_image(url="https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800")
-        return embed
+        file = discord.File("assets/battle/battle_start.png", filename="battle_start.png")
+        embed.set_image(url="attachment://battle_start.png")
+        return embed, file
 
     async def execute_turn(self, interaction, action):
         if interaction.user != self.current_turn_user: return
@@ -439,9 +446,9 @@ class PvPBattleView(View):
         self.current_turn_user = self.p2 if is_p1 else self.p1
         self.turn_count += 1
         
-        embed = self.generate_embed()
+        embed, file = self.generate_embed()
         embed.add_field(name="📜 로그", value=self.battle_log, inline=False)
-        await interaction.response.edit_message(embed=embed, view=self)
+        await interaction.response.edit_message(embed=embed, attachments=[file], view=self)
 
     async def end_battle(self, interaction, winner, loser):
         self.stop()
@@ -474,10 +481,14 @@ class PvPBattleView(View):
             result_desc += f"\n\n💰 **전리품 획득**\n패배자의 주머니에서 `{steal_amount:,} C`를 가져왔습니다!"
         
         embed.description = result_desc
-        embed.set_image(url="https://images.unsplash.com/photo-1555680202-c86f0e12f086?w=800") # 불타는 검 (결투/승패)
+        
+        # 승리자와 패배자 구분 (관점은 승리자 위주로 연출)
+        file = discord.File("assets/battle/battle_victory.png", filename="battle_victory.png")
+        embed.set_image(url="attachment://battle_victory.png")
+        
         embed.set_footer(text=f"전투 종료 시각: {datetime.datetime.now(kst).strftime('%H:%M:%S')}")
 
-        await interaction.response.edit_message(content=None, embed=embed, view=None)
+        await interaction.response.edit_message(content=None, embed=embed, attachments=[file], view=None)
 
     @discord.ui.button(label="공격", style=discord.ButtonStyle.danger)
     async def btn_attack(self, interaction: discord.Interaction, button: Button):
