@@ -348,11 +348,11 @@ class BattleView(View):
         embed.add_field(name="🔴 적 물고기", value=f"{self.npc_fish}\nHP: {max(0, self.npc_hp)}", inline=True)
         
         if is_win:
-            embed.set_image(url="https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=800") # 승리 테마 (불꽃놀이)
-            embed.set_footer(text="강력한 수중 생물을 제압했습니다!")
+            embed.set_image(url="https://images.unsplash.com/photo-1589487391730-58f20eb2c308?w=800") # 황금 왕관 (승리/명예)
+            embed.set_footer(text="전설적인 승리를 거두었습니다!")
         else:
-            embed.set_image(url="https://images.unsplash.com/photo-1518101645466-7795885ff8f8?w=800") # 패배 테마 (어두운 바다)
-            embed.set_footer(text="다음에는 더 강한 낚싯대와 물고기로 도전하세요.")
+            embed.set_image(url="https://images.unsplash.com/photo-153157660ea91-7d52b1758515?w=800") # 거친 파도와 폭풍 (패배/시련)
+            embed.set_footer(text="바다는 냉혹합니다. 더 강해져서 돌아오세요.")
 
         await interaction.response.edit_message(content=None, embed=embed, view=None)
 
@@ -473,7 +473,7 @@ class PvPBattleView(View):
             result_desc += f"\n\n💰 **전리품 획득**\n패배자의 주머니에서 `{steal_amount:,} C`를 가져왔습니다!"
         
         embed.description = result_desc
-        embed.set_image(url="https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800") # 경쟁 테마
+        embed.set_image(url="https://images.unsplash.com/photo-1555680202-c86f0e12f086?w=800") # 불타는 검 (결투/승패)
         embed.set_footer(text=f"전투 종료 시각: {datetime.datetime.now(kst).strftime('%H:%M:%S')}")
 
         await interaction.response.edit_message(content=None, embed=embed, view=None)
