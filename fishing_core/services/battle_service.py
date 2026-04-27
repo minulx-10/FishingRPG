@@ -1,12 +1,12 @@
 import random
-from typing import Any
+from typing import Any, ClassVar
 
 from fishing_core.database import db
 from fishing_core.shared import FISH_DATA, get_element_multiplier
 
 
 class BattleService:
-    MULTIPLIERS = {
+    MULTIPLIERS: ClassVar[dict[int, float]] = {
         0: 0.0, 1: 1.0, 2: 2.4, 3: 4.2, 4: 6.6, 
         5: 10.0, 6: 14.4, 7: 20.0, 8: 27.2
     }
