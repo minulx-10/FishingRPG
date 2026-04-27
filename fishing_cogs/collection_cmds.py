@@ -116,13 +116,25 @@ class CollectionCog(commands.Cog):
                 if current_pearls < item['price']:
                     return await interaction.response.send_message(f"❌ 진주가 부족합니다! (필요: {item['price']}개 / 보유: {current_pearls}개)", ephemeral=True)
 
+                # 중복 구매 방지 (축복, 칭호)
+                if item_key == "blessing":
+                    async with db.conn.execute("SELECT max_stamina FROM user_data WHERE user_id=?", (interaction.user.id,)) as c:
+                        ms = await c.fetchone()
+                    if ms and ms[0] >= 300:
+                        return await interaction.response.send_message("❌ 이미 최대 체력 한도(300)에 도달하여 더 이상 구매할 수 없습니다.", ephemeral=True)
+                elif item_key == "title":
+                    async with db.conn.execute("SELECT title FROM user_data WHERE user_id=?", (interaction.user.id,)) as c:
+                        t = await c.fetchone()
+                    if t and t[0] == '[진주 수집가]':
+                        return await interaction.response.send_message("❌ 이미 해당 칭호를 보유하고 있습니다.", ephemeral=True)
+
                 # 구매 처리
                 await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name='진주 ⚪'", (item['price'], interaction.user.id))
                 
                 msg = f"✅ **{item['name']}**(을)를 구매했습니다!"
                 
                 if item_key == "blessing":
-                    await db.execute("UPDATE user_data SET max_stamina = max_stamina + 10 WHERE user_id=?", (interaction.user.id,))
+                    await db.execute("UPDATE user_data SET max_stamina = MIN(300, max_stamina + 10) WHERE user_id=?", (interaction.user.id,))
                 elif item_key == "luck":
                     import datetime
                     end_time = (datetime.datetime.now(kst) + datetime.timedelta(days=7)).isoformat()

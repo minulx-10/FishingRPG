@@ -80,6 +80,38 @@ class DBManager:
                 )
             '''),
             (33, "ALTER TABLE user_data ADD COLUMN last_active TEXT DEFAULT ''"),
+
+            # --- [Phase 5: 누락 컬럼 복구 및 신규 기능] ---
+            (34, "ALTER TABLE user_data ADD COLUMN quest_date TEXT DEFAULT ''"),
+            (35, "ALTER TABLE user_data ADD COLUMN quest_item TEXT DEFAULT ''"),
+            (36, "ALTER TABLE user_data ADD COLUMN quest_amount INTEGER DEFAULT 0"),
+            (37, "ALTER TABLE user_data ADD COLUMN quest_reward INTEGER DEFAULT 0"),
+            (38, "ALTER TABLE user_data ADD COLUMN quest_is_cleared INTEGER DEFAULT 0"),
+            (39, "ALTER TABLE user_data ADD COLUMN last_farm_harvest TEXT DEFAULT ''"),
+            (40, "ALTER TABLE user_data ADD COLUMN dex_rewards TEXT DEFAULT '{}'"),
+            (41, "ALTER TABLE user_data ADD COLUMN aquarium_slots INTEGER DEFAULT 5"),
+            (42, "ALTER TABLE user_data ADD COLUMN peace_mode INTEGER DEFAULT 0"),
+            (43, "ALTER TABLE user_data ADD COLUMN peace_cooldown TEXT DEFAULT ''"),
+            (44, "ALTER TABLE user_data ADD COLUMN guard_fish TEXT DEFAULT ''"),
+            (45, "ALTER TABLE user_data ADD COLUMN last_free_rest TEXT DEFAULT ''"),
+            (46, "ALTER TABLE user_data ADD COLUMN pvp_shield_date TEXT DEFAULT ''"),
+            (47, "ALTER TABLE user_data ADD COLUMN username TEXT DEFAULT ''"),
+
+            # --- [웹 대시보드 세션 테이블] ---
+            (48, '''
+                CREATE TABLE IF NOT EXISTS admin_sessions (
+                    token TEXT PRIMARY KEY,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            '''),
+
+            # --- [시장 시세 DB 저장] ---
+            (49, '''
+                CREATE TABLE IF NOT EXISTS market_prices (
+                    item_name TEXT PRIMARY KEY,
+                    current_price INTEGER DEFAULT 0
+                )
+            '''),
         ]
 
         # 3. 마이그레이션 실행

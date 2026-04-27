@@ -58,10 +58,13 @@ class HelpSelect(discord.ui.Select):
         if category == "fishing":
             embed = discord.Embed(title="🎣 낚시 및 바다 명령어", color=0x3498db)
             embed.add_field(name="`/낚시 [미끼]`", value="찌를 던져 물고기를 낚습니다. 타이밍 판정에 성공해야 합니다.\n(체력 10 소모 / 뉴비 5 소모)", inline=False)
+            embed.add_field(name="`/그물망 [그물]`", value="그물망을 던져 여러 마리를 한꺼번에 낚습니다.", inline=False)
             embed.add_field(name="`/미끼장착 [미끼이름]`", value="자동으로 소모할 미끼를 장착하거나 해제합니다.", inline=False)
+            embed.add_field(name="`/이동 [해역]`", value="다른 해역으로 이동하여 새로운 어종을 만납니다.", inline=False)
             embed.add_field(name="`/바다`", value="현재 바다의 시간대와 날씨 환경을 확인합니다.", inline=False)
             embed.add_field(name="`/기상예측`", value="향후 3시간의 날씨 변화를 미리 확인합니다. (3,000 C 소모)", inline=False)
             embed.add_field(name="`/기우제 [기부금]`", value="유저들과 힘을 합쳐 날씨를 **🌩️ 폭풍우**로 변경합니다.", inline=False)
+            embed.add_field(name="`/기도`", value="오늘의 운세를 점쳐 2시간 버프/디버프를 받습니다. (일 1회)", inline=False)
             embed.add_field(name="`/바다기도 [제물]`", value="심연의 바다에 제물을 바쳐 전설 속의 신수를 부릅니다.", inline=False)
             return embed
 
@@ -103,6 +106,8 @@ class HelpSelect(discord.ui.Select):
             embed.add_field(name="`/수족관 [유저]`", value="내가 전시한 물고기들을 이미지로 렌더링하여 감상합니다.", inline=False)
             embed.add_field(name="`/전시 [물고기]` / `/전시해제`", value="물고기를 수족관에 넣거나 다시 꺼냅니다.", inline=False)
             embed.add_field(name="`/수족관확장`", value="코인을 지불하여 수족관 전시 슬롯을 추가합니다.", inline=False)
+            embed.add_field(name="`/양식수확`", value="수족관에 전시된 물고기가 번식한 치어를 수확합니다.", inline=False)
+            embed.add_field(name="`/세트효과`", value="수집한 물고기 세트에 따른 영구 효과를 확인합니다.", inline=False)
             return embed
 
         if category == "upgrade":
@@ -118,6 +123,8 @@ class HelpSelect(discord.ui.Select):
             embed.add_field(name="`/지도합성 [수량]`", value="찢어진 지도 조각(A,B,C,D) 4종을 모아 보물지도를 완성합니다.", inline=False)
             embed.add_field(name="`/조각교환 [조각]`", value="같은 지도 조각 3개를 다른 무작위 조각 1개로 교환합니다.", inline=False)
             embed.add_field(name="`/지도사용`", value="보물지도를 사용해 30분간 특수 해역(망자/심해/황금)을 개방합니다.", inline=False)
+            embed.add_field(name="`/조개열기 [조개] [수량]`", value="가방의 조개를 열어 진주를 찾습니다.", inline=False)
+            embed.add_field(name="`/진주상점`", value="모은 진주를 특별한 보상으로 교환합니다.", inline=False)
             embed.add_field(name="`/출석`", value="매일 한 번 출석체크하여 코인 보상과 체력 회복을 받습니다.", inline=False)
             embed.add_field(name="`/한강물`", value="실시간 한강 수온 정보를 확인합니다. (응? 🎣)", inline=False)
             return embed

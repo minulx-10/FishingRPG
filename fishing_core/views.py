@@ -133,12 +133,12 @@ class FishingView(View):
 
             # 3. 특수 로직 (크라켄 등)
             if self.target_fish == "심해의 파멸, 크라켄 🦑":
-                async with db.conn.execute("SELECT user_id, coins FROM user_data WHERE user_id != ? AND coins > 1000 AND peace_mode=0 ORDER BY RANDOM() LIMIT 1", (self.user.id,)) as cursor:
+                async with db.conn.execute("SELECT user_id, coins FROM user_data WHERE user_id != ? AND coins > 1000 ORDER BY RANDOM() LIMIT 1", (self.user.id,)) as cursor:
                     target = await cursor.fetchone()
                 if target:
                     stolen_amount = int(target[1] * 0.1)
-                    await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id = ?", (target[0], stolen_amount))
-                    await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (self.user.id, stolen_amount))
+                    await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id = ?", (stolen_amount, target[0]))
+                    await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (stolen_amount, self.user.id))
                     await db.commit()
                     embed.add_field(name="🦑 크라켄의 촉수 발동!", value=f"심연에서 뻗어 나온 거대한 촉수가 누군가의 금고를 부수고 `{stolen_amount:,} C`를 훔쳐 당신에게 가져왔습니다!!", inline=False)
 
@@ -348,10 +348,16 @@ class BattleView(View):
         embed.add_field(name="🔴 적 물고기", value=f"{self.npc_fish}\nHP: {max(0, self.npc_hp)}", inline=True)
         
         if is_win:
-            embed.set_image(url="https://images.unsplash.com/photo-1589487391730-58f20eb2c308?w=800") # 황금 왕관 (승리/명예)
+            # PvE 승리 보상 지급 (NPC 전투력 비례)
+            npc_power = FISH_DATA.get(self.npc_fish, {}).get("power", 10)
+            reward = int(npc_power * random.randint(3, 8))
+            await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (reward, self.user.id))
+            await db.commit()
+            embed.add_field(name="💰 전투 보상", value=f"`{reward:,} C` 획득!", inline=False)
+            embed.set_image(url="https://images.unsplash.com/photo-1589487391730-58f20eb2c308?w=800")
             embed.set_footer(text="전설적인 승리를 거두었습니다!")
         else:
-            embed.set_image(url="https://images.unsplash.com/photo-153157660ea91-7d52b1758515?w=800") # 거친 파도와 폭풍 (패배/시련)
+            embed.set_image(url="https://images.unsplash.com/photo-1551244072-5d12893278ab?w=800")
             embed.set_footer(text="바다는 냉혹합니다. 더 강해져서 돌아오세요.")
 
         await interaction.response.edit_message(content=None, embed=embed, view=None)
@@ -496,17 +502,23 @@ class MarketPaginationView(View):
         for f, p in items: embed.add_field(name=f, value=f"{p} C", inline=True)
         return embed
 
-    @discord.ui.button(label="이전")
+    @discord.ui.button(label="◀ 이전", style=discord.ButtonStyle.secondary)
     async def prev(self, interaction, btn):
         if self.current_page > 0:
             self.current_page -= 1
-            await interaction.response.edit_message(embed=self.make_embed())
+        total = (len(self.all_items) - 1) // self.per_page + 1
+        embed = self.make_embed()
+        embed.set_footer(text=f"페이지 {self.current_page + 1} / {total}")
+        await interaction.response.edit_message(embed=embed)
 
-    @discord.ui.button(label="다음")
+    @discord.ui.button(label="다음 ▶", style=discord.ButtonStyle.secondary)
     async def next(self, interaction, btn):
         if (self.current_page+1)*self.per_page < len(self.all_items):
             self.current_page += 1
-            await interaction.response.edit_message(embed=self.make_embed())
+        total = (len(self.all_items) - 1) // self.per_page + 1
+        embed = self.make_embed()
+        embed.set_footer(text=f"페이지 {self.current_page + 1} / {total}")
+        await interaction.response.edit_message(embed=embed)
 
 class DragonKingBlessingView(View):
     def __init__(self):
@@ -525,10 +537,19 @@ class QuestDeliveryView(View):
     @discord.ui.button(label="📦 납품하기", style=discord.ButtonStyle.success)
     async def deliver(self, interaction, btn):
         if interaction.user != self.user: return
-        await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (self.reward, self.user.id))
+        # 실제 보유 수량 확인
+        async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (self.user.id, self.item)) as cursor:
+            res = await cursor.fetchone()
+        current = res[0] if res else 0
+        if current < self.amount:
+            return await interaction.response.send_message(f"❌ 납품에 필요한 **{self.item}**이(가) 부족합니다! (필요: {self.amount}마리 / 보유: {current}마리)", ephemeral=True)
+        # 재고 차감
+        await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name=?", (self.amount, self.user.id, self.item))
+        await db.execute("UPDATE user_data SET coins = coins + ?, quest_is_cleared = 1 WHERE user_id = ?", (self.reward, self.user.id))
         await db.log_action(self.user.id, "QUEST_COMPLETE", f"Item: {self.item}, Amount: {self.amount}, Reward: {self.reward} C")
         await db.commit()
-        await interaction.response.edit_message(content=f"✅ 납품 완료! (+{self.reward:,} C)", view=None)
+        self.stop()
+        await interaction.response.edit_message(content=f"✅ **{self.item}** {self.amount}마리를 납품 완료! (+{self.reward:,} C)", view=None)
 
 class InventoryView(View):
     def __init__(self, user, target_user, items, stats):
@@ -539,22 +560,49 @@ class InventoryView(View):
 
     def make_embed(self):
         coins, rod, rating, boat, stam, max_stam, title = self.stats
-        embed = discord.Embed(title=f"🎒 {self.target_user.name}의 가방", color=0x3498db)
-        embed.add_field(name="💰 코인", value=f"{coins:,} C")
+        display_name = f"{title} {self.target_user.name}" if title else self.target_user.name
+        embed = discord.Embed(title=f"🎒 {display_name}의 가방", color=0x3498db)
+        if self.target_user.avatar:
+            embed.set_thumbnail(url=self.target_user.avatar.url)
+
+        # 스탯 요약 영역
+        stam_pct = stam / max_stam if max_stam > 0 else 0
+        stam_bar_len = 10
+        stam_filled = int(stam_pct * stam_bar_len)
+        stam_color = "🟩" if stam_pct > 0.5 else "🟨" if stam_pct > 0.2 else "🟥"
+        stam_bar = stam_color * stam_filled + "⬛" * (stam_bar_len - stam_filled)
+
+        embed.add_field(name="💰 코인", value=f"`{coins:,} C`", inline=True)
+        embed.add_field(name="🎣 낚싯대", value=f"Lv.`{rod}`", inline=True)
+        embed.add_field(name="⚓ 선박", value=f"{boat}", inline=True)
+        embed.add_field(name=f"⚡ 체력 ({stam}/{max_stam})", value=stam_bar, inline=True)
+        embed.add_field(name="🏅 RP", value=f"`{rating}`", inline=True)
+        if title:
+            embed.add_field(name="📛 칭호", value=f"`{title}`", inline=True)
+
+        # 아이템 목록
         start = self.current_page * self.per_page
         items = self.all_items[start:start+self.per_page]
-        if items: embed.description = "\n".join([f"**{n}**: {a}개" for n, a, _ in items])
-        else: embed.description = "가방이 텅 비었습니다."
+        total_pages = max(1, (len(self.all_items) - 1) // self.per_page + 1)
+        if items:
+            item_lines = []
+            for n, a, locked in items:
+                lock_icon = "🔒 " if locked else ""
+                item_lines.append(f"{lock_icon}**{n}**: {a}개")
+            embed.description = "\n".join(item_lines)
+        else:
+            embed.description = "가방이 텅 비었습니다."
+        embed.set_footer(text=f"페이지 {self.current_page + 1} / {total_pages} · 총 {len(self.all_items)}종")
         return embed
 
-    @discord.ui.button(label="이전")
+    @discord.ui.button(label="◀ 이전", style=discord.ButtonStyle.secondary)
     async def prev(self, interaction, btn):
         if self.current_page > 0:
             self.current_page -= 1
-            await interaction.edit_original_response(embed=self.make_embed())
+        await interaction.response.edit_message(embed=self.make_embed())
 
-    @discord.ui.button(label="다음")
+    @discord.ui.button(label="다음 ▶", style=discord.ButtonStyle.secondary)
     async def next(self, interaction, btn):
         if (self.current_page+1)*self.per_page < len(self.all_items):
             self.current_page += 1
-            await interaction.edit_original_response(embed=self.make_embed())
+        await interaction.response.edit_message(embed=self.make_embed())
