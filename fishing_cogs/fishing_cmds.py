@@ -369,18 +369,6 @@ class FishingCog(commands.Cog):
     async def 휴(self, interaction: discord.Interaction):
         await self._rest_user(interaction)
 
-    @app_commands.command(name="가이드", description="신규 어부들을 위한 성장 가이드를 확인합니다.")
-    async def 가이드(self, interaction: discord.Interaction):
-        embed = discord.Embed(title="🎣 Fishing RPG 성장 로드맵", color=0x3498db)
-        embed.set_thumbnail(url="https://images.unsplash.com/photo-1544551763-47a0159f963f?w=400")
-        
-        embed.add_field(name="🌱 1단계: 해안가 적응", value="`/낚시`를 통해 물고기를 잡고, `/판매`로 자금을 모으세요. 초기에는 인벤토리를 자주 확인하며 잠금을 설정하는 법을 익히세요.", inline=False)
-        embed.add_field(name="🔧 2단계: 장비 강화", value="모은 코인으로 `/강화`를 진행하세요. 낚싯대 티어가 높을수록 더 크고 희귀한 물고기를 쉽게 낚을 수 있습니다.", inline=False)
-        embed.add_field(name="🚤 3단계: 해역 확장", value="어선(2단계 선박)을 구매하면 `/상점` 이용이 가능해지고, 더 먼 바다로 나갈 수 있습니다. 각 해역마다 등장하는 물고기가 다릅니다.", inline=False)
-        embed.add_field(name="⚔️ 4단계: 수산 배틀 & 레이드", value="강력한 포식자 물고기를 잡았다면 `/잠금`한 뒤 수산대전에 참여하거나, 주기적으로 나타나는 보스 레이드에 도전하세요.", inline=False)
-        
-        embed.set_footer(text="궁금한 점이 있다면 `/도움말`을 입력해보세요!")
-        await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="이동", description="원하는 해역으로 이동합니다. (선박 등급 필요 및 체력 20 소모)")
     @app_commands.choices(해역=[

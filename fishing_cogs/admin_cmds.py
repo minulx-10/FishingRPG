@@ -185,8 +185,11 @@ class AdminCog(commands.Cog):
             "fishing_cogs.ship_cmds",
             "fishing_cogs.battle_cmds",
             "fishing_cogs.quest_cmds",
+            "fishing_cogs.help_cmds",
+            "fishing_cogs.prayer_cmds",
+            "fishing_cogs.collection_cmds",
             "fishing_cogs.events",
-            "fishing_cogs.admin_cmds", # 가급적 자신을 맨 마지막에 리로드하도록 순서 변경
+            "fishing_cogs.admin_cmds",
         ]
 
         reloaded = []
