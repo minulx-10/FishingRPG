@@ -1,9 +1,8 @@
 
-import os
 
 file_path = r'c:\Users\master\Documents\Server\fishing_core\views.py'
 
-with open(file_path, 'r', encoding='utf-8') as f:
+with open(file_path, encoding='utf-8') as f:
     lines = f.readlines()
 
 def replace_class_content(lines, class_name, new_content):
@@ -12,7 +11,7 @@ def replace_class_content(lines, class_name, new_content):
     for i, line in enumerate(lines):
         if f'class {class_name}(' in line:
             start = i
-        if start != -1 and i > start and (line.startswith('class ') or line.startswith('def ') == False and line.strip() == "" and i+1 < len(lines) and lines[i+1].startswith('class ')):
+        if start != -1 and i > start and (line.startswith('class ') or (line.startswith('def ') == False and line.strip() == "" and i+1 < len(lines) and lines[i+1].startswith('class '))):
             # This is tricky. Let's look for the next class.
             pass
     
