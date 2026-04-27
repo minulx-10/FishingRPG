@@ -345,7 +345,6 @@ class BattleView(View):
         await interaction.response.defer()
         if interaction.user != self.user: return
         
-        from fishing_core.services.battle_service import BattleService
         # 1. NPC AI (단순: 랜덤 배분)
         npc_alloc = {'atk': 0, 'blk': 0}
         temp_ap = self.npc_ap
@@ -526,7 +525,6 @@ class PvPBattleView(View):
             await self._update_view(interaction)
 
     async def resolve_turn(self, interaction):
-        from fishing_core.services.battle_service import BattleService
         p1_res = BattleService.calculate_ap_battle(self.p1_pwr, self.p1_alloc['atk'], self.p2_alloc['blk'])
         p2_res = BattleService.calculate_ap_battle(self.p2_pwr, self.p2_alloc['atk'], self.p1_alloc['blk'])
         
@@ -574,7 +572,6 @@ class PvPBattleView(View):
 
     async def end_battle(self, interaction, winner, loser):
         from fishing_core.database import db
-        from fishing_core.services.achievement_service import AchievementService
         self.stop()
         async with db.conn.execute('SELECT coins FROM user_data WHERE user_id=?', (loser.id,)) as cursor:
             res = await cursor.fetchone()
