@@ -7,8 +7,12 @@ import holidays
 import aiohttp
 from discord.ui import View
 from aiohttp import web
+import os
+from dotenv import load_dotenv
 import asyncio
 import json
+
+load_dotenv()
 
 # --- 봇 기본 설정 ---
 intents = discord.Intents.default()
