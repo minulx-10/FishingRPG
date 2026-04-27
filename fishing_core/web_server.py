@@ -207,28 +207,40 @@ class DashboardServer:
 
     @require_auth
     async def api_broadcast(self, request):
-        data = await request.json()
-        title = data.get("title", "공지사항")
-        content = data.get("content", "")
-
         try:
-            embed = EmbedFactory.build(title=f"📢 [시스템 공지] {title}", description=content, type="error")
-            embed.set_footer(text="수산시장 웹 통제실에서 발송된 메시지입니다.")
+            data = await request.json()
+            title = data.get('title', '공지사항')
+            content = data.get('content', '')
+            color_hex = data.get('color', '#ef4444').replace('#', '')
+            thumb_url = data.get('thumbnail')
+            image_url = data.get('image')
+            footer_text = data.get('footer')
 
-            # 모든 서버의 첫 번째 텍스트 채널에 발송 (혹은 특정 채널 ID 지정 가능)
-            count = 0
+            if not content:
+                return web.json_response({"error": "Content is required"}, status=400)
+
+            color = int(color_hex, 16)
+            success_count = 0
+            
+            # 모든 길드에 전송 시도
             for guild in self.bot.guilds:
-                if guild.system_channel:
-                    await guild.system_channel.send(embed=embed)
-                    count += 1
-                else:
-                    for channel in guild.text_channels:
-                        if channel.permissions_for(guild.me).send_messages:
-                            await channel.send(embed=embed)
-                            count += 1
-                            break
+                # 적절한 채널 찾기 (기본 채널 또는 첫 번째 텍스트 채널)
+                target_channel = guild.system_channel or next((c for c in guild.text_channels if c.permissions_for(guild.me).send_messages), None)
+                
+                if target_channel:
+                    try:
+                        embed = discord.Embed(title=f"📢 {title}", description=content, color=color)
+                        if thumb_url: embed.set_thumbnail(url=thumb_url)
+                        if image_url: embed.set_image(url=image_url)
+                        if footer_text: embed.set_footer(text=footer_text)
+                        
+                        await target_channel.send(embed=embed)
+                        success_count += 1
+                    except Exception as e:
+                        logger.error(f"Broadcast failed for guild {guild.id}: {e}")
 
-            return web.json_response({"success": True, "channels_notified": count})
+            await db.log_action(0, "ADMIN_BROADCAST", f"Title: {title}, Content: {content[:50]}...")
+            return web.json_response({"success": True, "channels_notified": success_count})
         except Exception as e:
             return web.json_response({"error": str(e)}, status=500)
 

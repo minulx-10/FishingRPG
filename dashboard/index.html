@@ -147,15 +147,30 @@
                 <div class="grid-2col">
                     <div class="glass-panel">
                         <h2>🔊 글로벌 무전 송출</h2>
-                        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:1rem;">해당 기능은 봇이 등록된 <strong>모든 디스코드 서버</strong>에 긴급 알림(빨간색 공식 임베드)을 푸시합니다. 이벤트 시작이나 점검 안내에 사용하세요.</p>
-                        <input type="text" id="noti-title" placeholder="공지 제목">
-                        <textarea id="noti-content" rows="4" placeholder="공지 내용을 입력하세요 (디스코드 전역 송출)"></textarea>
+                        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:1rem;">모든 서버에 긴급 알림을 푸시합니다. 임베드 디자인을 커스텀하세요.</p>
                         
+                        <div class="input-row">
+                            <input type="text" id="noti-title" placeholder="공지 제목">
+                            <input type="color" id="noti-color" value="#ef4444" style="width:50px; padding:2px; height:42px;">
+                        </div>
+                        <textarea id="noti-content" rows="3" placeholder="공지 내용을 입력하세요"></textarea>
+                        
+                        <div class="grid-2col" style="margin-top:10px; gap:10px;">
+                            <input type="text" id="noti-thumb" placeholder="썸네일 URL (아이콘)">
+                            <input type="text" id="noti-image" placeholder="메인 이미지 URL">
+                        </div>
+                        <input type="text" id="noti-footer" placeholder="푸터 메시지" style="margin-top:10px;">
+
                         <div style="margin-top: 15px;">
                             <label style="font-size: 0.8rem; color: var(--text-muted);">실시간 Discord 미리보기</label>
                             <div id="embed-preview" class="embed-preview">
-                                <div class="embed-title" id="preview-title">공지 제목이 여기에 표시됩니다</div>
-                                <div class="embed-description" id="preview-content">공지 내용 미리보기가 여기에 실시간으로 렌더링됩니다.</div>
+                                <div class="preview-header">
+                                    <div class="embed-title" id="preview-title">공지 제목</div>
+                                    <img id="preview-thumb" src="" style="width:40px; height:40px; border-radius:4px; display:none;">
+                                </div>
+                                <div class="embed-description" id="preview-content">내용 미리보기...</div>
+                                <img id="preview-image" src="" style="width:100%; border-radius:4px; margin-top:8px; display:none;">
+                                <div id="preview-footer" style="font-size:0.75rem; color:#94a3b8; margin-top:8px; border-top:1px solid #444; padding-top:4px;"></div>
                             </div>
                         </div>
 
@@ -163,7 +178,7 @@
                     </div>
                     <div class="glass-panel">
                         <h2>🌡️ 극기상 조작기</h2>
-                        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:1rem;">서버 전체의 날씨 생태계를 바꿉니다. 날씨에 따라 특정 히든 물고기(예: 비 오는 날 네시)의 등장 조건이 활성화될 수 있습니다.</p>
+                        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:1rem;">서버 전체의 날씨 생태계를 바꿉니다. 특정 히든 물고기 등장 조건이 활성화될 수 있습니다.</p>
                         <select id="weather-select" style="margin-bottom: 1rem;">
                             <option value="☀️ 맑음">☀️ 맑음 (평화로움)</option>
                             <option value="☁️ 흐림">☁️ 흐림 (어두움)</option>
@@ -178,44 +193,57 @@
         </main>
     </div>
 
-    <!-- 유저 컨트롤 모달 -->
+    <!-- User Edit Modal -->
     <div id="user-modal" class="modal-overlay hidden">
-        <div class="modal glass-panel">
-            <h2 id="modal-user-name">유저 이름</h2>
-            <p id="modal-user-id" style="font-size: 0.8rem; color: #aaa; margin-bottom: 20px;">ID: 123456</p>
+        <div class="glass-panel modal" style="max-width: 600px;">
+            <h2 id="modal-user-name">유저 정보 수정</h2>
+            <p id="modal-user-id" style="color:var(--text-muted); font-size:0.8rem; margin-bottom:1.5rem;"></p>
             
             <div class="grid-2col">
                 <div class="input-group">
                     <label>코인 수정</label>
-                    <input type="number" id="mod-coins">
+                    <input type="number" id="edit-coins">
                 </div>
                 <div class="input-group">
                     <label>레이팅 (RP)</label>
-                    <input type="number" id="mod-rp">
+                    <input type="number" id="edit-rating">
                 </div>
+            </div>
+            <div class="grid-2col">
                 <div class="input-group">
                     <label>선박 등급</label>
-                    <input type="number" id="mod-boat">
+                    <input type="number" id="edit-boat">
                 </div>
                 <div class="input-group">
                     <label>낚싯대 레벨</label>
-                    <input type="number" id="mod-rod">
+                    <input type="number" id="edit-rod">
                 </div>
             </div>
             
-            <hr style="margin: 20px 0; border-color: rgba(255,255,255,0.1);">
+            <hr style="margin: 25px 0; border-color: rgba(255,255,255,0.1);">
             
-            <h3>인벤토리 개입 (아이템 지급/압수)</h3>
-            <div class="input-group" style="display: flex; gap: 10px;">
-                <input type="text" id="mod-item-name" list="fish-list" placeholder="아이템 또는 어종 검색..." style="flex: 2;">
-                <input type="number" id="mod-item-amt" value="1" style="flex: 1;">
-                <button id="btn-mod-give" class="btn-success">지급</button>
-                <button id="btn-mod-take" class="btn-danger">회수</button>
+            <h3 style="margin-bottom: 10px;">🛡️ 인벤토리 개입 (아이템 지급/압수)</h3>
+            <p style="color:var(--text-muted); font-size:0.8rem; margin-bottom:15px;">대상 유저의 가방에 직접 아이템을 넣거나 뺍니다.</p>
+            
+            <div style="display: flex; gap: 12px; margin-bottom: 20px; align-items: flex-end;">
+                <div class="input-group" style="flex: 3; margin-bottom: 0;">
+                    <label>아이템/어종 검색</label>
+                    <input type="text" id="edit-item-name" list="fish-list" placeholder="물고기 또는 아이템 이름을 입력하세요...">
+                </div>
+                <div class="input-group" style="flex: 1; margin-bottom: 0;">
+                    <label>수량</label>
+                    <input type="number" id="edit-item-amount" value="1">
+                </div>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <button id="btn-give-item" class="btn-success">아이템 지급하기</button>
+                <button id="btn-take-item" class="btn-danger">아이템 압수하기</button>
             </div>
 
-            <div style="margin-top: 30px; display: flex; justify-content: flex-end; gap: 10px;">
-                <button id="btn-modal-close" class="btn-secondary">닫기</button>
-                <button id="btn-modal-save">변경사항 저장</button>
+            <div style="margin-top: 40px; display: flex; justify-content: flex-end; gap: 12px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
+                <button id="btn-close-modal" class="btn-secondary" style="width: auto; padding: 10px 25px;">닫기</button>
+                <button id="btn-save-user" class="btn-success" style="width: auto; padding: 10px 35px;">💾 변경사항 저장</button>
             </div>
         </div>
     </div>
