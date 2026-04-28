@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 from typing import Any
 
 import aiosqlite
@@ -10,6 +12,24 @@ class DBManager:
 
     def __init__(self) -> None:
         self.conn: aiosqlite.Connection | None = None
+        self._lock = asyncio.Lock()
+
+    @contextlib.asynccontextmanager
+    async def transaction(self):
+        """트랜잭션을 관리하는 컨텍스트 매니저입니다."""
+        if not self.conn:
+            yield
+            return
+
+        async with self._lock:
+            await self.conn.execute("BEGIN TRANSACTION")
+            try:
+                yield
+                await self.conn.commit()
+            except Exception as e:
+                await self.conn.rollback()
+                logger.error(f"⚠️ 트랜잭션 오류로 롤백됨: {e}")
+                raise
 
     async def init_db(self) -> None:
         """데이터베이스 연결을 초기화하고 마이그레이션을 수행합니다."""
@@ -123,6 +143,9 @@ class DBManager:
                     avg_fish_price INTEGER
                 )
             '''),
+
+            # --- [방문 해역 기록 (대해적 업적용)] ---
+            (51, "ALTER TABLE user_data ADD COLUMN visited_regions TEXT DEFAULT '[]'"),
         ]
 
         # 3. 마이그레이션 실행
@@ -191,5 +214,54 @@ class DBManager:
         async with self.conn.execute("SELECT title FROM user_data WHERE user_id=?", (user_id,)) as cursor:
             row = await cursor.fetchone()
             return row[0] if row else ""
+
+    async def get_full_user_data(self, user_id: int) -> dict[str, Any]:
+        """유저의 모든 주요 정보를 딕셔너리 형태로 가져옵니다."""
+        if not self.conn: return {}
+        
+        # 유저가 없으면 생성
+        await self.get_user_data(user_id)
+        
+        query = "SELECT coins, rod_tier, rating, boat_tier, stamina, max_stamina, current_region, title FROM user_data WHERE user_id=?"
+        async with self.conn.execute(query, (user_id,)) as cursor:
+            row = await cursor.fetchone()
+            if not row: return {}
+            
+            return {
+                "coins": row[0],
+                "rod_tier": row[1],
+                "rating": row[2],
+                "boat_tier": row[3],
+                "stamina": row[4],
+                "max_stamina": row[5],
+                "region": row[6],
+                "title": row[7]
+            }
+
+    async def modify_inventory(self, user_id: int, item_name: str, amount: int) -> bool:
+        """인벤토리 아이템 수량을 변경합니다. (음수 가능)"""
+        if not self.conn: return False
+        
+        if amount > 0:
+            await self.conn.execute(
+                "INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, ?) "
+                "ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?",
+                (user_id, item_name, amount, amount)
+            )
+        elif amount < 0:
+            # 수량 확인 후 차감
+            async with self.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (user_id, item_name)) as cursor:
+                row = await cursor.fetchone()
+                if not row or row[0] < abs(amount):
+                    return False
+                
+                await self.conn.execute(
+                    "UPDATE inventory SET amount = amount + ? WHERE user_id=? AND item_name=?",
+                    (amount, user_id, item_name)
+                )
+                # 0개 이하면 삭제
+                await self.conn.execute("DELETE FROM inventory WHERE user_id=? AND item_name=? AND amount <= 0", (user_id, item_name))
+        
+        return True
 
 db = DBManager()

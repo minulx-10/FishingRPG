@@ -11,7 +11,7 @@ from fishing_core.logger import logger
 from fishing_core.services.battle_service import BattleService
 from fishing_core.shared import FISH_DATA, format_grade_label, kst
 from fishing_core.utils import EmbedFactory, check_boat_tier, create_progress_bar, inv_autocomplete
-from fishing_core.views import BattleView, PvPBattleView
+from fishing_core.views_v2 import BattleView, PvPBattleView
 
 
 class BattleCog(commands.Cog):
@@ -149,12 +149,12 @@ class BattleCog(commands.Cog):
             if not p2_deck:
                 return await interaction.response.send_message(f"❌ 상대방({상대.name})의 잠금 목록이 비어있어 약탈할 수 없습니다!", ephemeral=True)
 
-            # 성공 시 체력 차감 및 상태 업데이트
-            await db.execute("UPDATE user_data SET stamina = stamina - 20 WHERE user_id=?", (interaction.user.id,))
-            cooldown_until = (now + dt.timedelta(hours=1)).isoformat()
-            await db.execute("UPDATE user_data SET peace_mode=0, peace_cooldown=? WHERE user_id=?", (cooldown_until, interaction.user.id))
-            await db.execute("UPDATE user_data SET pvp_shield_count = pvp_shield_count - 1, pvp_shield_date=? WHERE user_id=?", (today_str, 상대.id))
-            await db.commit()
+            async with db.transaction():
+                # 성공 시 체력 차감 및 상태 업데이트
+                await db.execute("UPDATE user_data SET stamina = stamina - 20 WHERE user_id=?", (interaction.user.id,))
+                cooldown_until = (now + dt.timedelta(hours=1)).isoformat()
+                await db.execute("UPDATE user_data SET peace_mode=0, peace_cooldown=? WHERE user_id=?", (cooldown_until, interaction.user.id))
+                await db.execute("UPDATE user_data SET pvp_shield_count = pvp_shield_count - 1, pvp_shield_date=? WHERE user_id=?", (today_str, 상대.id))
 
             # 호위 로직 반영
             async with db.conn.execute("SELECT last_active, guard_fish FROM user_data WHERE user_id=?", (상대.id,)) as cursor:
@@ -216,8 +216,8 @@ class BattleCog(commands.Cog):
         status_text = "켜졌습니다 🕊️" if new_mode == 1 else "꺼졌습니다 ⚔️"
         cooldown_until = (now + dt.timedelta(hours=1)).isoformat()
 
-        await db.execute("UPDATE user_data SET peace_mode=?, peace_cooldown=? WHERE user_id=?", (new_mode, cooldown_until, interaction.user.id))
-        await db.commit()
+        async with db.transaction():
+            await db.execute("UPDATE user_data SET peace_mode=?, peace_cooldown=? WHERE user_id=?", (new_mode, cooldown_until, interaction.user.id))
 
         await interaction.response.send_message(f"✅ 평화 모드가 **{status_text}**\n⏳ *다음 전환까지 1시간 쿨타임이 적용됩니다.*")
 
@@ -273,30 +273,38 @@ class BattleCog(commands.Cog):
         # 서비스 레이어를 통한 공격 처리
         result = await BattleService.process_raid_attack(interaction.user.id, strongest_fish, boss_hp, boss_max_hp)
         
-        # DB 업데이트
-        await db.execute("UPDATE user_data SET stamina = stamina - 25 WHERE user_id=?", (interaction.user.id,))
-        await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_BOSS_HP', ?)", (str(result['new_hp']),))
+        async with db.transaction():
+            # DB 업데이트
+            await db.execute("UPDATE user_data SET stamina = stamina - 25 WHERE user_id=?", (interaction.user.id,))
+            await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_BOSS_HP', ?)", (str(result['new_hp']),))
 
-        async with db.conn.execute("SELECT value FROM server_state WHERE key='RAID_DAMAGE_LOG'") as cursor:
-            log_res = await cursor.fetchone()
-        damage_log = json.loads(log_res[0]) if log_res and log_res[0] else {}
-        damage_log[str(interaction.user.id)] = damage_log.get(str(interaction.user.id), 0) + result['damage']
-        await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_DAMAGE_LOG', ?)", (json.dumps(damage_log),))
-        
-        await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (result['reward'], interaction.user.id))
-        await db.commit()
+            async with db.conn.execute("SELECT value FROM server_state WHERE key='RAID_DAMAGE_LOG'") as cursor:
+                log_res = await cursor.fetchone()
+            damage_log = json.loads(log_res[0]) if log_res and log_res[0] else {}
+            damage_log[str(interaction.user.id)] = damage_log.get(str(interaction.user.id), 0) + result['damage']
+            await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_DAMAGE_LOG', ?)", (json.dumps(damage_log),))
+            
+            await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (result['reward'], interaction.user.id))
 
         # 임베드 구성
         fish_grade = FISH_DATA.get(strongest_fish, {}).get("grade", "일반")
-        embed = EmbedFactory.build(title=f"🌌 월드 보스 레이드 (Lv.{boss_level})", type="default")
+        is_defeated = result['new_hp'] <= 0
+        embed_type = "success" if is_defeated else "info"
+        
+        embed = EmbedFactory.build(title=f"🌌 월드 보스 레이드 (Lv.{boss_level})", type=embed_type)
         health_bar = create_progress_bar(result['new_hp'], boss_max_hp, length=20)
         
         crit_msg = "💥 **[치명타!]** " if result['is_crit'] else "⚔️ "
         harpoon_msg = "🔱 **[작살 강화]** " if result['used_harpoon'] else ""
         
-        embed.add_field(name="보스 체력", value=f"{health_bar}\n`{result['new_hp']:,} / {boss_max_hp:,}`", inline=False)
+        embed.add_field(name="👾 보스 상태 (HP)", value=f"{health_bar}\n`{result['new_hp']:,} / {boss_max_hp:,}`", inline=False)
         embed.description = f"{crit_msg}{harpoon_msg}**{strongest_fish}** {format_grade_label(fish_grade)}의 맹공!\n" \
-                            f"💥 **{result['damage']:,}** 피해를 입혔습니다! 💰 `{result['reward']:,} C` 지급 완료."
+                            f"💥 보스에게 **{result['damage']:,}**의 피해를 입히고 **{result['reward']:,} C**를 획득했습니다!"
+        
+        # 보스 이미지 (아포칼립스 느낌의 거대 괴수)
+        embed.set_image(url="https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800")
+        embed.set_footer(text="레이드는 30분마다 참여 가능합니다. 모든 유저의 누적 데미지로 보스를 처치하세요!")
+        
         await interaction.response.send_message(embed=embed)
 
         if result['new_hp'] <= 0:
@@ -314,8 +322,8 @@ class BattleCog(commands.Cog):
         if res[1] == 0:
             return await interaction.response.send_message("⚠️ 먼저 `/잠금`으로 배틀용 전사로 등록하세요.", ephemeral=True)
 
-        await db.execute("UPDATE user_data SET guard_fish=? WHERE user_id=?", (물고기, interaction.user.id))
-        await db.commit()
+        async with db.transaction():
+            await db.execute("UPDATE user_data SET guard_fish=? WHERE user_id=?", (물고기, interaction.user.id))
         await interaction.response.send_message(f"🛡️ **{물고기}**(을)를 호위 어종으로 설정했습니다!")
 
 async def setup(bot):

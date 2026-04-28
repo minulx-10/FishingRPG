@@ -19,9 +19,8 @@ class AdminCog(commands.Cog):
     @app_commands.command(name="코인지급", description="[관리자 전용] 특정 유저에게 코인을 강제로 지급합니다.")
     @is_developer()
     async def 코인지급(self, interaction: discord.Interaction, target: discord.Member, amount: int):
-        await db.get_user_data(target.id)
-        await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (amount, target.id))
-        await db.commit()
+        async with db.transaction():
+            await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (amount, target.id))
         await log_admin_action(self.bot, interaction.user, target, "코인지급", f"수량: `{amount:,} C`")
         await interaction.response.send_message(f"💰 관리자 권한으로 **{target.name}**님에게 `{amount:,} C`를 지급했습니다!")
 
@@ -29,8 +28,8 @@ class AdminCog(commands.Cog):
     @app_commands.autocomplete(아이템명=fish_autocomplete)
     @is_developer()
     async def 아이템지급(self, interaction: discord.Interaction, target: discord.Member, 아이템명: str, 수량: int):
-        await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, ?) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?", (target.id, 아이템명, 수량, 수량))
-        await db.commit()
+        async with db.transaction():
+            await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, ?) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?", (target.id, 아이템명, 수량, 수량))
         await log_admin_action(self.bot, interaction.user, target, "아이템지급", f"아이템: `{아이템명}` / 수량: `{수량}`")
         await interaction.response.send_message(f"🎁 관리자 권한으로 **{target.name}**님에게 `{아이템명}` {수량}개를 지급했습니다!")
 
@@ -44,9 +43,9 @@ class AdminCog(commands.Cog):
         if not res or res[0] <= 0:
             return await interaction.response.send_message(f"❌ **{target.name}**님은 `{아이템명}`을(를) 소지하고 있지 않습니다.", ephemeral=True)
 
-        await db.execute("UPDATE inventory SET amount = MAX(0, amount - ?) WHERE user_id = ? AND item_name = ?", (수량, target.id, 아이템명))
-        await db.execute("DELETE FROM inventory WHERE amount <= 0")
-        await db.commit()
+        async with db.transaction():
+            await db.execute("UPDATE inventory SET amount = MAX(0, amount - ?) WHERE user_id = ? AND item_name = ?", (수량, target.id, 아이템명))
+            await db.execute("DELETE FROM inventory WHERE amount <= 0")
         await log_admin_action(self.bot, interaction.user, target, "아이템회수", f"아이템: `{아이템명}` / 수량: `{수량}`")
         await interaction.response.send_message(f"🗑️ 관리자 권한으로 **{target.name}**님의 `{아이템명}` {수량}개를 강제 회수했습니다!")
 
@@ -58,14 +57,13 @@ class AdminCog(commands.Cog):
     ])
     @is_developer()
     async def 유저스탯변경(self, interaction: discord.Interaction, target: discord.Member, 항목: app_commands.Choice[str], 값: int):
-        await db.get_user_data(target.id)
-        if 항목.value == "boat_tier":
-            await db.execute("UPDATE user_data SET boat_tier = ? WHERE user_id = ?", (값, target.id))
-        elif 항목.value == "rod_tier":
-            await db.execute("UPDATE user_data SET rod_tier = ? WHERE user_id = ?", (값, target.id))
-        elif 항목.value == "rating":
-            await db.execute("UPDATE user_data SET rating = ? WHERE user_id = ?", (값, target.id))
-        await db.commit()
+        async with db.transaction():
+            if 항목.value == "boat_tier":
+                await db.execute("UPDATE user_data SET boat_tier = ? WHERE user_id = ?", (값, target.id))
+            elif 항목.value == "rod_tier":
+                await db.execute("UPDATE user_data SET rod_tier = ? WHERE user_id = ?", (값, target.id))
+            elif 항목.value == "rating":
+                await db.execute("UPDATE user_data SET rating = ? WHERE user_id = ?", (값, target.id))
         await log_admin_action(self.bot, interaction.user, target, "유저스탯변경", f"항목: `{항목.name}` / 변경된 값: `{값}`")
         await interaction.response.send_message(f"⚙️ 관리자 권한으로 **{target.name}**님의 `{항목.name}`을(를) **{값}**(으)로 설정했습니다!")
 

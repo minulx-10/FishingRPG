@@ -40,7 +40,6 @@ class MarketService:
         
         # 시세 변동 후 판매량 초기화 (다음 텀을 위해)
         await db.execute("UPDATE market_sales SET amount_sold = 0")
-        await db.commit()
         
         # 랜덤 변동 (소폭의 무작위성 추가)
         for item in MARKET_PRICES:
@@ -65,7 +64,6 @@ class MarketService:
         """만료된 버프를 데이터베이스에서 정리합니다."""
         now_str = datetime.datetime.now(kst).strftime('%Y-%m-%d %H:%M:%S')
         await db.execute("DELETE FROM active_buffs WHERE end_time <= ?", (now_str,))
-        await db.commit()
 
     @staticmethod
     async def recover_user_stamina():
@@ -76,7 +74,6 @@ class MarketService:
         
         # 자연 회복은 최대치까지만 (이미 최대치를 넘은 유저는 깎지 않음)
         await db.execute("UPDATE user_data SET stamina = MIN(max_stamina, stamina + ?) WHERE stamina < max_stamina", (stamina_regen,))
-        await db.commit()
         return stamina_regen
 
     @staticmethod
@@ -141,40 +138,34 @@ class MarketService:
         if coins < total_price:
             return {"success": False, "message": f"❌ 코인이 부족합니다! (필요: {total_price:,} C / 현재: {coins:,} C)"}
 
-        # 1. 재화 차감
-        await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id=?", (total_price, user_id))
+        async with db.transaction():
+            # 1. 재화 차감
+            await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id=?", (total_price, user_id))
 
-        # 2. 아이템별 특수 처리
-        msg = f"✅ **{item_name}** {amount}개를 구매했습니다! (소모: {total_price:,} C)"
-        
-        if item_name == "에너지 드링크 ⚡":
-            heal = 50 * amount
-            # 드링크는 최대 1000까지 오버플로우 허용 (유저가 돈 날리는 느낌 안 들게)
-            await db.execute("UPDATE user_data SET stamina = MIN(1000, stamina + ?) WHERE user_id=?", (heal, user_id))
-            async with db.conn.execute("SELECT stamina, max_stamina FROM user_data WHERE user_id=?", (user_id,)) as cursor:
-                st = await cursor.fetchone()
-            msg = f"⚡ 에너지 드링크를 {amount}개 마셨습니다! 체력 +{heal}⚡ (현재: {st[0]}/{st[1]}⚡)\n(소모: {total_price:,} C)"
-        
-        elif item_name in ["가속 포션 💨", "특수 떡밥 🎣"]:
-            buff_type = "fishing_speed_up" if item_name == "가속 포션 💨" else "rare_boost"
-            duration = 30 * amount
-            end_time = (datetime.datetime.now(kst) + datetime.timedelta(minutes=duration)).strftime('%Y-%m-%d %H:%M:%S')
-            await db.execute(
-                "INSERT INTO active_buffs (user_id, buff_type, end_time) VALUES (?, ?, ?) "
-                "ON CONFLICT(user_id, buff_type) DO UPDATE SET end_time = ?",
-                (user_id, buff_type, end_time, end_time)
-            )
-            msg = f"✨ **{item_name}** {amount}개를 사용하여 {duration}분간 버프가 적용됩니다! (소모: {total_price:,} C)"
+            # 2. 아이템별 특수 처리
+            if item_name == "에너지 드링크 ⚡":
+                heal = 50 * amount
+                await db.execute("UPDATE user_data SET stamina = MIN(max_stamina, stamina + ?) WHERE user_id=?", (heal, user_id))
+                async with db.conn.execute("SELECT stamina, max_stamina FROM user_data WHERE user_id=?", (user_id,)) as cursor:
+                    st = await cursor.fetchone()
+                msg = f"⚡ 에너지 드링크를 {amount}개 마셨습니다! 체력 +{heal}⚡ (현재: {st[0]}/{st[1]}⚡)\n(소모: {total_price:,} C)"
             
-        else:
-            # 일반 아이템 인벤토리 추가
-            await db.execute(
-                "INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, ?) "
-                "ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?",
-                (user_id, item_name, amount, amount)
-            )
+            elif item_name in ["가속 포션 💨", "특수 떡밥 🎣"]:
+                buff_type = "fishing_speed_up" if item_name == "가속 포션 💨" else "rare_boost"
+                duration = 30 * amount
+                end_time = (datetime.datetime.now(kst) + datetime.timedelta(minutes=duration)).strftime('%Y-%m-%d %H:%M:%S')
+                await db.execute(
+                    "INSERT INTO active_buffs (user_id, buff_type, end_time) VALUES (?, ?, ?) "
+                    "ON CONFLICT(user_id, buff_type) DO UPDATE SET end_time = ?",
+                    (user_id, buff_type, end_time, end_time)
+                )
+                msg = f"✨ **{item_name}** {amount}개를 사용하여 {duration}분간 버프가 적용됩니다! (소모: {total_price:,} C)"
+                
+            else:
+                # 일반 아이템 인벤토리 추가
+                await db.modify_inventory(user_id, item_name, amount)
+                msg = f"✅ **{item_name}** {amount}개를 구매했습니다! (소모: {total_price:,} C)"
 
-        await db.log_action(user_id, "MARKET_BUY", f"Item: {item_name}, Amount: {amount}, Spent: {total_price} C")
-        await db.commit()
+            await db.log_action(user_id, "MARKET_BUY", f"Item: {item_name}, Amount: {amount}, Spent: {total_price} C")
 
         return {"success": True, "message": msg, "total_price": total_price}

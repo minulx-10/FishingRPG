@@ -77,60 +77,57 @@ class ShipCog(commands.Cog):
             success_rate = 1.0
             is_pity_trigger = True
 
-        # 비용 차감 (성공/실패 무관)
-        now = dt.datetime.now()
-        await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id = ?", (cost, interaction.user.id))
-        if scrap_needed > 0:
-            await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name='낡은 고철 ⚙️'", (scrap_needed, interaction.user.id))
+        # 비용 차감 및 강화 판정 (원자적 처리)
+        async with db.transaction():
+            await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id = ?", (cost, interaction.user.id))
+            if scrap_needed > 0:
+                await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name='낡은 고철 ⚙️'", (scrap_needed, interaction.user.id))
 
-        # 강화 판정
-        roll = random.random()
-        if roll < success_rate:
-            # 성공!
-            await db.execute("UPDATE user_data SET rod_tier = rod_tier + 1, upgrade_pity = 0 WHERE user_id = ?", (interaction.user.id,))
-            await db.log_action(interaction.user.id, "ROD_UPGRADE_SUCCESS", f"Tier: {rod_tier} -> {rod_tier + 1}")
-            await db.commit()
+            # 강화 판정
+            roll = random.random()
+            if roll < success_rate:
+                # 성공!
+                await db.execute("UPDATE user_data SET rod_tier = rod_tier + 1, upgrade_pity = 0 WHERE user_id = ?", (interaction.user.id,))
+                await db.log_action(interaction.user.id, "ROD_UPGRADE_SUCCESS", f"Tier: {rod_tier} -> {rod_tier + 1}")
+                
+                new_level = rod_tier + 1
+                
+                # [업적] 낚싯대 30강 달성
+                if new_level >= 30:
+                    from fishing_core.services.achievement_service import AchievementService
+                    await AchievementService.check_achievement(interaction.user.id, "ROD_MASTER")
 
-            new_level = rod_tier + 1
-            
-            # [업적] 낚싯대 30강 달성
-            if new_level >= 30:
-                from fishing_core.services.achievement_service import AchievementService
-                await AchievementService.check_achievement(interaction.user.id, "ROD_MASTER")
+                pity_txt = "✨ **[천장 도달]** " if is_pity_trigger else ""
+                msg = f"{pity_txt}{'🔥 **[초월 성공]** 🔥' if is_transcendence else '캉! 캉! 캉! ...'} 낚싯대가 **Lv.{new_level}** 로 강화되었습니다!"
 
-            pity_txt = "✨ **[천장 도달]** " if is_pity_trigger else ""
-            msg = f"{pity_txt}{'🔥 **[초월 성공]** 🔥' if is_transcendence else '캉! 캉! 캉! ...'} 낚싯대가 **Lv.{new_level}** 로 강화되었습니다!"
+                # 마일스톤 알림 (50강 이후는 10단위로 계속 알림)
+                if new_level % 10 == 0:
+                    # 서버 알림
+                    try:
+                        await interaction.channel.send(f"📢 **[대속보]** {interaction.user.mention}님의 낚싯대가 **Lv.{new_level}**에 도달하는 기염을 토했습니다!!")
+                    except Exception:
+                        pass
 
-            # 마일스톤 알림 (50강 이후는 10단위로 계속 알림)
-            if new_level % 10 == 0:
-                # 서버 알림
-                try:
-                    await interaction.channel.send(f"📢 **[대속보]** {interaction.user.mention}님의 낚싯대가 **Lv.{new_level}**에 도달하는 기염을 토했습니다!!")
-                except Exception:
-                    pass
-
-            await interaction.response.send_message(msg)
-        else:
-            # 실패 판정 (하락 vs 유지)
-            roll_drop = random.random()
-            if is_transcendence and roll_drop < drop_rate:
-                # 하락
-                await db.execute("UPDATE user_data SET rod_tier = MAX(50, rod_tier - 1) WHERE user_id = ?", (interaction.user.id,))
-                await db.commit()
-                await interaction.response.send_message(
-                    f"💀 **[강화 실패]** 낚싯대에 균열이 생기며 레벨이 하락했습니다... (Lv.{rod_tier} → Lv.{max(50, rod_tier-1)})\n"
-                    f"• 소모된 코인: `{cost:,} C`",
-                )
+                await interaction.response.send_message(msg)
             else:
-                # 유지
-                await db.execute("UPDATE user_data SET upgrade_pity = upgrade_pity + 1 WHERE user_id = ?", (interaction.user.id,))
-                await db.commit()
-                await interaction.response.send_message(
-                    f"💨 캉... 쿵! 강화에 실패하여 낚싯대의 레벨이 **유지**되었습니다. (Lv.{rod_tier})\n"
-                    f"• 현재 천장 스택: `{pity_count + 1}/10` (10회 도달 시 100% 성공)\n"
-                    f"• 소모된 코인: `{cost:,} C`" + (f"\n• 소모된 고철: `{scrap_needed}개`" if scrap_needed > 0 else "") +
-                    f"\n*(성공 확률: {int(success_rate*100)}%)*",
-                )
+                # 실패 판정 (하락 vs 유지)
+                roll_drop = random.random()
+                if is_transcendence and roll_drop < drop_rate:
+                    # 하락
+                    await db.execute("UPDATE user_data SET rod_tier = MAX(50, rod_tier - 1) WHERE user_id = ?", (interaction.user.id,))
+                    await interaction.response.send_message(
+                        f"💀 **[강화 실패]** 낚싯대에 균열이 생기며 레벨이 하락했습니다... (Lv.{rod_tier} → Lv.{max(50, rod_tier-1)})\n"
+                        f"• 소모된 코인: `{cost:,} C`",
+                    )
+                else:
+                    # 유지
+                    await db.execute("UPDATE user_data SET upgrade_pity = upgrade_pity + 1 WHERE user_id = ?", (interaction.user.id,))
+                    await interaction.response.send_message(
+                        f"💨 캉... 쿵! 강화에 실패하여 낚싯대의 레벨이 **유지**되었습니다. (Lv.{rod_tier})\n"
+                        f"• 현재 천장 스택: `{pity_count + 1}/10` (10회 도달 시 100% 성공)\n"
+                        f"• 소모된 코인: `{cost:,} C`" + (f"\n• 소모된 고철: `{scrap_needed}개`" if scrap_needed > 0 else "") +
+                        f"\n*(성공 확률: {int(success_rate*100)}%)*",
+                    )
 
     @app_commands.command(name="선박개조", description="코인과 고철을 모아 배를 다음 티어로 업그레이드하고 새로운 기능을 해금합니다!")
     async def 선박개조(self, interaction: discord.Interaction):
@@ -167,16 +164,16 @@ class ShipCog(commands.Cog):
                 embed.set_footer(text="💡 열심히 낚시를 해서 코인을 모아보세요!")
             return await interaction.response.send_message(embed=embed, ephemeral=True)
 
-        # 스태미나 최대치 업데이트
+        # 스태미나 최대치 업데이트 및 데이터 변경 (원자적 처리)
         new_tier = current_tier + 1
         new_max_stamina = TIER_MAX_STAMINA.get(new_tier, 100)
 
-        await db.execute("UPDATE user_data SET coins = coins - ?, boat_tier = boat_tier + 1, max_stamina = ?, stamina = ? WHERE user_id = ?",
-                         (req["coins"], new_max_stamina, new_max_stamina, interaction.user.id))
-        if req["scrap"] > 0:
-            await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name='낡은 고철 ⚙️'", (req["scrap"], interaction.user.id))
-        await db.log_action(interaction.user.id, "SHIP_UPGRADE_SUCCESS", f"Tier: {current_tier} -> {new_tier}, Boat: {req['next']}")
-        await db.commit()
+        async with db.transaction():
+            await db.execute("UPDATE user_data SET coins = coins - ?, boat_tier = boat_tier + 1, max_stamina = ?, stamina = ? WHERE user_id = ?",
+                             (req["coins"], new_max_stamina, new_max_stamina, interaction.user.id))
+            if req["scrap"] > 0:
+                await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name='낡은 고철 ⚙️'", (req["scrap"], interaction.user.id))
+            await db.log_action(interaction.user.id, "SHIP_UPGRADE_SUCCESS", f"Tier: {current_tier} -> {new_tier}, Boat: {req['next']}")
 
         embed = EmbedFactory.build(title="🎉 선박 개조 완료!", description=f"뚝딱뚝딱... 쾅!\n배가 **[{req['next']}]**(으)로 업그레이드 되었습니다!", type="success")
         embed.add_field(name="🔓 새로운 기능 해금!", value=f"`{req['unlock']}` 명령어를 이제 사용할 수 있습니다.", inline=False)

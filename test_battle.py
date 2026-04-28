@@ -62,7 +62,7 @@ async def test_susan_daejeon():
     title1 = res[0] if res else ""
     display_name1 = f"{title1} {interaction.user.name}" if title1 else interaction.user.name
 
-    from fishing_core.views import PvPBattleView
+    from fishing_core.views_v2 import PvPBattleView
     view = PvPBattleView(interaction.user, target, p1_deck, p2_deck)
 
     await interaction.response.send_message(

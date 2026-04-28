@@ -16,7 +16,7 @@ from fishing_core.utils import (
     inv_autocomplete,
     locked_autocomplete,
 )
-from fishing_core.views import MarketPaginationView, ShopView
+from fishing_core.views_v2 import MarketPaginationView, ShopView
 
 
 class MarketCog(commands.Cog):
@@ -183,23 +183,19 @@ class MarketCog(commands.Cog):
         if coins < total_price:
             return await interaction.response.send_message(f"❌ 코인이 부족합니다! (필요: {total_price:,} C / 현재: {coins:,} C)", ephemeral=True)
 
-        await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id = ?", (total_price, interaction.user.id))
-        await db.execute(
-            "INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, ?) "
-            "ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?",
-            (interaction.user.id, item_name, quantity, quantity),
-        )
+        async with db.transaction():
+            await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id = ?", (total_price, interaction.user.id))
+            await db.modify_inventory(interaction.user.id, item_name, quantity)
 
-        offer["stock"] -= quantity
-        user_state["merchant_id"] = state["merchant_id"]
-        user_state["counts"][item_name] = purchased + quantity
+            offer["stock"] -= quantity
+            user_state["merchant_id"] = state["merchant_id"]
+            user_state["counts"][item_name] = purchased + quantity
 
-        await self._save_user_merchant_state(interaction.user.id, user_state)
-        await db.execute(
-            "UPDATE server_state SET value = ? WHERE key = 'WANDERING_MERCHANT_STATE'",
-            (json.dumps(state, ensure_ascii=False),),
-        )
-        await db.commit()
+            await self._save_user_merchant_state(interaction.user.id, user_state)
+            await db.execute(
+                "UPDATE server_state SET value = ? WHERE key = 'WANDERING_MERCHANT_STATE'",
+                (json.dumps(state, ensure_ascii=False),),
+            )
 
         await interaction.response.send_message(
             f"🧳 떠돌이 상인에게서 **{item_name}** {quantity}개를 구매했습니다! "
@@ -296,11 +292,11 @@ class MarketCog(commands.Cog):
         delete_targets = [(interaction.user.id, name) for name, amt in sellable_items]
         sales_logs = [(name, amt, amt) for name, amt in sellable_items]
 
-        await db.executemany("DELETE FROM inventory WHERE user_id = ? AND item_name = ?", delete_targets)
-        await db.executemany("INSERT INTO market_sales (item_name, amount_sold) VALUES (?, ?) ON CONFLICT(item_name) DO UPDATE SET amount_sold = amount_sold + ?", sales_logs)
-        await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (total_earned, interaction.user.id))
-        await db.log_action(interaction.user.id, "MARKET_SELL_ALL", f"Total Earned: {total_earned} C, Items: {len(sellable_items)} types")
-        await db.commit()
+        async with db.transaction():
+            await db.executemany("DELETE FROM inventory WHERE user_id = ? AND item_name = ?", delete_targets)
+            await db.executemany("INSERT INTO market_sales (item_name, amount_sold) VALUES (?, ?) ON CONFLICT(item_name) DO UPDATE SET amount_sold = amount_sold + ?", sales_logs)
+            await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (total_earned, interaction.user.id))
+            await db.log_action(interaction.user.id, "MARKET_SELL_ALL", f"Total Earned: {total_earned} C, Items: {len(sellable_items)} types")
 
         msg = f"{msg}\n**총 수익: +{total_earned:,} C**"
 
@@ -336,11 +332,14 @@ class MarketCog(commands.Cog):
 
         total_earned = price_per_item * 수량
 
-        await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name=?", (수량, interaction.user.id, target_fish))
-        await db.execute("INSERT INTO market_sales (item_name, amount_sold) VALUES (?, ?) ON CONFLICT(item_name) DO UPDATE SET amount_sold = amount_sold + ?", (target_fish, 수량, 수량))
-        await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id=?", (total_earned, interaction.user.id))
-        await db.log_action(interaction.user.id, "MARKET_SELL_ITEM", f"Item: {target_fish}, Amount: {수량}, Total Earned: {total_earned} C")
-        await db.commit()
+        async with db.transaction():
+            await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name=?", (수량, interaction.user.id, target_fish))
+            await db.execute("INSERT INTO market_sales (item_name, amount_sold) VALUES (?, ?) ON CONFLICT(item_name) DO UPDATE SET amount_sold = amount_sold + ?", (target_fish, 수량, 수량))
+            await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id=?", (total_earned, interaction.user.id))
+            await db.log_action(interaction.user.id, "MARKET_SELL_ITEM", f"Item: {target_fish}, Amount: {수량}, Total Earned: {total_earned} C")
+        
+        # 삭제 후 0개인 항목 정리 (선택사항이나 깔끔함 유지)
+        await db.execute("DELETE FROM inventory WHERE user_id=? AND item_name=? AND amount <= 0", (interaction.user.id, target_fish))
 
         await interaction.response.send_message(f"💰 **{target_fish}** {수량}마리를 팔아서 총 `{total_earned:,} C`를 얻었습니다! (개당 {price_per_item}C)")
 

@@ -1,7 +1,6 @@
 import asyncio
 import datetime
 import io
-import json
 import os
 import random
 
@@ -28,17 +27,12 @@ from fishing_core.utils import (
     recipe_autocomplete,
     usable_item_autocomplete,
 )
-from fishing_core.views import QuestDeliveryView
+from fishing_core.views_v2 import QuestDeliveryView
 
 
 class QuestCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        try:
-            with open("collections.json", encoding="utf-8") as f:
-                self.collections = json.load(f)
-        except Exception:
-            self.collections = {}
 
     async def _show_aquarium(self, interaction: discord.Interaction, target: discord.Member):
         await interaction.response.defer()
@@ -179,56 +173,11 @@ class QuestCog(commands.Cog):
             return await interaction.response.send_message("❌ 오늘은 이미 출석하셨습니다! 내일 다시 와주세요.", ephemeral=True)
 
         reward = 1000
-        await db.execute("UPDATE user_data SET coins = coins + ?, stamina = max_stamina, last_daily = ? WHERE user_id = ?", (reward, today, interaction.user.id))
-        await db.commit()
+        async with db.transaction():
+            await db.execute("UPDATE user_data SET coins = coins + ?, stamina = max_stamina, last_daily = ? WHERE user_id = ?", (reward, today, interaction.user.id))
 
         await interaction.response.send_message(f"✅ 출석 완료! 보상으로 `{reward} C`를 받고 **행동력(체력)이 모두 회복**되었습니다! ⚡ (잔액 확인: `/인벤토리`)")
 
-    @app_commands.command(name="도감", description="나 또는 특정 유저가 지금까지 발견한 모든 물고기 기록과 수집률을 확인합니다.")
-    async def 도감(self, interaction: discord.Interaction, 유저: discord.Member = None):
-        target = 유저 or interaction.user
-        async with db.conn.execute("SELECT item_name FROM fish_dex WHERE user_id=?", (target.id,)) as cursor:
-            dex_items = await cursor.fetchall()
-
-        collected_names = [item[0] for item in dex_items]
-        total_fish = len(FISH_DATA)
-        collected_count = len(collected_names)
-        percent = (collected_count / total_fish) * 100
-
-        if percent == 100: dex_rank = "👑 그랜드 마스터 앵글러"
-        elif percent >= 70: dex_rank = "🥇 엘리트 어류학자"
-        elif percent >= 50: dex_rank = "🥈 어류학자"
-        elif percent >= 30: dex_rank = "🥉 낚시계의 새싹"
-        elif percent >= 10: dex_rank = "🌱 낚시계의 떡잎"
-        else: dex_rank = "🥚 초보 낚시꾼"
-
-        title = await db.get_user_title(target.id)
-        display_name = f"{title} {target.name}" if title else target.name
-
-        embed = EmbedFactory.build(title=f"📖 {display_name}님의 낚시 도감", type="default")
-        if target.avatar:
-            embed.set_thumbnail(url=target.avatar.url)
-
-        embed.add_field(name="현재 수집률", value=f"**{collected_count} / {total_fish} 종** (`{percent:.1f}%`)", inline=False)
-        embed.add_field(name="도감 등급", value=f"**{dex_rank}**", inline=False)
-
-        if collected_names:
-            recent_fish = "\n".join(
-                [f"• {name} `{format_grade_label(FISH_DATA.get(name, {}).get('grade', '일반'))}`" for name in collected_names[-5:]]
-            )
-            embed.add_field(name="최근 발견한 어종", value=recent_fish, inline=False)
-
-            async with db.conn.execute("SELECT item_name, max_size FROM fish_records WHERE user_id=? ORDER BY max_size DESC LIMIT 5", (target.id,)) as cursor:
-                records = await cursor.fetchall()
-            if records:
-                record_str = "\n".join(
-                    [f"🏆 **{name}** `{format_grade_label(FISH_DATA.get(name, {}).get('grade', '일반'))}` : `{size} cm`" for name, size in records]
-                )
-                embed.add_field(name="월척 기록 (Top 5)", value=record_str, inline=False)
-        else:
-            embed.add_field(name="최근 발견한 어종", value="아직 발견한 물고기가 없습니다.", inline=False)
-
-        await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="한강물", description="모든 측정소의 한강 수온을 확인합니다. (우회 접속)")
     async def 한강물(self, interaction: discord.Interaction):
@@ -335,13 +284,13 @@ class QuestCog(commands.Cog):
                         return await interaction.response.send_message(f"❌ 재료가 부족합니다! (필요: `{item}` {amt}개)", ephemeral=True)
                 to_consume.append((item, amt))
 
-        # 실제 차감
-        for item, amt in to_consume:
-            await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name=?", (amt, interaction.user.id, item))
+        async with db.transaction():
+            # 실제 차감
+            for item, amt in to_consume:
+                await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name=?", (amt, interaction.user.id, item))
 
-        # 요리 완성 및 인벤토리 지급 (Phase 5: 모든 요리가 가방으로 보관됨)
-        await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id, 선택))
-        await db.commit()
+            # 요리 완성 및 인벤토리 지급
+            await db.modify_inventory(interaction.user.id, 선택, 1)
         
         await interaction.response.send_message(f"👨‍🍳 **{선택}** 완성! 가방에 보관되었습니다. `/사용` 명령어로 효과를 얻거나 시장에 비싸게 파세요!")
 
@@ -377,19 +326,19 @@ class QuestCog(commands.Cog):
                     await db.execute("UPDATE user_data SET coins = coins - 5000 WHERE user_id=?", (interaction.user.id,))
                     extra_msg = "\n🤢 **아야!** 복어 독에 당했습니다... 해독비로 `5,000C`를 썼습니다."
 
-            await db.execute("INSERT OR REPLACE INTO active_buffs (user_id, buff_type, end_time) VALUES (?, ?, ?)",
-                             (interaction.user.id, recipe["buff_type"], end_time_str))
-            
-            await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (interaction.user.id, 아이템))
-            await db.commit()
+            async with db.transaction():
+                await db.execute("INSERT OR REPLACE INTO active_buffs (user_id, buff_type, end_time) VALUES (?, ?, ?)",
+                                 (interaction.user.id, recipe["buff_type"], end_time_str))
+                
+                await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (interaction.user.id, 아이템))
             
             await interaction.response.send_message(f"😋 **{아이템}**을(를) 맛있게 먹었습니다!{extra_msg}\n**효과:** {recipe['description']}")
 
         # 2. 상점 소모품
         elif 아이템 == "에너지 드링크 ⚡":
-            await db.execute("UPDATE user_data SET stamina = MIN(max_stamina, stamina + 50) WHERE user_id=?", (interaction.user.id,))
-            await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (interaction.user.id, 아이템))
-            await db.commit()
+            async with db.transaction():
+                await db.execute("UPDATE user_data SET stamina = MIN(max_stamina, stamina + 50) WHERE user_id=?", (interaction.user.id,))
+                await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (interaction.user.id, 아이템))
             async with db.conn.execute("SELECT stamina, max_stamina FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
                 st = await cursor.fetchone()
             await interaction.response.send_message(f"⚡ **에너지 드링크**를 마셨습니다! 체력 +50⚡ (현재: {st[0]}/{st[1]}⚡)")
@@ -397,9 +346,9 @@ class QuestCog(commands.Cog):
         elif 아이템 in ["가속 포션 💨", "특수 떡밥 🎣"]:
             buff_type = "fishing_speed_up" if 아이템 == "가속 포션 💨" else "rare_boost"
             end_time = (datetime.datetime.now(kst) + datetime.timedelta(minutes=30)).strftime('%Y-%m-%d %H:%M:%S')
-            await db.execute("INSERT OR REPLACE INTO active_buffs (user_id, buff_type, end_time) VALUES (?, ?, ?)", (interaction.user.id, buff_type, end_time))
-            await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (interaction.user.id, 아이템))
-            await db.commit()
+            async with db.transaction():
+                await db.execute("INSERT OR REPLACE INTO active_buffs (user_id, buff_type, end_time) VALUES (?, ?, ?)", (interaction.user.id, buff_type, end_time))
+                await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (interaction.user.id, 아이템))
             await interaction.response.send_message(f"✨ **{아이템}**을 사용하여 30분간 버프가 적용됩니다!")
         
         else:
@@ -425,9 +374,9 @@ class QuestCog(commands.Cog):
             q_cleared = 0
             q_date = today
 
-            await db.execute("UPDATE user_data SET quest_date=?, quest_item=?, quest_amount=?, quest_reward=?, quest_is_cleared=0 WHERE user_id=?",
-                             (q_date, q_item, q_amount, q_reward, interaction.user.id))
-            await db.commit()
+            async with db.transaction():
+                await db.execute("UPDATE user_data SET quest_date=?, quest_item=?, quest_amount=?, quest_reward=?, quest_is_cleared=0 WHERE user_id=?",
+                                 (q_date, q_item, q_amount, q_reward, interaction.user.id))
 
         if q_cleared == 1:
             embed = EmbedFactory.build(title="📜 오늘의 항구 의뢰", description="오늘의 의뢰는 이미 완료했습니다!\n마을이 평화롭네요. 내일 다시 와주세요.", type="default")
@@ -467,9 +416,9 @@ class QuestCog(commands.Cog):
         if not res or res[0] <= 0:
             return await interaction.response.send_message(f"❌ 가방에 **{물고기}**가 없습니다!", ephemeral=True)
 
-        await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기))
-        await db.execute("INSERT INTO aquarium (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id, 물고기))
-        await db.commit()
+        async with db.transaction():
+            await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기))
+            await db.execute("INSERT INTO aquarium (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id, 물고기))
 
         await interaction.response.send_message(f"✨ **{물고기}**을(를) 수족관에 멋지게 전시했습니다! (`/수족관`으로 확인해보세요!)")
 
@@ -484,14 +433,14 @@ class QuestCog(commands.Cog):
         if not res or res[0] < 수량:
             return await interaction.response.send_message(f"❌ 수족관에 **{물고기}**가 부족합니다! (현재: {res[0] if res else 0}마리)", ephemeral=True)
 
-        new_amt = res[0] - 수량
-        if new_amt <= 0:
-            await db.execute("DELETE FROM aquarium WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기))
-        else:
-            await db.execute("UPDATE aquarium SET amount = ? WHERE user_id=? AND item_name=?", (new_amt, interaction.user.id, 물고기))
-            
-        await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, ?) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?", (interaction.user.id, 물고기, 수량, 수량))
-        await db.commit()
+        async with db.transaction():
+            new_amt = res[0] - 수량
+            if new_amt <= 0:
+                await db.execute("DELETE FROM aquarium WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기))
+            else:
+                await db.execute("UPDATE aquarium SET amount = ? WHERE user_id=? AND item_name=?", (new_amt, interaction.user.id, 물고기))
+                
+            await db.modify_inventory(interaction.user.id, 물고기, 수량)
 
         await interaction.response.send_message(f"🎒 **{물고기}** {수량}마리를 수족관에서 조심스럽게 꺼내 가방에 넣었습니다.")
 
@@ -536,11 +485,11 @@ class QuestCog(commands.Cog):
         if not harvested:
             return await interaction.response.send_message("❌ 수확할 수 있는 물고기가 없습니다! (조건: 같은 종 2마리 이상 전시, 소형 포식자 이하 등급)", ephemeral=True)
         
-        for name in harvested:
-            await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id, name))
-        
-        await db.execute("UPDATE user_data SET last_farm_harvest=? WHERE user_id=?", (now.isoformat(), interaction.user.id))
-        await db.commit()
+        async with db.transaction():
+            for name in harvested:
+                await db.modify_inventory(interaction.user.id, name, 1)
+            
+            await db.execute("UPDATE user_data SET last_farm_harvest=? WHERE user_id=?", (now.isoformat(), interaction.user.id))
         
         harvest_str = "\n".join([f"• {name} 🐟" for name in harvested])
         embed = EmbedFactory.build(title="🧺 양식 수확 완료!", description=f"수족관에서 정성껏 키운 물고기들이 새끼를 쳤습니다!\n\n**[획득 목록]**\n{harvest_str}", type="success")
@@ -562,8 +511,8 @@ class QuestCog(commands.Cog):
         if coins < cost:
             return await interaction.response.send_message(f"❌ 코인이 부족합니다. 다음 슬롯 확장에 `{cost:,} C`가 필요합니다.", ephemeral=True)
 
-        await db.execute("UPDATE user_data SET coins = coins - ?, aquarium_slots = aquarium_slots + 1 WHERE user_id=?", (cost, interaction.user.id))
-        await db.commit()
+        async with db.transaction():
+            await db.execute("UPDATE user_data SET coins = coins - ?, aquarium_slots = aquarium_slots + 1 WHERE user_id=?", (cost, interaction.user.id))
 
         await interaction.response.send_message(f"🏗️ `{cost:,} C`를 지불하여 수족관을 한 칸 확장했습니다! (현재 최대 슬롯: **{current_slots + 1}칸**)")
 
@@ -648,186 +597,6 @@ class QuestCog(commands.Cog):
         await db.commit()
         await interaction.edit_original_response(content=f"🧰 **녹슨 상자가 마침내 열렸습니다!**\n\n{reward_msg}")
 
-    @app_commands.command(name="지도합성", description="찢어진 지도 조각(A,B,C,D) 4종을 모아 '고대 해적의 보물지도 🗺️'를 완성합니다. (수량 지정 가능)")
-    async def 지도합성(self, interaction: discord.Interaction, 수량: int = 1):
-        if 수량 < 1:
-            return await interaction.response.send_message("❌ 최소 1개 이상 합성해야 합니다.", ephemeral=True)
-
-        pieces = ["찢어진 지도 조각 A 🧩", "찢어진 지도 조각 B 🧩", "찢어진 지도 조각 C 🧩", "찢어진 지도 조각 D 🧩"]
-
-        async with db.conn.execute("SELECT item_name, amount FROM inventory WHERE user_id=? AND amount > 0", (interaction.user.id,)) as cursor:
-            inv_items = {row[0]: row[1] for row in await cursor.fetchall()}
-
-        for p in pieces:
-            if inv_items.get(p, 0) < 수량:
-                return await interaction.response.send_message(f"❌ 조각이 부족합니다!\n(달성 불가: **{p}**가 {수량}개 필요하지만 {inv_items.get(p, 0)}개 있음)\n낚시를 통해 4부위를 모두 모아보세요.", ephemeral=True)
-
-        for p in pieces:
-            await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name=?", (수량, interaction.user.id, p))
-
-        await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, ?) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?", (interaction.user.id, "고대 해적의 보물지도 🗺️", 수량, 수량))
-        await db.commit()
-
-        embed = EmbedFactory.build(title=f"🗺️ 보물지도 {수량}장 합성 성공!", description=f"보유 중인 조각들을 이어 붙여 **고대 해적의 보물지도 🗺️** {수량}장을 대량으로 완성했습니다!\n`/지도사용` 명령어를 통해 망자의 해역으로 떠나보세요.", type="warning")
-        await interaction.response.send_message(embed=embed)
-
-    @app_commands.command(name="지도사용", description="'고대 해적의 보물지도'를 사용하여 특별한 해역 버프(30분)를 개방합니다.")
-    async def 지도사용(self, interaction: discord.Interaction):
-        async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name='고대 해적의 보물지도 🗺️'", (interaction.user.id,)) as cursor:
-            res = await cursor.fetchone()
-
-        if not res or res[0] < 1:
-            return await interaction.response.send_message("❌ 가방에 **고대 해적의 보물지도 🗺️**가 없습니다!", ephemeral=True)
-
-        await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name='고대 해적의 보물지도 🗺️'", (interaction.user.id,))
-
-        end_time = datetime.datetime.now(kst) + datetime.timedelta(minutes=30)
-        end_time_str = end_time.strftime('%Y-%m-%d %H:%M:%S')
-
-        buffs = ["ghost_sea_open", "deep_sea_rift", "golden_tide"]
-        weights = [30, 40, 30]
-        chosen_buff = random.choices(buffs, weights=weights, k=1)[0]
-
-        await db.execute("INSERT OR REPLACE INTO active_buffs (user_id, buff_type, end_time) VALUES (?, ?, ?)", (interaction.user.id, chosen_buff, end_time_str))
-        await db.commit()
-
-        if chosen_buff == "ghost_sea_open":
-            embed = EmbedFactory.build(title="☠️ 망자의 해역 개방...", description="지도의 낡은 좌표를 따라 안개가 자욱한 해역에 도착했습니다.\n\n앞으로 **30분 동안**, 당신의 낚싯대에는 물고기 대신 **해적의 금화 🪙, 낡은 고철 ⚙️, 가라앉은 보물상자 🧰**만 걸려 올라올 것입니다!", type="default")
-        elif chosen_buff == "deep_sea_rift":
-            embed = EmbedFactory.build(title="🌊 심해의 균열 발견!", description="지도가 가리킨 곳에서 바다가 갈라진 깊은 심연이 보입니다.\n\n앞으로 **30분 동안**, **[심해] 속성** 어종들의 낚시 등장 확률이 3배 상승합니다!", type="info")
-        else:
-            embed = EmbedFactory.build(title="✨ 황금 조류 발견!", description="지도를 따라가니 눈부시게 빛나는 따뜻한 해류를 만났습니다.\n\n앞으로 **30분 동안**, 낚시 타이밍 판정 시간이 매우 넉넉해져 물고기를 낚을 확률이 대폭 상승합니다!", type="warning")
-
-        await interaction.response.send_message(embed=embed)
-
-    @app_commands.command(name="조각교환", description="같은 지도 조각 3개를 다른 무작위 조각 1개로 교환합니다.")
-    @app_commands.choices(조각=[
-        app_commands.Choice(name="찢어진 지도 조각 A 🧩", value="찢어진 지도 조각 A 🧩"),
-        app_commands.Choice(name="찢어진 지도 조각 B 🧩", value="찢어진 지도 조각 B 🧩"),
-        app_commands.Choice(name="찢어진 지도 조각 C 🧩", value="찢어진 지도 조각 C 🧩"),
-        app_commands.Choice(name="찢어진 지도 조각 D 🧩", value="찢어진 지도 조각 D 🧩"),
-    ])
-    async def 조각교환(self, interaction: discord.Interaction, 조각: app_commands.Choice[str]):
-        target_piece = 조각.value
-        all_pieces = ["찢어진 지도 조각 A 🧩", "찢어진 지도 조각 B 🧩", "찢어진 지도 조각 C 🧩", "찢어진 지도 조각 D 🧩"]
-
-        async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, target_piece)) as cursor:
-            res = await cursor.fetchone()
-
-        current = res[0] if res else 0
-        if current < 3:
-            return await interaction.response.send_message(f"❌ **{target_piece}**가 3개 이상 필요합니다. (보유: {current}개)", ephemeral=True)
-
-        reward_pieces = [p for p in all_pieces if p != target_piece]
-        reward_piece = random.choice(reward_pieces)
-
-        await db.execute("UPDATE inventory SET amount = amount - 3 WHERE user_id=? AND item_name=?", (interaction.user.id, target_piece))
-        await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id, reward_piece))
-        await db.commit()
-
-        await interaction.response.send_message(f"♻️ 교환 성공! 낡은 교환원이 **{target_piece}** 3개를 받고 **{reward_piece}** 1개를 주었습니다!")
-
-    @app_commands.command(name="도감보상", description="수집한 어종 수에 따른 특별 보상을 수령합니다.")
-    async def 도감보상(self, interaction: discord.Interaction):
-        import json
-
-        from fishing_core.shared import FISH_DATA
-
-        async with db.conn.execute("SELECT COUNT(*) FROM fish_dex WHERE user_id=?", (interaction.user.id,)) as cursor:
-            dex_count = (await cursor.fetchone())[0]
-
-        async with db.conn.execute("SELECT dex_rewards FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
-            res = await cursor.fetchone()
-        claimed = json.loads(res[0]) if res and res[0] else {}
-
-        milestones = [
-            {"count": 20, "reward_c": 5000, "title": "신입 어부", "id": "20"},
-            {"count": 50, "reward_c": 20000, "title": "어부의 혼", "id": "50"},
-            {"count": 100, "reward_c": 100000, "title": "바다의 지배자", "id": "100"},
-            {"count": 150, "reward_c": 500000, "title": "용왕의 친구", "id": "150"},
-        ]
-
-        total_species = len(FISH_DATA)
-        milestones.append({"count": total_species, "reward_c": 1000000, "title": "전설의 낚시꾼", "id": "full"})
-
-        embed = EmbedFactory.build(title="📜 어종 도감 수집 보상", type="info")
-        embed.description = f"현재 수집한 어종: **{dex_count} / {total_species}** 종\n\n"
-
-        can_claim = False
-        new_rewards = []
-
-        for m in milestones:
-            is_claimed = claimed.get(m["id"], False)
-            if not is_claimed and dex_count >= m["count"]:
-                # 보상 지급 대상
-                claimed[m["id"]] = True
-                await db.execute("UPDATE user_data SET coins = coins + ?, title = ? WHERE user_id=?", (m["reward_c"], f"[{m['title']}]", interaction.user.id))
-                can_claim = True
-                new_rewards.append(f"• {m['count']}종 달성 보상: `{m['reward_c']:,} C` + 칭호 `[{m['title']}]` ✅")
-                status = "🎁 수령 완료!"
-            else:
-                status = "✅ 수령 완료" if is_claimed else (f"🔒 미달성 (목표: {m['count']}종)" if dex_count < m["count"] else "🎁 수령 가능")
-
-            embed.add_field(
-                name=f"{m['count']}종 달성 보상",
-                value=f"• 보상: `{m['reward_c']:,} C` + 칭호 `[{m['title']}]` \n• 상태: **{status}**",
-                inline=False,
-            )
-
-        if can_claim:
-            await db.execute("UPDATE user_data SET dex_rewards = ? WHERE user_id=?", (json.dumps(claimed), interaction.user.id))
-            await db.commit()
-            reward_txt = "\n".join(new_rewards)
-            await interaction.response.send_message(f"🎉 **축하합니다! 새로운 보상을 수령했습니다!**\n{reward_txt}", embed=embed)
-        else:
-            await interaction.response.send_message("💡 아직 수령할 수 있는 새로운 보상이 없습니다. 더 많은 물고기를 낚아보세요!", embed=embed, ephemeral=True)
-
-    @app_commands.command(name="컬렉션", description="특정 어종 그룹을 모두 수집하여 특별한 보상을 수령합니다.")
-    async def 컬렉션(self, interaction: discord.Interaction):
-        # 유저 도감 정보 가져오기
-        async with db.conn.execute("SELECT item_name FROM fish_dex WHERE user_id=?", (interaction.user.id,)) as cursor:
-            dex_items = [row[0] for row in await cursor.fetchall()]
-        
-        async with db.conn.execute("SELECT claimed_collections FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
-            res = await cursor.fetchone()
-        claimed = json.loads(res[0]) if res and res[0] else {}
-
-        embed = EmbedFactory.build(title="📜 어류 수집 세트 컬렉션", type="warning")
-        embed.description = "특정 물고기들을 모두 도감에 등록하면 특별한 보상을 드립니다!\n\n"
-
-        can_claim_any = False
-        newly_claimed = []
-
-        for set_name, data in self.collections.items():
-            required_fish = data["fish"]
-            collected_in_set = [f for f in required_fish if f in dex_items]
-            is_complete = len(collected_in_set) == len(required_fish)
-            is_claimed = claimed.get(set_name, False)
-
-            status = "✅ 수령 완료" if is_claimed else ("🎁 보상 수령 가능!" if is_complete else f"⏳ 진행 중 ({len(collected_in_set)}/{len(required_fish)})")
-            
-            fish_list_str = ", ".join([f"**{f}**" if f in dex_items else f"~~{f}~~" for f in required_fish])
-            
-            embed.add_field(
-                name=f"{set_name} ({status})",
-                value=f"• 대상: {fish_list_str}\n• 보상: `{data['reward_coins']:,} C` + 칭호 `{data['reward_title']}`",
-                inline=False
-            )
-
-            if is_complete and not is_claimed:
-                # 보상 지급
-                claimed[set_name] = True
-                await db.execute("UPDATE user_data SET coins = coins + ?, title = ? WHERE user_id=?", (data["reward_coins"], data["reward_title"], interaction.user.id))
-                can_claim_any = True
-                newly_claimed.append(f"🎉 **[{set_name}]** 컬렉션 완성! `{data['reward_coins']:,} C` + 칭호 `{data['reward_title']}` 획득!")
-
-        if can_claim_any:
-            await db.execute("UPDATE user_data SET claimed_collections = ? WHERE user_id=?", (json.dumps(claimed), interaction.user.id))
-            await db.commit()
-            msg = "\n".join(newly_claimed)
-            await interaction.response.send_message(f"🎊 **축하합니다! 컬렉션을 완성하여 보상을 수령했습니다!**\n{msg}", embed=embed)
-        else:
-            await interaction.response.send_message(embed=embed)
 
 
 async def setup(bot):

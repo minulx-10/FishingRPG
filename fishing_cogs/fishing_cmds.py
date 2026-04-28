@@ -10,7 +10,7 @@ from fishing_core.database import db
 from fishing_core.services.fishing_service import FishingService
 from fishing_core.shared import FISH_DATA, WEATHER_TYPES, env_state, kst
 from fishing_core.utils import EmbedFactory, bait_autocomplete, net_autocomplete
-from fishing_core.views import FishingView, InventoryView
+from fishing_core.views_v2 import FishingView, InventoryView
 
 
 class FishingCog(commands.Cog):
@@ -22,10 +22,8 @@ class FishingCog(commands.Cog):
         if 수량 < 1:
             return await interaction.response.send_message("❌ 최소 1개 이상의 그물망을 던져야 합니다.", ephemeral=True)
             
-        await db.get_user_data(interaction.user.id)
-        async with db.conn.execute("SELECT stamina FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
-            stamina_row = await cursor.fetchone()
-        current_stamina = stamina_row[0] if stamina_row else 150
+        data = await db.get_full_user_data(interaction.user.id)
+        current_stamina = data.get("stamina", 150)
 
         stamina_cost = (12 if net_name == "초급 그물망 🕸️" else 20) * 수량
         if current_stamina < stamina_cost:
@@ -35,10 +33,8 @@ class FishingCog(commands.Cog):
                 ephemeral=True,
             )
 
-        async with db.conn.execute(
-            "SELECT amount FROM inventory WHERE user_id=? AND item_name=?",
-            (interaction.user.id, net_name),
-        ) as cursor:
+        # 1. 수량 확인
+        async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, net_name)) as cursor:
             net_row = await cursor.fetchone()
         if not net_row or net_row[0] < 수량:
             return await interaction.response.send_message(f"❌ **{net_name}**이(가) 부족합니다! (보유: {net_row[0] if net_row else 0}개 / 필요: {수량}개)", ephemeral=True)
@@ -46,56 +42,34 @@ class FishingCog(commands.Cog):
         pools = {
             "초급 그물망 🕸️": {
                 "draws": 5 * 수량,
-                "weights": {
-                    "낡은 고철 ⚙️": 20,
-                    "바지락 🐚": 18,
-                    "홍합 🐚": 18,
-                    "새우 🦐": 16,
-                    "멸치 🐟": 15,
-                    "까나리 🐟": 15,
-                    "정어리 🐟": 12,
-                    "소라 🐚": 10,
-                    "가리비 🐚": 8,
-                    "해적의 금화 🪙": 3,
-                },
+                "weights": {"낡은 고철 ⚙️": 20, "바지락 🐚": 18, "홍합 🐚": 18, "새우 🦐": 16, "멸치 🐟": 15, "까나리 🐟": 15, "정어리 🐟": 12, "소라 🐚": 10, "가리비 🐚": 8, "해적의 금화 🪙": 3},
             },
             "튼튼한 그물망 🕸️": {
                 "draws": 10 * 수량,
-                "weights": {
-                    "낡은 고철 ⚙️": 18,
-                    "바지락 🐚": 16,
-                    "홍합 🐚": 16,
-                    "새우 🦐": 14,
-                    "가리비 🐚": 12,
-                    "소라 🐚": 12,
-                    "꽃게 🦀": 10,
-                    "쭈꾸미 🐙": 10,
-                    "전갱이 🐟": 10,
-                    "싱싱한 고등어 🐟": 8,
-                    "해적의 금화 🪙": 4,
-                },
+                "weights": {"낡은 고철 ⚙️": 18, "바지락 🐚": 16, "홍합 🐚": 16, "새우 🦐": 14, "가리비 🐚": 12, "소라 🐚": 12, "꽃게 🦀": 10, "쭈꾸미 🐙": 10, "전갱이 🐟": 10, "싱싱한 고등어 🐟": 8, "해적의 금화 🪙": 4},
             },
         }
 
         config = pools[net_name]
-        candidates = list(config["weights"].keys())
-        weights = list(config["weights"].values())
-        catches = random.choices(candidates, weights=weights, k=config["draws"])
+        catches = random.choices(list(config["weights"].keys()), weights=list(config["weights"].values()), k=config["draws"])
+        summary = {}
+        for item in catches: summary[item] = summary.get(item, 0) + 1
 
-        summary: dict[str, int] = {}
-        for item in catches:
-            summary[item] = summary.get(item, 0) + 1
+        # --- 트랜잭션 시작 (무결성 보장) ---
+        try:
+            async with db.transaction():
+                # 스태미나 및 그물 차감
+                await db.execute("UPDATE user_data SET stamina = stamina - ? WHERE user_id=?", (stamina_cost, interaction.user.id))
+                await db.modify_inventory(interaction.user.id, net_name, -수량)
 
-        await db.execute("UPDATE user_data SET stamina = stamina - ? WHERE user_id=?", (stamina_cost, interaction.user.id))
-        await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name=?", (수량, interaction.user.id, net_name))
-
-        insert_rows = [(interaction.user.id, item, amount, amount) for item, amount in summary.items()]
-        await db.executemany(
-            "INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, ?) "
-            "ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?",
-            insert_rows,
-        )
-        await db.commit()
+                # 아이템 획득
+                insert_rows = [(interaction.user.id, item, amount, amount) for item, amount in summary.items()]
+                await db.executemany(
+                    "INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, ?) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?",
+                    insert_rows
+                )
+        except Exception as e:
+            return await interaction.response.send_message(f"❌ 처리 중 오류가 발생했습니다: {e}", ephemeral=True)
 
         result_lines = []
         total_value = 0
@@ -109,37 +83,37 @@ class FishingCog(commands.Cog):
         embed.add_field(name="획득 목록", value="\n".join(result_lines), inline=False)
         embed.add_field(name="예상 판매 가치", value=f"`{total_value:,} C`", inline=True)
         embed.add_field(name="소모 행동력", value=f"`{stamina_cost}⚡`", inline=True)
-        embed.set_footer(text="그물망은 빠른 자원 수급용입니다. 희귀 대물은 일반 낚시로 노려보세요.")
         await interaction.response.send_message(embed=embed)
 
     async def _show_inventory(self, interaction: discord.Interaction, target: discord.Member):
-        coins, rod_tier, rating = await db.get_user_data(target.id)
-
-        async with db.conn.execute("SELECT boat_tier, stamina, max_stamina FROM user_data WHERE user_id=?", (target.id,)) as cursor:
-            res = await cursor.fetchone()
-        current_tier, stamina, max_stamina = res if res else (1, 100, 100)
-
-        tier_names = {1: "나룻배 🛶", 2: "어선 🚤", 3: "쇄빙선 🛳️", 4: "전투함 ⚓", 5: "잠수함 ⛴️", 6: "차원함선 🛸"}
-        boat_str = tier_names.get(current_tier, f"Lv.{current_tier}")
+        data = await db.get_full_user_data(target.id)
+        if not data:
+            return await interaction.response.send_message("❌ 해당 유저의 데이터를 찾을 수 없습니다.", ephemeral=True)
 
         async with db.conn.execute("SELECT item_name, amount, is_locked FROM inventory WHERE user_id=? AND amount > 0", (target.id,)) as cursor:
             items = await cursor.fetchall()
 
-        title = await db.get_user_title(target.id)
-        stats = (coins, rod_tier, rating, boat_str, stamina, max_stamina, title)
+        stats = (
+            data["coins"], data["rod_tier"], data["rating"],
+            {1: "나룻배 🛶", 2: "어선 🚤", 3: "쇄빙선 🛳️", 4: "전투함 ⚓", 5: "잠수함 ⛴️", 6: "차원함선 🛸"}.get(data["boat_tier"], f"Lv.{data['boat_tier']}"),
+            data["stamina"], data["max_stamina"], data["title"]
+        )
 
         view = InventoryView(interaction.user, target, items, stats)
         await interaction.response.send_message(embed=view.make_embed(), view=view)
 
     async def _rest_user(self, interaction: discord.Interaction):
-        coins, _, _ = await db.get_user_data(interaction.user.id)
-
-        async with db.conn.execute("SELECT stamina, max_stamina, boat_tier, last_free_rest FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
-            res = await cursor.fetchone()
-        stamina = res[0] if res else 100
-        max_stamina = res[1] if res else 100
-        boat_tier = res[2] if res else 1
-        last_free_rest = res[3] if res else ""
+        data = await db.get_full_user_data(interaction.user.id)
+        
+        stamina = data["stamina"]
+        max_stamina = data["max_stamina"]
+        boat_tier = data["boat_tier"]
+        coins = data["coins"]
+        
+        # 마지막 무료 휴식 확인
+        async with db.conn.execute("SELECT last_free_rest FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+            row = await cursor.fetchone()
+        last_free_rest = row[0] if row else ""
 
         if stamina >= max_stamina:
             return await interaction.response.send_message("✨ 체력이 이미 가득 차 있습니다! 휴식이 필요하지 않습니다.", ephemeral=True)
@@ -150,17 +124,21 @@ class FishingCog(commands.Cog):
         tier_costs = {1: 500, 2: 1000, 3: 1800, 4: 2800, 5: 4000}
         cost = tier_costs.get(boat_tier, 2500)
 
-        if is_free:
-            await db.execute("UPDATE user_data SET stamina = max_stamina, last_free_rest = ? WHERE user_id=?", (today, interaction.user.id))
-            await db.commit()
-            return await interaction.response.send_message(f"🛌 오늘의 **무료 휴식**을 사용했습니다! (체력 {max_stamina}⚡ 전부 회복 완료)\n💡 *내일 다시 무료 휴식이 충전됩니다.*")
-
-        if coins < cost:
-            return await interaction.response.send_message(f"❌ 코인이 부족합니다. (필요: `{cost:,} C` / 현재: `{coins:,} C`)\n💡 오늘의 무료 휴식은 이미 사용했습니다. 시간이 지나면 10분마다 자연 회복됩니다.", ephemeral=True)
-
-        await db.execute("UPDATE user_data SET coins = coins - ?, stamina = max_stamina WHERE user_id=?", (cost, interaction.user.id))
-        await db.commit()
-        await interaction.response.send_message(f"🛌 `{cost:,} C`를 지불하고 여관에서 푹 쉬었습니다! (체력 {max_stamina}⚡ 전부 회복 완료)")
+        try:
+            async with db.transaction():
+                if is_free:
+                    await db.execute("UPDATE user_data SET stamina = max_stamina, last_free_rest = ? WHERE user_id=?", (today, interaction.user.id))
+                    msg = f"🛌 오늘의 **무료 휴식**을 사용했습니다! (체력 {max_stamina}⚡ 전부 회복 완료)\n💡 *내일 다시 무료 휴식이 충전됩니다.*"
+                else:
+                    if coins < cost:
+                        return await interaction.response.send_message(f"❌ 코인이 부족합니다. (필요: `{cost:,} C` / 현재: `{coins:,} C`)\n💡 오늘의 무료 휴식은 이미 사용했습니다. 시간이 지나면 10분마다 자연 회복됩니다.", ephemeral=True)
+                    
+                    await db.execute("UPDATE user_data SET coins = coins - ?, stamina = max_stamina WHERE user_id=?", (cost, interaction.user.id))
+                    msg = f"🛌 `{cost:,} C`를 지불하고 여관에서 푹 쉬었습니다! (체력 {max_stamina}⚡ 전부 회복 완료)"
+            
+            await interaction.response.send_message(msg)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ 휴식 처리 중 오류가 발생했습니다: {e}", ephemeral=True)
 
     async def _forecast_weather(self, interaction: discord.Interaction):
         coins, _, _ = await db.get_user_data(interaction.user.id)
@@ -204,11 +182,15 @@ class FishingCog(commands.Cog):
     @app_commands.checks.cooldown(1, 3.0, key=lambda i: i.user.id)
     @app_commands.autocomplete(사용할미끼=bait_autocomplete)
     async def 낚시(self, interaction: discord.Interaction, 사용할미끼: str = "none"):
-        _, rod_tier, _ = await db.get_user_data(interaction.user.id)
-
-        async with db.conn.execute("SELECT stamina, title, boat_tier, current_region FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
-            stamina_res = await cursor.fetchone()
-        current_stamina, title, current_tier, region = stamina_res if stamina_res else (100, "", 1, "연안")
+        data = await db.get_full_user_data(interaction.user.id)
+        if not data: return
+        
+        rod_tier = data["rod_tier"]
+        current_stamina = data["stamina"]
+        title = data["title"]
+        current_tier = data["boat_tier"]
+        region = data["region"]
+        
         display_name = f"{title} {interaction.user.name}" if title else interaction.user.name
 
         if current_stamina < 10:
@@ -219,80 +201,70 @@ class FishingCog(commands.Cog):
             bait_used = self.equipped_baits[interaction.user.id]
 
         bait_text = ""
-
-        if bait_used != "none":
-            async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, bait_used)) as cursor:
-                bait_res = await cursor.fetchone()
-
-            if not bait_res or bait_res[0] <= 0:
-                if interaction.user.id in self.equipped_baits and self.equipped_baits[interaction.user.id] == bait_used:
-                    self.equipped_baits.pop(interaction.user.id, None)
-                    return await interaction.response.send_message(f"❌ 장착된 **{bait_used}**를 모두 소모했습니다! (자동 장착 해제)\n상점에서 미끼를 다시 구매하세요.", ephemeral=True)
-                return await interaction.response.send_message(f"❌ 가방에 **{bait_used}**가 없습니다! 상점에서 먼저 구매해주세요.", ephemeral=True)
-
-            await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (interaction.user.id, bait_used))
-            await db.commit()
-            bait_text = f" ({bait_used} 사용됨!)"
-
         now_str = datetime.datetime.now(kst).strftime('%Y-%m-%d %H:%M:%S')
-        async with db.conn.execute("SELECT buff_type FROM active_buffs WHERE user_id=? AND end_time > ?", (interaction.user.id, now_str)) as cursor:
-            active_buffs = [row[0] for row in await cursor.fetchall()]
 
+        # 버프 및 미끼 정보 미리 조회
+        try:
+            async with db.transaction():
+                # 미끼 소모 처리
+                if bait_used != "none":
+                    async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, bait_used)) as cursor:
+                        bait_res = await cursor.fetchone()
+
+                    if not bait_res or bait_res[0] <= 0:
+                        if interaction.user.id in self.equipped_baits and self.equipped_baits[interaction.user.id] == bait_used:
+                            self.equipped_baits.pop(interaction.user.id, None)
+                        return await interaction.response.send_message(f"❌ 가방에 **{bait_used}**가 없습니다! 상점에서 먼저 구매해주세요.", ephemeral=True)
+
+                    await db.modify_inventory(interaction.user.id, bait_used, -1)
+                    bait_text = f" ({bait_used} 사용됨!)"
+
+                # 활성 버프 조회
+                async with db.conn.execute("SELECT buff_type FROM active_buffs WHERE user_id=? AND end_time > ?", (interaction.user.id, now_str)) as cursor:
+                    active_buffs = [row[0] for row in await cursor.fetchall()]
+
+                # 스태미나 계산 및 차감
+                stamina_cost = 5 if current_tier == 1 else 10
+                if "stamina_save_1" in active_buffs: stamina_cost = max(1, stamina_cost - 1)
+                elif "stamina_save_2" in active_buffs: stamina_cost = max(1, stamina_cost - 2)
+                if "prayer_stamina_save" in active_buffs: stamina_cost = max(1, stamina_cost - 1)
+                
+                if current_stamina < stamina_cost:
+                    raise ValueError(f"행동력이 부족합니다 (필요: {stamina_cost})")
+
+                await db.execute("UPDATE user_data SET stamina = stamina - ? WHERE user_id=?", (stamina_cost, interaction.user.id))
+
+        except ValueError as e:
+            return await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+        except Exception as e:
+            return await interaction.response.send_message(f"❌ 데이터베이스 처리 오류: {e}", ephemeral=True)
+
+        # 확률 계산 (CPU 바운드)
         candidates, weights = FishingService.calculate_fish_probabilities(
             interaction.user.id, rod_tier, bait_used, active_buffs, title, env_state["CURRENT_WEATHER"], region
         )
 
         target_fish = "낡은 장화 🥾" if not candidates else random.choices(candidates, weights=weights, k=1)[0]
 
+        # 특수 어종 조건 체크
         now_hour = datetime.datetime.now(kst).hour
-        if target_fish == "바다의 원혼, 우미보즈 🌑" and not (0 <= now_hour < 4):
+        if (target_fish == "바다의 원혼, 우미보즈 🌑" and not (0 <= now_hour < 4)) or \
+           (target_fish == "네스호의 그림자, 네시 🦕" and env_state["CURRENT_WEATHER"] not in ["🌧️ 비", "🌫️ 안개", "🌩️ 폭풍우"]):
             target_fish = "낡은 장화 🥾"
+            # 미끼 보존 로직 (트랜잭션 밖에서 별도로 처리하거나 위 트랜잭션 설계를 변경할 수 있음)
             if bait_used != "none":
-                await db.execute("UPDATE inventory SET amount = amount + 1 WHERE user_id=? AND item_name=?", (interaction.user.id, bait_used))
-                await db.commit()
+                await db.modify_inventory(interaction.user.id, bait_used, 1)
                 bait_text = " *(조건 미달로 미끼가 보존되었습니다!)*"
-            else:
-                bait_text += "\n*(으스스한 기운이 맴돌았지만, 날이 밝아 흩어졌습니다...)*"
 
-        if target_fish == "네스호의 그림자, 네시 🦕" and env_state["CURRENT_WEATHER"] not in ["🌧️ 비", "🌫️ 안개", "🌩️ 폭풍우"]:
-            target_fish = "낡은 장화 🥾"
-            if bait_used != "none":
-                await db.execute("UPDATE inventory SET amount = amount + 1 WHERE user_id=? AND item_name=?", (interaction.user.id, bait_used))
-                await db.commit()
-                bait_text = " *(조건 미달로 미끼가 보존되었습니다!)*"
-            else:
-                bait_text += "\n*(거대한 그림자가 지나갔지만, 깊은 곳으로 숨어버렸습니다...)*"
+        effective_rod_tier = rod_tier
+        if "golden_tide" in active_buffs: effective_rod_tier += 7.5
+        if "fishing_speed_up" in active_buffs: effective_rod_tier += 2.0
+        if "common_success_boost" in active_buffs: effective_rod_tier += 3.0
+        elif "premium_success_boost" in active_buffs: effective_rod_tier += 8.0
+        if "prayer_success_boost" in active_buffs: effective_rod_tier += 2.0
 
-        if env_state["CURRENT_WEATHER"] == "🌩️ 폭풍우":
-            bait_text += "\n*(거친 폭풍우가 몰아칩니다! 심연의 괴수들이 활동하기 시작합니다!)*"
-
-        effective_rod_tier = rod_tier + 7.5 if "golden_tide" in active_buffs else rod_tier
-        if "fishing_speed_up" in active_buffs:
-            effective_rod_tier += 2.0
-        if "common_success_boost" in active_buffs:
-            effective_rod_tier += 3.0
-        elif "premium_success_boost" in active_buffs:
-            effective_rod_tier += 8.0
-        if "prayer_success_boost" in active_buffs:
-            effective_rod_tier += 2.0
-
-        stamina_cost = 5 if current_tier == 1 else 10
-        if "stamina_save_1" in active_buffs:
-            stamina_cost = max(1, stamina_cost - 1)
-        elif "stamina_save_2" in active_buffs:
-            stamina_cost = max(1, stamina_cost - 2)
-        if "prayer_stamina_save" in active_buffs:
-            stamina_cost = max(1, stamina_cost - 1)
-        
-        if current_stamina < stamina_cost:
-            return await interaction.response.send_message(f"❌ 행동력이 부족합니다! (필요: {stamina_cost}⚡ / 현재: {current_stamina}⚡)\n`/출석`을 하거나 상점에서 에너지 드링크를 구매하세요.", ephemeral=True)
-
-        await db.execute("UPDATE user_data SET stamina = stamina - ? WHERE user_id=?", (stamina_cost, interaction.user.id))
-
-        double_catch = False
-        if ("double_catch_chance" in active_buffs and random.random() < 0.25) or \
-           ("prayer_double_catch" in active_buffs and random.random() < 0.20):
-            double_catch = True
+        double_catch = ("double_catch_chance" in active_buffs and random.random() < 0.25) or \
+                       ("prayer_double_catch" in active_buffs and random.random() < 0.20)
 
         view = FishingView(interaction.user, target_fish, effective_rod_tier, self.bot)
         view.double_catch = double_catch
@@ -399,8 +371,29 @@ class FishingCog(commands.Cog):
         if stamina < 20:
             return await interaction.response.send_message(f"🔋 항해에 필요한 체력이 부족합니다. (필요: 20⚡ / 현재: {stamina}⚡)", ephemeral=True)
             
-        await db.execute("UPDATE user_data SET current_region = ?, stamina = stamina - 20 WHERE user_id = ?", (해역.value, user_id))
+        # 방문 기록 업데이트 및 업적 체크
+        async with db.conn.execute("SELECT visited_regions FROM user_data WHERE user_id = ?", (user_id,)) as cursor:
+            v_row = await cursor.fetchone()
+        
+        import json
+        try:
+            visited = json.loads(v_row[0]) if v_row and v_row[0] else []
+        except Exception:
+            visited = []
+            
+        if 해역.value not in visited:
+            visited.append(해역.value)
+            
+        await db.execute("UPDATE user_data SET current_region = ?, stamina = stamina - 20, visited_regions = ? WHERE user_id = ?", 
+                         (해역.value, user_id, json.dumps(visited)))
         await db.commit()
+        
+        # 대해적 업적 체크 (5개 이상 해역 방문)
+        if len(visited) >= 5:
+            from fishing_core.services.achievement_service import AchievementService
+            award = await AchievementService.check_achievement(user_id, "SEA_EXPLORER")
+            if award:
+                await interaction.channel.send(f"🎊 **축하합니다! {interaction.user.mention}님이 업적 [{award['name']}]을(를) 달성했습니다!**\n*{award['desc']}*")
         
         embed = EmbedFactory.build(title="🛳️ 항해를 시작합니다!", description=f"**{current_region}**에서 출발하여 **{해역.value}**에 무사히 도착했습니다!", type="info")
         embed.add_field(name="⛽ 소모 체력", value="-20⚡", inline=True)

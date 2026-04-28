@@ -40,7 +40,6 @@ class AchievementService:
         )
         await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id=?", (config["reward"], user_id))
         await db.log_action(user_id, "ACHIEVEMENT_UNLOCKED", f"ID: {achievement_id}, Reward: {config['reward']} C")
-        await db.commit()
         
         return config
 
