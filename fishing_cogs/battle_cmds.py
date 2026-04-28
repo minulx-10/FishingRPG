@@ -225,57 +225,64 @@ class BattleCog(commands.Cog):
     @app_commands.checks.cooldown(1, 1800, key=lambda i: i.user.id)
     async def 레이드(self, interaction: discord.Interaction):
         try:
+            if not db.conn:
+                return await interaction.response.send_message("❌ 데이터베이스 연결이 끊겨 있습니다. 잠시 후 다시 시도해주세요.", ephemeral=True)
+
             user_id = interaction.user.id
             await db.get_user_data(user_id)
             
-            async with db.conn.execute("SELECT stamina FROM user_data WHERE user_id=?", (user_id,)) as cursor:
-                st = await cursor.fetchone()
-            if st and st[0] < 25:
-                return await interaction.response.send_message(f"❌ 행동력(체력)이 부족합니다! (필요: 25⚡ / 현재: {st[0]}⚡)", ephemeral=True)
+            # 모든 DB 작업을 락으로 보호하여 안정성 확보
+            async with db._lock:
+                async with db.conn.execute("SELECT stamina FROM user_data WHERE user_id=?", (user_id,)) as cursor:
+                    st = await cursor.fetchone()
+                if st and st[0] < 25:
+                    return await interaction.response.send_message(f"❌ 행동력(체력)이 부족합니다! (필요: 25⚡ / 현재: {st[0]}⚡)", ephemeral=True)
 
-            async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (user_id,)) as cursor:
-                items = await cursor.fetchall()
-            if not items:
-                return await interaction.response.send_message("❌ 전투에 출전할 잠금 처리된 물고기가 없습니다!", ephemeral=True)
+                async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (user_id,)) as cursor:
+                    items = await cursor.fetchall()
+                if not items:
+                    return await interaction.response.send_message("❌ 전투에 출전할 잠금 처리된 물고기가 없습니다!", ephemeral=True)
 
-            strongest_fish, _ = BattleService.get_strongest_fish(items)
-            if not strongest_fish:
-                return await interaction.response.send_message("❌ 출전할 유효한 전사가 없습니다!", ephemeral=True)
+                strongest_fish, _ = BattleService.get_strongest_fish(items)
+                if not strongest_fish:
+                    return await interaction.response.send_message("❌ 출전할 유효한 전사가 없습니다!", ephemeral=True)
 
-            # 보스 데이터 로드
-            async with db.conn.execute("SELECT value FROM server_state WHERE key='RAID_BOSS_LEVEL'") as cursor:
-                lvl_res = await cursor.fetchone()
-            
-            try:
-                boss_level = int(lvl_res[0]) if lvl_res and lvl_res[0] is not None else 1
-            except (ValueError, TypeError):
-                boss_level = 1
+                # 보스 데이터 로드
+                async with db.conn.execute("SELECT value FROM server_state WHERE key='RAID_BOSS_LEVEL'") as cursor:
+                    lvl_res = await cursor.fetchone()
                 
-            boss_max_hp = int(1000000 * (1.1 ** (boss_level - 1)))
-
-            async with db.conn.execute("SELECT value FROM server_state WHERE key='RAID_BOSS_HP'") as cursor:
-                res = await cursor.fetchone()
-            
-            if not res or res[0] is None:
-                boss_hp = boss_max_hp
-                await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_BOSS_HP', ?)", (str(boss_hp),))
-                await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_DAMAGE_LOG', ?)", ('{}',))
-            else:
                 try:
-                    boss_hp = int(float(res[0]))
+                    boss_level = int(lvl_res[0]) if lvl_res and lvl_res[0] is not None else 1
                 except (ValueError, TypeError):
-                    boss_hp = boss_max_hp
-
-            if boss_hp <= 0:
-                boss_level += 1
+                    boss_level = 1
+                    
                 boss_max_hp = int(1000000 * (1.1 ** (boss_level - 1)))
-                boss_hp = boss_max_hp
-                await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_BOSS_LEVEL', ?)", (str(boss_level),))
-                await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_BOSS_HP', ?)", (str(boss_hp),))
-                await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_DAMAGE_LOG', ?)", ('{}',))
-                await interaction.channel.send(f"📢 Lv.{boss_level} 월드 보스가 더 강해져서 깨어났습니다!")
 
-            # 서비스 레이어를 통한 공격 처리
+                async with db.conn.execute("SELECT value FROM server_state WHERE key='RAID_BOSS_HP'") as cursor:
+                    res = await cursor.fetchone()
+                
+                if not res or res[0] is None:
+                    boss_hp = boss_max_hp
+                    await db.conn.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_BOSS_HP', ?)", (str(boss_hp),))
+                    await db.conn.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_DAMAGE_LOG', ?)", ('{}',))
+                    await db.conn.commit()
+                else:
+                    try:
+                        boss_hp = int(float(res[0]))
+                    except (ValueError, TypeError):
+                        boss_hp = boss_max_hp
+
+                if boss_hp <= 0:
+                    boss_level += 1
+                    boss_max_hp = int(1000000 * (1.1 ** (boss_level - 1)))
+                    boss_hp = boss_max_hp
+                    await db.conn.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_BOSS_LEVEL', ?)", (str(boss_level),))
+                    await db.conn.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_BOSS_HP', ?)", (str(boss_hp),))
+                    await db.conn.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_DAMAGE_LOG', ?)", ('{}',))
+                    await db.conn.commit()
+                    await interaction.channel.send(f"📢 Lv.{boss_level} 월드 보스가 더 강해져서 깨어났습니다!")
+
+            # 서비스 레이어를 통한 공격 처리 (내부에서 db.execute 사용 가능)
             result = await BattleService.process_raid_attack(user_id, strongest_fish, boss_hp, boss_max_hp)
             
             async with db.transaction():
@@ -321,10 +328,11 @@ class BattleCog(commands.Cog):
 
         except Exception as e:
             logger.error(f"레이드 명령어 실행 중 예외 발생: {e}")
+            error_msg = f"❌ 레이드 처리 중 오류가 발생했습니다: `{str(e)}`"
             if not interaction.response.is_done():
-                await interaction.response.send_message("❌ 레이드 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.", ephemeral=True)
+                await interaction.response.send_message(error_msg, ephemeral=True)
             else:
-                await interaction.followup.send("❌ 레이드 처리 중 예상치 못한 오류가 발생했습니다.", ephemeral=True)
+                await interaction.followup.send(error_msg, ephemeral=True)
 
     @app_commands.command(name="호위설정", description="나의 전사 중 한 마리를 '호위 어종'으로 지정합니다.")
     @app_commands.checks.cooldown(1, 10.0, key=lambda i: i.user.id)
