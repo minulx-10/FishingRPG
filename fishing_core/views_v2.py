@@ -10,9 +10,7 @@ from fishing_core.services.achievement_service import AchievementService
 from fishing_core.services.battle_service import BattleService
 from fishing_core.shared import (
     FISH_DATA,
-    MARKET_PRICES,
     format_grade_label,
-    get_grade_order,
     kst,
 )
 from fishing_core.utils import EmbedFactory, create_progress_bar
@@ -222,7 +220,7 @@ class BattleView(View):
     def generate_embed(self):
         embed = EmbedFactory.build(title=f'⚔️ 배틀 (Turn {self.turn})', type='error')
         embed.add_field(name=f'🔵 {self.user.name}', value=f'HP: {self.my_hp}', inline=True)
-        embed.add_field(name=f'🔴 적', value=f'HP: {self.npc_hp}', inline=True)
+        embed.add_field(name='🔴 적', value=f'HP: {self.npc_hp}', inline=True)
         
         # 기본 배틀 배경 이미지
         file = discord.File("assets/battle/battle_bg.png", filename="battle.png")
