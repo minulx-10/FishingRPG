@@ -224,91 +224,107 @@ class BattleCog(commands.Cog):
     @app_commands.command(name="레이드", description="서버 전체 유저들과 힘을 합쳐 월드 보스를 토벌합니다! (체력 25 소모, 30분 쿨타임)")
     @app_commands.checks.cooldown(1, 1800, key=lambda i: i.user.id)
     async def 레이드(self, interaction: discord.Interaction):
-        await db.get_user_data(interaction.user.id)
-        async with db.conn.execute("SELECT stamina FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
-            st = await cursor.fetchone()
-        if st and st[0] < 25:
-            return await interaction.response.send_message(f"❌ 행동력(체력)이 부족합니다! (필요: 25⚡ / 현재: {st[0]}⚡)", ephemeral=True)
-
-        async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (interaction.user.id,)) as cursor:
-            items = await cursor.fetchall()
-        if not items:
-            return await interaction.response.send_message("❌ 전투에 출전할 잠금 처리된 물고기가 없습니다!", ephemeral=True)
-
-        strongest_fish, _ = BattleService.get_strongest_fish(items)
-        if not strongest_fish:
-            return await interaction.response.send_message("❌ 출전할 유효한 전사가 없습니다!", ephemeral=True)
-
-        # 보스 데이터 로드
-        async with db.conn.execute("SELECT value FROM server_state WHERE key='RAID_BOSS_LEVEL'") as cursor:
-            lvl_res = await cursor.fetchone()
-        boss_level = int(lvl_res[0]) if lvl_res else 1
-        boss_max_hp = int(1000000 * (1.1 ** (boss_level - 1)))
-
-        async with db.conn.execute("SELECT value FROM server_state WHERE key='RAID_BOSS_HP'") as cursor:
-            res = await cursor.fetchone()
-        
-        if not res:
-            boss_hp = boss_max_hp
-            await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_BOSS_HP', ?)", (str(boss_hp),))
-            await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_DAMAGE_LOG', ?)", ('{}',))
-            await db.commit()
-        else:
-            try:
-                # 소수점 포함 가능성(1.5e+06 등) 대비하여 float 후 int 변환
-                boss_hp = int(float(res[0]))
-            except (ValueError, TypeError):
-                boss_hp = boss_max_hp
-
-        if boss_hp <= 0:
-            boss_level += 1
-            boss_max_hp = int(1000000 * (1.1 ** (boss_level - 1)))
-            boss_hp = boss_max_hp
-            await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_BOSS_LEVEL', ?)", (str(boss_level),))
-            await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_BOSS_HP', ?)", (str(boss_hp),))
-            await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_DAMAGE_LOG', ?)", ('{}',))
-            await db.commit()
-            await interaction.channel.send(f"📢 Lv.{boss_level} 월드 보스가 더 강해져서 깨어났습니다!")
-
-        # 서비스 레이어를 통한 공격 처리
-        result = await BattleService.process_raid_attack(interaction.user.id, strongest_fish, boss_hp, boss_max_hp)
-        
-        async with db.transaction():
-            # DB 업데이트
-            await db.execute("UPDATE user_data SET stamina = stamina - 25 WHERE user_id=?", (interaction.user.id,))
-            await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_BOSS_HP', ?)", (str(result['new_hp']),))
-
-            async with db.conn.execute("SELECT value FROM server_state WHERE key='RAID_DAMAGE_LOG'") as cursor:
-                log_res = await cursor.fetchone()
-            damage_log = json.loads(log_res[0]) if log_res and log_res[0] else {}
-            damage_log[str(interaction.user.id)] = damage_log.get(str(interaction.user.id), 0) + result['damage']
-            await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_DAMAGE_LOG', ?)", (json.dumps(damage_log),))
+        try:
+            user_id = interaction.user.id
+            await db.get_user_data(user_id)
             
-            await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (result['reward'], interaction.user.id))
+            async with db.conn.execute("SELECT stamina FROM user_data WHERE user_id=?", (user_id,)) as cursor:
+                st = await cursor.fetchone()
+            if st and st[0] < 25:
+                return await interaction.response.send_message(f"❌ 행동력(체력)이 부족합니다! (필요: 25⚡ / 현재: {st[0]}⚡)", ephemeral=True)
 
-        # 임베드 구성
-        fish_grade = FISH_DATA.get(strongest_fish, {}).get("grade", "일반")
-        is_defeated = result['new_hp'] <= 0
-        embed_type = "success" if is_defeated else "info"
-        
-        embed = EmbedFactory.build(title=f"🌌 월드 보스 레이드 (Lv.{boss_level})", type=embed_type)
-        health_bar = create_progress_bar(result['new_hp'], boss_max_hp, length=20)
-        
-        crit_msg = "💥 **[치명타!]** " if result['is_crit'] else "⚔️ "
-        harpoon_msg = "🔱 **[작살 강화]** " if result['used_harpoon'] else ""
-        
-        embed.add_field(name="👾 보스 상태 (HP)", value=f"{health_bar}\n`{result['new_hp']:,} / {boss_max_hp:,}`", inline=False)
-        embed.description = f"{crit_msg}{harpoon_msg}**{strongest_fish}** {format_grade_label(fish_grade)}의 맹공!\n" \
-                            f"💥 보스에게 **{result['damage']:,}**의 피해를 입히고 **{result['reward']:,} C**를 획득했습니다!"
-        
-        # 보스 이미지 (아포칼립스 느낌의 거대 괴수)
-        embed.set_image(url="https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800")
-        embed.set_footer(text="레이드는 30분마다 참여 가능합니다. 모든 유저의 누적 데미지로 보스를 처치하세요!")
-        
-        await interaction.response.send_message(embed=embed)
+            async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (user_id,)) as cursor:
+                items = await cursor.fetchall()
+            if not items:
+                return await interaction.response.send_message("❌ 전투에 출전할 잠금 처리된 물고기가 없습니다!", ephemeral=True)
 
-        if result['new_hp'] <= 0:
-            await interaction.channel.send(f"🎉 Lv.{boss_level} 보스가 토벌되었습니다!")
+            strongest_fish, _ = BattleService.get_strongest_fish(items)
+            if not strongest_fish:
+                return await interaction.response.send_message("❌ 출전할 유효한 전사가 없습니다!", ephemeral=True)
+
+            # 보스 데이터 로드
+            async with db.conn.execute("SELECT value FROM server_state WHERE key='RAID_BOSS_LEVEL'") as cursor:
+                lvl_res = await cursor.fetchone()
+            
+            try:
+                boss_level = int(lvl_res[0]) if lvl_res and lvl_res[0] is not None else 1
+            except (ValueError, TypeError):
+                boss_level = 1
+                
+            boss_max_hp = int(1000000 * (1.1 ** (boss_level - 1)))
+
+            async with db.conn.execute("SELECT value FROM server_state WHERE key='RAID_BOSS_HP'") as cursor:
+                res = await cursor.fetchone()
+            
+            if not res or res[0] is None:
+                boss_hp = boss_max_hp
+                await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_BOSS_HP', ?)", (str(boss_hp),))
+                await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_DAMAGE_LOG', ?)", ('{}',))
+            else:
+                try:
+                    boss_hp = int(float(res[0]))
+                except (ValueError, TypeError):
+                    boss_hp = boss_max_hp
+
+            if boss_hp <= 0:
+                boss_level += 1
+                boss_max_hp = int(1000000 * (1.1 ** (boss_level - 1)))
+                boss_hp = boss_max_hp
+                await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_BOSS_LEVEL', ?)", (str(boss_level),))
+                await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_BOSS_HP', ?)", (str(boss_hp),))
+                await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_DAMAGE_LOG', ?)", ('{}',))
+                await interaction.channel.send(f"📢 Lv.{boss_level} 월드 보스가 더 강해져서 깨어났습니다!")
+
+            # 서비스 레이어를 통한 공격 처리
+            result = await BattleService.process_raid_attack(user_id, strongest_fish, boss_hp, boss_max_hp)
+            
+            async with db.transaction():
+                # DB 업데이트
+                await db.execute("UPDATE user_data SET stamina = stamina - 25 WHERE user_id=?", (user_id,))
+                await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_BOSS_HP', ?)", (str(result['new_hp']),))
+
+                async with db.conn.execute("SELECT value FROM server_state WHERE key='RAID_DAMAGE_LOG'") as cursor:
+                    log_res = await cursor.fetchone()
+                
+                try:
+                    damage_log = json.loads(log_res[0]) if log_res and log_res[0] else {}
+                except json.JSONDecodeError:
+                    damage_log = {}
+                    
+                damage_log[str(user_id)] = damage_log.get(str(user_id), 0) + result['damage']
+                await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RAID_DAMAGE_LOG', ?)", (json.dumps(damage_log),))
+                
+                await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (result['reward'], user_id))
+
+            # 임베드 구성
+            fish_grade = FISH_DATA.get(strongest_fish, {}).get("grade", "일반")
+            is_defeated = result['new_hp'] <= 0
+            embed_type = "success" if is_defeated else "info"
+            
+            embed = EmbedFactory.build(title=f"🌌 월드 보스 레이드 (Lv.{boss_level})", type=embed_type)
+            health_bar = create_progress_bar(result['new_hp'], boss_max_hp, length=20)
+            
+            crit_msg = "💥 **[치명타!]** " if result['is_crit'] else "⚔️ "
+            harpoon_msg = "🔱 **[작살 강화]** " if result['used_harpoon'] else ""
+            
+            embed.add_field(name="👾 보스 상태 (HP)", value=f"{health_bar}\n`{result['new_hp']:,} / {boss_max_hp:,}`", inline=False)
+            embed.description = f"{crit_msg}{harpoon_msg}**{strongest_fish}** {format_grade_label(fish_grade)}의 맹공!\n" \
+                                f"💥 보스에게 **{result['damage']:,}**의 피해를 입히고 **{result['reward']:,} C**를 획득했습니다!"
+            
+            embed.set_image(url="https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800")
+            embed.set_footer(text="레이드는 30분마다 참여 가능합니다. 모든 유저의 누적 데미지로 보스를 처치하세요!")
+            
+            await interaction.response.send_message(embed=embed)
+
+            if is_defeated:
+                await interaction.channel.send(f"🎉 Lv.{boss_level} 보스가 토벌되었습니다!")
+
+        except Exception as e:
+            logger.error(f"레이드 명령어 실행 중 예외 발생: {e}")
+            if not interaction.response.is_done():
+                await interaction.response.send_message("❌ 레이드 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.", ephemeral=True)
+            else:
+                await interaction.followup.send("❌ 레이드 처리 중 예상치 못한 오류가 발생했습니다.", ephemeral=True)
 
     @app_commands.command(name="호위설정", description="나의 전사 중 한 마리를 '호위 어종'으로 지정합니다.")
     @app_commands.checks.cooldown(1, 10.0, key=lambda i: i.user.id)
