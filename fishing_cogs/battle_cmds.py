@@ -328,7 +328,7 @@ class BattleCog(commands.Cog):
 
         except Exception as e:
             logger.error(f"레이드 명령어 실행 중 예외 발생: {e}")
-            error_msg = f"❌ 레이드 처리 중 오류가 발생했습니다: `{str(e)}`"
+            error_msg = f"❌ 레이드 처리 중 오류가 발생했습니다: `{e!s}`"
             if not interaction.response.is_done():
                 await interaction.response.send_message(error_msg, ephemeral=True)
             else:
