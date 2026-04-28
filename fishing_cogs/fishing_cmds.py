@@ -9,7 +9,7 @@ from discord.ext import commands
 from fishing_core.database import db
 from fishing_core.services.fishing_service import FishingService
 from fishing_core.shared import FISH_DATA, WEATHER_TYPES, env_state, kst
-from fishing_core.utils import EmbedFactory, bait_autocomplete, net_autocomplete
+from fishing_core.utils import EmbedFactory, bait_autocomplete, inv_autocomplete, net_autocomplete
 from fishing_core.views_v2 import FishingView, InventoryView
 
 
