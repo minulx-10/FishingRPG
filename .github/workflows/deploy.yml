@@ -3,9 +3,10 @@ name: Deploy Discord Bot
 on:
   push:
     branches:
-      - main 
+      - main
     paths-ignore:
-      - '**.json' # 🌟 JSON 파일만 수정될 때는 배포(재시작) 생략!
+      - '**.json'
+  workflow_dispatch: # 🌟 수동 배포 가능하게 추가!
 
 jobs:
   lint:
