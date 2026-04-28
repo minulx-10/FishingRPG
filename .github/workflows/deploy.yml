@@ -74,6 +74,12 @@ jobs:
                 echo "🔄 Full Deploy Mode: Restarting the bot!"
                 git checkout logs/fishing_bot.log || true
                 git pull origin main
+                
+                # 🌟 GitHub Secrets로부터 .env 파일 자동 생성
+                echo "DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}" > .env
+                echo "ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}" >> .env
+                echo "WEB_PORT=8888" >> .env
+                
                 pip3 install -r requirements.txt --quiet 2>&1 || echo "⚠️ pip install 실패"
                 sudo apt-get install -y fonts-noto-cjk > /dev/null 2>&1 || true
                 sed -i 's/fishing_rpg.py/fishing_main.py/g' deploy.sh
