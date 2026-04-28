@@ -1,11 +1,14 @@
 import asyncio
 import contextlib
+import contextvars
 from typing import Any
 
 import aiosqlite
 
 from .logger import logger
 
+# 트랜잭션 중첩 상태를 추적하기 위한 ContextVar
+_transaction_depth: contextvars.ContextVar[int] = contextvars.ContextVar("_transaction_depth", default=0)
 
 class DBManager:
     """데이터베이스 관리를 담당하는 클래스입니다. aiosqlite를 사용하여 비동기적으로 작동합니다."""
@@ -16,24 +19,50 @@ class DBManager:
 
     @contextlib.asynccontextmanager
     async def transaction(self):
-        """트랜잭션을 관리하는 컨텍스트 매니저입니다."""
+        """
+        트랜잭션을 관리하는 컨텍스트 매니저입니다.
+        중첩된 트랜잭션 호출 시 SAVEPOINT를 사용하여 처리하거나, 
+        동일 태스크 내에서는 락을 건너뛰고 최상위에서만 BEGIN/COMMIT을 수행합니다.
+        """
         if not self.conn:
             yield
             return
 
-        async with self._lock:
-            await self.conn.execute("BEGIN TRANSACTION")
-            try:
-                yield
-                await self.conn.commit()
-            except Exception as e:
-                await self.conn.rollback()
-                logger.error(f"⚠️ 트랜잭션 오류로 롤백됨: {e}")
-                raise
+        depth = _transaction_depth.get()
+        token = _transaction_depth.set(depth + 1)
+
+        try:
+            if depth == 0:
+                # 최상위 트랜잭션: 락 획득 및 BEGIN
+                async with self._lock:
+                    await self.conn.execute("BEGIN TRANSACTION")
+                    try:
+                        yield
+                        await self.conn.commit()
+                    except Exception as e:
+                        await self.conn.rollback()
+                        logger.error(f"⚠️ 트랜잭션 오류로 롤백됨: {e}")
+                        raise
+            else:
+                # 중첩된 트랜잭션: 별도의 락 없이 SAVEPOINT 사용 (또는 그냥 yield)
+                # 여기서는 안전하게 SAVEPOINT를 사용하여 중첩 롤백이 가능하게 합니다.
+                sp_name = f"sp_{depth}"
+                await self.conn.execute(f"SAVEPOINT {sp_name}")
+                try:
+                    yield
+                    await self.conn.execute(f"RELEASE SAVEPOINT {sp_name}")
+                except Exception as e:
+                    await self.conn.execute(f"ROLLBACK TO SAVEPOINT {sp_name}")
+                    logger.warning(f"⚠️ 중첩 트랜잭션({sp_name}) 롤백됨: {e}")
+                    raise
+        finally:
+            _transaction_depth.reset(token)
 
     async def init_db(self) -> None:
         """데이터베이스 연결을 초기화하고 마이그레이션을 수행합니다."""
-        self.conn = await aiosqlite.connect('fishing_rpg.db')
+        # isolation_level=None으로 설정하여 트랜잭션을 수동으로 완벽하게 제어합니다.
+        # (기본값은 ""이며, 이는 DML 실행 시 자동으로 트랜잭션을 시작하여 'cannot start a transaction...' 에러를 유발할 수 있음)
+        self.conn = await aiosqlite.connect('fishing_rpg.db', isolation_level=None)
 
         # 1. 시스템 테이블 생성 (마이그레이션 관리용)
         await self.conn.execute('''
@@ -50,9 +79,7 @@ class DBManager:
         ''')
 
         # 2. 마이그레이션 리스트 (기본 테이블 생성 및 변경 사항)
-        # v1 ~ v31은 이전 히스토리 유지, v32부터 신규 기능 추가
         migrations = [
-            # --- [기초 스키마] ---
             (1, "CREATE TABLE IF NOT EXISTS user_data (user_id INTEGER PRIMARY KEY, coins INTEGER DEFAULT 0, rod_tier INTEGER DEFAULT 1, rating INTEGER DEFAULT 1000)"),
             (2, "CREATE TABLE IF NOT EXISTS inventory (user_id INTEGER, item_name TEXT, amount INTEGER DEFAULT 0, PRIMARY KEY (user_id, item_name))"),
             (3, "CREATE TABLE IF NOT EXISTS active_buffs (user_id INTEGER, buff_type TEXT, end_time TEXT, PRIMARY KEY (user_id, buff_type))"),
@@ -62,8 +89,6 @@ class DBManager:
             (7, "CREATE TABLE IF NOT EXISTS fish_records (user_id INTEGER, item_name TEXT, max_size REAL DEFAULT 0.0, PRIMARY KEY (user_id, item_name))"),
             (8, "CREATE TABLE IF NOT EXISTS fish_info (item_name TEXT PRIMARY KEY, grade TEXT, price INTEGER, prob REAL, element TEXT, power INTEGER DEFAULT 0, description TEXT)"),
             (9, "CREATE TABLE IF NOT EXISTS recipe_info (recipe_name TEXT PRIMARY KEY, ingredients TEXT, result_item TEXT, buff_type TEXT, duration INTEGER)"),
-            
-            # --- [컬럼 추가 히스토리 (v10~v31 요약)] ---
             (10, "ALTER TABLE user_data ADD COLUMN last_daily TEXT DEFAULT ''"),
             (11, "ALTER TABLE user_data ADD COLUMN boat_tier INTEGER DEFAULT 1"),
             (12, "ALTER TABLE user_data ADD COLUMN stamina INTEGER DEFAULT 150"),
@@ -76,32 +101,9 @@ class DBManager:
             (19, "ALTER TABLE user_data ADD COLUMN claimed_collections TEXT DEFAULT '{}'"),
             (20, "ALTER TABLE user_data ADD COLUMN pvp_shield_count INTEGER DEFAULT 3"),
             (21, "ALTER TABLE user_data ADD COLUMN last_prayer_date TEXT DEFAULT ''"),
-            
-            # --- [감사 로그 시스템] ---
-            (31, '''
-                CREATE TABLE IF NOT EXISTS audit_logs (
-                    log_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER,
-                    action_type TEXT,
-                    details TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            '''),
-
-            # --- [Phase 4: 업적 시스템] ---
-            (32, '''
-                CREATE TABLE IF NOT EXISTS user_achievements (
-                    user_id INTEGER,
-                    achievement_id TEXT,
-                    progress INTEGER DEFAULT 0,
-                    is_completed INTEGER DEFAULT 0,
-                    completed_at TEXT,
-                    PRIMARY KEY (user_id, achievement_id)
-                )
-            '''),
+            (31, "CREATE TABLE IF NOT EXISTS audit_logs (log_id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, action_type TEXT, details TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"),
+            (32, "CREATE TABLE IF NOT EXISTS user_achievements (user_id INTEGER, achievement_id TEXT, progress INTEGER DEFAULT 0, is_completed INTEGER DEFAULT 0, completed_at TEXT, PRIMARY KEY (user_id, achievement_id))"),
             (33, "ALTER TABLE user_data ADD COLUMN last_active TEXT DEFAULT ''"),
-
-            # --- [Phase 5: 누락 컬럼 복구 및 신규 기능] ---
             (34, "ALTER TABLE user_data ADD COLUMN quest_date TEXT DEFAULT ''"),
             (35, "ALTER TABLE user_data ADD COLUMN quest_item TEXT DEFAULT ''"),
             (36, "ALTER TABLE user_data ADD COLUMN quest_amount INTEGER DEFAULT 0"),
@@ -116,35 +118,9 @@ class DBManager:
             (45, "ALTER TABLE user_data ADD COLUMN last_free_rest TEXT DEFAULT ''"),
             (46, "ALTER TABLE user_data ADD COLUMN pvp_shield_date TEXT DEFAULT ''"),
             (47, "ALTER TABLE user_data ADD COLUMN username TEXT DEFAULT ''"),
-
-            # --- [웹 대시보드 세션 테이블] ---
-            (48, '''
-                CREATE TABLE IF NOT EXISTS admin_sessions (
-                    token TEXT PRIMARY KEY,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            '''),
-
-            # --- [시장 시세 DB 저장] ---
-            (49, '''
-                CREATE TABLE IF NOT EXISTS market_prices (
-                    item_name TEXT PRIMARY KEY,
-                    current_price INTEGER DEFAULT 0
-                )
-            '''),
-
-            # --- [웹 대시보드 통계 히스토리] ---
-            (50, '''
-                CREATE TABLE IF NOT EXISTS stats_history (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    total_users INTEGER,
-                    total_coins INTEGER,
-                    avg_fish_price INTEGER
-                )
-            '''),
-
-            # --- [방문 해역 기록 (대해적 업적용)] ---
+            (48, "CREATE TABLE IF NOT EXISTS admin_sessions (token TEXT PRIMARY KEY, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"),
+            (49, "CREATE TABLE IF NOT EXISTS market_prices (item_name TEXT PRIMARY KEY, current_price INTEGER DEFAULT 0)"),
+            (50, "CREATE TABLE IF NOT EXISTS stats_history (id INTEGER PRIMARY KEY AUTOINCREMENT, recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, total_users INTEGER, total_coins INTEGER, avg_fish_price INTEGER)"),
             (51, "ALTER TABLE user_data ADD COLUMN visited_regions TEXT DEFAULT '[]'"),
         ]
 
@@ -160,7 +136,6 @@ class DBManager:
                     await self.conn.execute("INSERT INTO migrations (version) VALUES (?)", (version,))
                     logger.info(f"🚀 DB 마이그레이션 적용 완료: 버전 {version}")
                 except aiosqlite.OperationalError as e:
-                    # 이미 존재하는 컬럼/테이블 에러는 무시하고 버전만 기록
                     if "duplicate" in str(e).lower() or "already exists" in str(e).lower():
                         await self.conn.execute("INSERT OR IGNORE INTO migrations (version) VALUES (?)", (version,))
                     else:
@@ -171,11 +146,14 @@ class DBManager:
     async def log_action(self, user_id: int, action_type: str, details: str):
         """중요 액션을 감사 로그에 기록합니다."""
         if not self.conn: return
+        # 외부에서 트랜잭션 중일 수 있으므로 commit()을 호출하지 않거나 수동 제어
         await self.conn.execute(
             "INSERT INTO audit_logs (user_id, action_type, details) VALUES (?, ?, ?)",
             (user_id, action_type, details)
         )
-        await self.conn.commit()
+        # 트랜잭션 외부인 경우에만 커밋 (isolation_level=None 이므로 수동 커밋 필요)
+        if _transaction_depth.get() == 0:
+            await self.conn.commit()
 
     async def commit(self) -> None:
         """변경 사항을 저장합니다."""
@@ -185,12 +163,18 @@ class DBManager:
     async def execute(self, query: str, params: tuple[Any, ...] | list[Any] = ()) -> aiosqlite.Cursor | None:
         """쿼리를 실행합니다."""
         if not self.conn: return None
-        return await self.conn.execute(query, params)
+        res = await self.conn.execute(query, params)
+        if _transaction_depth.get() == 0:
+            await self.conn.commit()
+        return res
 
     async def executemany(self, query: str, params: list[tuple[Any, ...]]) -> aiosqlite.Cursor | None:
         """여러 쿼리를 한 번에 실행합니다."""
         if not self.conn: return None
-        return await self.conn.executemany(query, params)
+        res = await self.conn.executemany(query, params)
+        if _transaction_depth.get() == 0:
+            await self.conn.commit()
+        return res
 
     async def close(self) -> None:
         """연결을 종료합니다."""
@@ -203,8 +187,9 @@ class DBManager:
         async with self.conn.execute("SELECT coins, rod_tier, rating FROM user_data WHERE user_id=?", (user_id,)) as cursor:
             res = await cursor.fetchone()
             if not res:
-                await self.conn.execute("INSERT INTO user_data (user_id, coins, rod_tier, rating, max_stamina, stamina) VALUES (?, 0, 1, 1000, 150, 150)", (user_id,))
-                await self.conn.commit()
+                # isolation_level=None이므로 트랜잭션 처리가 중요함
+                async with self.transaction():
+                    await self.conn.execute("INSERT INTO user_data (user_id, coins, rod_tier, rating, max_stamina, stamina) VALUES (?, 0, 1, 1000, 150, 150)", (user_id,))
                 return (0, 1, 1000)
             return res
 
@@ -242,8 +227,9 @@ class DBManager:
         """인벤토리 아이템 수량을 변경합니다. (음수 가능)"""
         if not self.conn: return False
         
+        # isolation_level=None 대응: 내부 작업이므로 상위 트랜잭션이 없을 경우 자동 커밋되도록 설계됨 (execute/executemany 참고)
         if amount > 0:
-            await self.conn.execute(
+            await self.execute(
                 "INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, ?) "
                 "ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?",
                 (user_id, item_name, amount, amount)
@@ -255,12 +241,12 @@ class DBManager:
                 if not row or row[0] < abs(amount):
                     return False
                 
-                await self.conn.execute(
+                await self.execute(
                     "UPDATE inventory SET amount = amount + ? WHERE user_id=? AND item_name=?",
                     (amount, user_id, item_name)
                 )
                 # 0개 이하면 삭제
-                await self.conn.execute("DELETE FROM inventory WHERE user_id=? AND item_name=? AND amount <= 0", (user_id, item_name))
+                await self.execute("DELETE FROM inventory WHERE user_id=? AND item_name=? AND amount <= 0", (user_id, item_name))
         
         return True
 

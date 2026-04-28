@@ -157,45 +157,53 @@ class MarketCog(commands.Cog):
         if quantity <= 0:
             return await interaction.response.send_message("❌ 수량은 1개 이상이어야 합니다.", ephemeral=True)
 
-        await db.get_user_data(interaction.user.id)
-        state = await self._get_wandering_merchant_state()
-        user_state = await self._get_user_merchant_state(interaction.user.id)
-        if user_state.get("merchant_id") != state["merchant_id"]:
-            user_state = {"merchant_id": state["merchant_id"], "counts": {}}
-
-        offer = next((entry for entry in state["offers"] if entry["item_name"] == item_name), None)
-        if offer is None:
-            return await interaction.response.send_message("❌ 지금 떠돌이 상인이 그 물건은 팔고 있지 않습니다.", ephemeral=True)
-
-        if offer["stock"] <= 0:
-            return await interaction.response.send_message("❌ 해당 상품은 이미 품절되었습니다.", ephemeral=True)
-
-        if offer["stock"] < quantity:
-            return await interaction.response.send_message(f"❌ 재고가 부족합니다. (남은 재고: {offer['stock']}개)", ephemeral=True)
-
-        purchased = int(user_state["counts"].get(item_name, 0))
-        if purchased + quantity > int(offer["user_limit"]):
-            remain = max(0, int(offer["user_limit"]) - purchased)
-            return await interaction.response.send_message(f"❌ 개인 구매 한도를 초과합니다. (남은 가능 수량: {remain}개)", ephemeral=True)
-
-        coins, _, _ = await db.get_user_data(interaction.user.id)
-        total_price = int(offer["price"]) * quantity
-        if coins < total_price:
-            return await interaction.response.send_message(f"❌ 코인이 부족합니다! (필요: {total_price:,} C / 현재: {coins:,} C)", ephemeral=True)
-
+        user_id = interaction.user.id
+        await db.get_user_data(user_id)
+        
+        # 트랜잭션 내에서 모든 검증과 처리를 수행하여 레이스 컨디션 방지
         async with db.transaction():
-            await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id = ?", (total_price, interaction.user.id))
-            await db.modify_inventory(interaction.user.id, item_name, quantity)
+            # 최신 상인 상태와 유저 상태 가져오기
+            state = await self._get_wandering_merchant_state()
+            user_state = await self._get_user_merchant_state(user_id)
+            
+            if user_state.get("merchant_id") != state["merchant_id"]:
+                user_state = {"merchant_id": state["merchant_id"], "counts": {}}
 
+            offer = next((entry for entry in state["offers"] if entry["item_name"] == item_name), None)
+            if offer is None:
+                return await interaction.response.send_message("❌ 지금 떠돌이 상인이 그 물건은 팔고 있지 않습니다.", ephemeral=True)
+
+            if offer["stock"] <= 0:
+                return await interaction.response.send_message("❌ 해당 상품은 이미 품절되었습니다.", ephemeral=True)
+
+            if offer["stock"] < quantity:
+                return await interaction.response.send_message(f"❌ 재고가 부족합니다. (남은 재고: {offer['stock']}개)", ephemeral=True)
+
+            purchased = int(user_state["counts"].get(item_name, 0))
+            if purchased + quantity > int(offer["user_limit"]):
+                remain = max(0, int(offer["user_limit"]) - purchased)
+                return await interaction.response.send_message(f"❌ 개인 구매 한도를 초과합니다. (남은 가능 수량: {remain}개)", ephemeral=True)
+
+            coins, _, _ = await db.get_user_data(user_id)
+            total_price = int(offer["price"]) * quantity
+            if coins < total_price:
+                return await interaction.response.send_message(f"❌ 코인이 부족합니다! (필요: {total_price:,} C / 현재: {coins:,} C)", ephemeral=True)
+
+            # 실제 구매 처리
+            await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id = ?", (total_price, user_id))
+            await db.modify_inventory(user_id, item_name, quantity)
+
+            # 상태 업데이트
             offer["stock"] -= quantity
-            user_state["merchant_id"] = state["merchant_id"]
             user_state["counts"][item_name] = purchased + quantity
 
-            await self._save_user_merchant_state(interaction.user.id, user_state)
+            await self._save_user_merchant_state(user_id, user_state)
             await db.execute(
                 "UPDATE server_state SET value = ? WHERE key = 'WANDERING_MERCHANT_STATE'",
                 (json.dumps(state, ensure_ascii=False),),
             )
+            
+            await db.log_action(user_id, "MERCHANT_BUY", f"Item: {item_name}, Quantity: {quantity}, Spent: {total_price} C")
 
         await interaction.response.send_message(
             f"🧳 떠돌이 상인에게서 **{item_name}** {quantity}개를 구매했습니다! "
