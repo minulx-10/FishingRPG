@@ -249,7 +249,7 @@ class BattleView(View):
         embed.add_field(name='🔴 적', value=f'HP: {self.npc_hp}', inline=True)
         
         # 기본 배틀 배경 이미지
-        file = discord.File("assets/battle/battle_bg.png", filename="battle.png")
+        file = discord.File("assets/battle/battle_start.png", filename="battle.png")
         embed.set_image(url="attachment://battle.png")
         return embed, file
 
@@ -679,3 +679,48 @@ class ShopQuantityModal(discord.ui.Modal):
         from fishing_core.services.market_service import MarketService
         result = await MarketService.process_purchase(interaction.user.id, self.item_name, amt)
         await interaction.response.send_message(result["message"], ephemeral=not result["success"])
+class RecipeBookView(View):
+    def __init__(self, recipes):
+        super().__init__(timeout=120)
+        self.recipes = list(recipes.items())
+        self.current_page = 0
+        self.per_page = 5 # 한 페이지에 5개씩 (가독성 고려)
+
+    def make_embed(self):
+        start = self.current_page * self.per_page
+        end = start + self.per_page
+        items = self.recipes[start:end]
+        
+        embed = EmbedFactory.build(title="👨‍🍳 수산시장 요리 도감", type="warning")
+        embed.description = f"잡은 물고기를 사용하여 특별한 요리를 만듭니다. `/요리` 명령어로 제작 가능합니다.\n(총 {len(self.recipes)}종의 레시피 보유)"
+        
+        for name, data in items:
+            ingredients = []
+            for item, amt in data["ingredients"].items():
+                display_item = "아무 물고기 🐟" if item == "*ANY_FISH*" else item
+                ingredients.append(f"{display_item} x{amt}")
+            
+            ing_str = ", ".join(ingredients)
+            duration = f"({data['duration']}분 지속)" if data.get("duration") else ""
+            
+            embed.add_field(
+                name=f"🍲 {name} {duration}",
+                value=f"**재료:** {ing_str}\n**효과:** {data['description']}",
+                inline=False
+            )
+            
+        total_pages = (len(self.recipes) - 1) // self.per_page + 1
+        embed.set_footer(text=f"페이지 {self.current_page + 1} / {total_pages}")
+        return embed
+
+    @discord.ui.button(label="◀ 이전", style=discord.ButtonStyle.secondary)
+    async def prev(self, interaction, btn):
+        if self.current_page > 0:
+            self.current_page -= 1
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
+
+    @discord.ui.button(label="다음 ▶", style=discord.ButtonStyle.secondary)
+    async def next(self, interaction, btn):
+        if (self.current_page + 1) * self.per_page < len(self.recipes):
+            self.current_page += 1
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
