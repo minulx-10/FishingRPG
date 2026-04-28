@@ -238,6 +238,28 @@ class QuestCog(commands.Cog):
         except Exception as e:
             await interaction.followup.send(f"❌ 연결 실패: 프록시 서버 또는 네트워크를 확인해주세요. (`{e}`)")
 
+    @app_commands.command(name="요리책", description="현재 만들 수 있는 요리 레시피와 버프 효과를 확인합니다.")
+    async def 요리책(self, interaction: discord.Interaction):
+        embed = EmbedFactory.build(title="👨‍🍳 수산시장 요리 도감", type="warning")
+        embed.description = "잡은 물고기를 사용하여 특별한 요리를 만듭니다. `/요리` 명령어로 제작 가능합니다."
+        
+        for name, data in RECIPES.items():
+            ingredients = []
+            for item, amt in data["ingredients"].items():
+                display_item = "아무 물고기 🐟" if item == "*ANY_FISH*" else item
+                ingredients.append(f"{display_item} x{amt}")
+            
+            ing_str = ", ".join(ingredients)
+            duration = f"({data['duration']}분 지속)" if data.get("duration") else ""
+            
+            embed.add_field(
+                name=f"🍲 {name} {duration}",
+                value=f"**재료:** {ing_str}\n**효과:** {data['description']}",
+                inline=False
+            )
+            
+        await interaction.response.send_message(embed=embed)
+
     @app_commands.command(name="요리", description="잡은 물고기로 요리를 만들어 버프를 얻거나 비싸게 팝니다.")
     @app_commands.autocomplete(선택=recipe_autocomplete)
     @check_boat_tier(2)

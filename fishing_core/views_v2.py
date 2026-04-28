@@ -108,7 +108,14 @@ class FishingView(View):
             from fishing_core.shared import MARKET_PRICES
             price = MARKET_PRICES.get(self.target_fish, FISH_DATA.get(self.target_fish, {}).get("price", 100))
 
-            embed = EmbedFactory.build(title="✨ 낚시 성공! 월척입니다!", type="success")
+            # [Phase 3] 프리미엄 색상 및 전역 공지
+            embed_type = "success"
+            if grade in ["레전드", "신화", "태고", "환상", "미스터리"]:
+                embed_type = "legend" if grade == "레전드" else "mythic"
+                from fishing_core.utils import broadcast_legendary_catch
+                self.bot.loop.create_task(broadcast_legendary_catch(self.bot, self.user, self.target_fish, grade))
+
+            embed = EmbedFactory.build(title="✨ 낚시 성공! 월척입니다!", type=embed_type)
             embed.set_author(name=f"{self.user.name}님의 포획 기록", icon_url=self.user.display_avatar.url)
             embed.description = f"**{self.target_fish}** (을)를 성공적으로 낚아올렸습니다!\n입질 반응 속도: `{elapsed:.2f}초`"
             embed.add_field(name="🧬 어종 등급", value=format_grade_label(grade), inline=True)
@@ -137,9 +144,28 @@ class FishingView(View):
             if stolen_amount > 0:
                 embed.add_field(name="🦑 크라켄의 촉수!", value=f"`{stolen_amount:,} C`를 훔쳐왔습니다!", inline=False)
 
-            action_view = FishActionView(self.user, self.target_fish)
-            await interaction.response.edit_message(content=f"🎊 낚았습니다!{double_msg}", embed=embed, view=action_view)
-            action_view.message = await interaction.original_response()
+            # [Phase 1] 자동 설정 체크
+            user_data = await db.get_full_user_data(self.user.id)
+            auto_bag = user_data.get("auto_bag", False)
+            auto_sell = user_data.get("auto_sell", False)
+
+            if auto_bag:
+                await db.modify_inventory(self.user.id, self.target_fish, 1)
+                await interaction.response.edit_message(content=f"🎊 낚았습니다!{double_msg}\n✅ **자동 가방 넣기** 설정으로 가방에 보관되었습니다.", embed=embed, view=None)
+            elif auto_sell:
+                # 시세 조회
+                async with db.conn.execute("SELECT current_price FROM market_prices WHERE item_name=?", (self.target_fish,)) as cursor:
+                    res = await cursor.fetchone()
+                sell_price = res[0] if res else FISH_DATA.get(self.target_fish, {}).get("price", 100)
+                
+                async with db.transaction():
+                    await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (sell_price, self.user.id))
+                
+                await interaction.response.edit_message(content=f"🎊 낚았습니다!{double_msg}\n💰 **자동 즉시 판매** 설정으로 `{sell_price:,} C`에 판매되었습니다.", embed=embed, view=None)
+            else:
+                action_view = FishActionView(self.user, self.target_fish)
+                await interaction.response.edit_message(content=f"🎊 낚았습니다!{double_msg}", embed=embed, view=action_view)
+                action_view.message = await interaction.original_response()
 
         except Exception as e:
             logger.error(f"on_bite_success 오류: {e}")
@@ -449,13 +475,35 @@ class InventoryView(View):
         
         embed = EmbedFactory.build(title=f"🎒 {display_name}님의 가방", type="info")
         
-        # 요약 정보
+        # 요약 정보 및 총 가치 계산
+        from fishing_core.shared import MARKET_PRICES
+        total_value = 0
+        for name, amt, _ in self.original_items:
+            price = MARKET_PRICES.get(name, FISH_DATA.get(name, {}).get("price", 0))
+            total_value += price * amt
+
         hp_bar = create_progress_bar(stamina, max_stamina, length=8)
         embed.description = (
-            f"🪙 **코인:** `{coins:,} C` | 🏆 **점수:** `{rating:,}`\n"
+            f"🪙 **보유 코인:** `{coins:,} C` | 🏆 **랭킹 점수:** `{rating:,}`\n"
             f"🎣 **낚싯대:** `Lv.{rod_tier}` | 🛳️ **선박:** `{boat_str}`\n"
-            f"⚡ **행동력:** {hp_bar} `{stamina}/{max_stamina}`"
+            f"⚡ **행동력:** {hp_bar} `{stamina}/{max_stamina}`\n"
+            f"💰 **가방 총 가치:** 약 `{total_value:,} C`"
         )
+
+        # 필터링 적용
+        from fishing_core.shared import get_grade_order
+        if self.filter_grade == "전체":
+            filtered = self.original_items
+        elif self.filter_grade == "일반":
+            filtered = [x for x in self.original_items if FISH_DATA.get(x[0], {}).get("grade", "아이템") == "일반"]
+        elif self.filter_grade == "희귀+":
+            filtered = [x for x in self.original_items if get_grade_order(FISH_DATA.get(x[0], {}).get("grade", "")) >= 2]
+        elif self.filter_grade == "아이템":
+            filtered = [x for x in self.original_items if x[0] not in FISH_DATA]
+        else:
+            filtered = self.original_items
+        
+        self.all_items = filtered
 
         # 페이징
         start = self.current_page * self.per_page
@@ -463,14 +511,24 @@ class InventoryView(View):
         items_slice = self.all_items[start:end]
 
         if not items_slice:
-            embed.add_field(name="비어있음", value="보유한 아이템이 없습니다.", inline=False)
+            embed.add_field(name="비어있음", value=f"보유한 **{self.filter_grade}** 아이템이 없습니다.", inline=False)
         else:
             item_list = []
+            from fishing_core.services.market_service import MarketService
             for name, amt, locked in items_slice:
                 lock_icon = "🔒" if locked else ""
                 grade = FISH_DATA.get(name, {}).get("grade", "아이템")
                 gl = format_grade_label(grade)
-                item_list.append(f"{lock_icon} **{name}** `x{amt}` {gl}")
+                
+                # 시세가 기본가보다 높으면 🔥 표시
+                hot_icon = ""
+                if name in FISH_DATA:
+                    base_price = FISH_DATA[name].get("price", 0)
+                    curr_price = MARKET_PRICES.get(name, base_price)
+                    if curr_price > base_price * 1.2: # 20% 이상 비쌀 때
+                        hot_icon = "🔥 "
+                
+                item_list.append(f"{lock_icon} {hot_icon}**{name}** `x{amt}` {gl}")
             
             embed.add_field(name=f"📦 보유 물품 ({self.filter_grade})", value="\n".join(item_list), inline=False)
 
@@ -478,19 +536,47 @@ class InventoryView(View):
         embed.set_footer(text=f"페이지 {self.current_page + 1} / {total_pages} | 총 {len(self.all_items)}종")
         return embed
 
-    @discord.ui.button(label="◀ 이전", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="전체", style=discord.ButtonStyle.primary)
+    async def filter_all(self, interaction, btn):
+        if interaction.user != self.user: return
+        self.filter_grade = "전체"
+        self.current_page = 0
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
+
+    @discord.ui.button(label="일반", style=discord.ButtonStyle.secondary)
+    async def filter_common(self, interaction, btn):
+        if interaction.user != self.user: return
+        self.filter_grade = "일반"
+        self.current_page = 0
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
+
+    @discord.ui.button(label="희귀+", style=discord.ButtonStyle.success)
+    async def filter_rare(self, interaction, btn):
+        if interaction.user != self.user: return
+        self.filter_grade = "희귀+"
+        self.current_page = 0
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
+
+    @discord.ui.button(label="아이템", style=discord.ButtonStyle.secondary)
+    async def filter_items(self, interaction, btn):
+        if interaction.user != self.user: return
+        self.filter_grade = "아이템"
+        self.current_page = 0
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
+
+    @discord.ui.button(label="◀ 이전", style=discord.ButtonStyle.secondary, row=2)
     async def prev(self, interaction, btn):
         if interaction.user != self.user: return
         if self.current_page > 0:
             self.current_page -= 1
-        await interaction.response.edit_message(embed=self.make_embed())
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
 
-    @discord.ui.button(label="다음 ▶", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="다음 ▶", style=discord.ButtonStyle.secondary, row=2)
     async def next(self, interaction, btn):
         if interaction.user != self.user: return
         if (self.current_page + 1) * self.per_page < len(self.all_items):
             self.current_page += 1
-        await interaction.response.edit_message(embed=self.make_embed())
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
 
 
 class QuestDeliveryView(View):

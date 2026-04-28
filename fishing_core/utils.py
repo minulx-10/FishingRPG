@@ -18,13 +18,16 @@ class EmbedFactory:
         "warning": 0xF1C40F,  # 노란색
         "info": 0x3498DB,     # 파란색
         "default": 0x2B2D31,  # 디스코드 기본 다크
+        "legend": 0xF1C40F,   # 황금색
+        "mythic": 0xE91E63,   # 분홍빛 빨강
+        "ancient": 0x795548,  # 갈색
+        "special": 0x9B59B6,  # 보라색
     }
 
     @staticmethod
     def build(title: str, description: str = "", type: str = "default", **kwargs) -> discord.Embed:
         """
         주어진 상태 타입에 맞는 색상과 레이아웃으로 임베드를 생성합니다.
-        사용 가능한 타입: success, error, warning, info, default
         """
         color = EmbedFactory.COLORS.get(type, EmbedFactory.COLORS["default"])
         embed = discord.Embed(title=title, description=description, color=color)
@@ -42,6 +45,33 @@ class EmbedFactory:
             embed.set_footer(text=kwargs["footer_text"], icon_url=kwargs.get("footer_icon", ""))
             
         return embed
+
+async def broadcast_legendary_catch(bot, user: discord.User, fish_name: str, grade: str):
+    """레전드 등급 이상의 물고기 포획 시 서버 전체에 알림을 보냅니다."""
+    from .shared import format_grade_label
+    
+    # 알림을 보낼 채널 리스트 (메인 채널 등)
+    # 여기서는 단순하게 봇이 소속된 서버들의 첫 번째 텍스트 채널에 보낼 수 있으나, 
+    # 보통은 특정 '월드 뉴스' 채널을 지정하는 것이 좋음.
+    # 일단은 로그와 함께 전 서버 유저들이 볼 수 있는 형태로 기획됨.
+    
+    embed = EmbedFactory.build(
+        title="📢 [월드 뉴스] 전설의 탄생!",
+        description=f"✨ **{user.name}**님이 방금 대단한 소식을 전해왔습니다!",
+        type="legend" if grade == "레전드" else "mythic"
+    )
+    embed.add_field(name="🏆 포획 어종", value=f"**{fish_name}**", inline=True)
+    embed.add_field(name="🧬 등급", value=format_grade_label(grade), inline=True)
+    embed.set_thumbnail(url=user.display_avatar.url)
+    
+    # 봇이 가입된 모든 서버의 시스템 채널이나 첫 번째 채널에 발송 (성능 고려하여 제한적 발송 추천)
+    for guild in bot.guilds:
+        target = guild.system_channel or next((c for c in guild.text_channels if c.permissions_for(guild.me).send_messages), None)
+        if target:
+            try:
+                await target.send(embed=embed)
+            except Exception:
+                continue
 
 def create_progress_bar(current: float, maximum: float, length: int = 10, reverse_color: bool = False) -> str:
     """

@@ -63,6 +63,7 @@ async def on_ready():
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     """슬래시 명령어 실행 중 발생하는 에러를 전역적으로 처리합니다."""
+    import traceback
     
     if isinstance(error, app_commands.CommandOnCooldown):
         await interaction.response.send_message(f"⏰ 쿨다운 중입니다! {error.retry_after:.1f}초 후에 다시 시도해주세요.", ephemeral=True)
@@ -71,16 +72,26 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
     elif isinstance(error, app_commands.MissingPermissions):
         await interaction.response.send_message("🚫 필요한 권한이 부족합니다.", ephemeral=True)
     else:
-        logger.error(f"명령어 실행 중 예외 발생: {interaction.command.name if interaction.command else '알 수 없음'}", exc_info=error)
+        # 실제 에러 추출 (Original Error)
+        orig_error = getattr(error, "original", error)
+        error_msg_full = "".join(traceback.format_exception(type(orig_error), orig_error, orig_error.__traceback__))
+        
+        logger.error(f"명령어 실행 중 예외 발생: {interaction.command.name if interaction.command else '알 수 없음'}\n{error_msg_full}")
         
         if ADMIN_LOG_CHANNEL_ID:
             try:
                 channel = bot.get_channel(ADMIN_LOG_CHANNEL_ID)
                 if channel:
-                    error_msg = f"⚠️ **명령어 에러 발생**\n- 명령어: `/{interaction.command.name if interaction.command else 'unknown'}`\n- 사용자: {interaction.user.name} ({interaction.user.id})\n- 에러: `{error}`"
-                    await channel.send(error_msg)
-            except Exception:
-                pass
+                    embed = discord.Embed(title="🚨 명령어 에러 발생", color=discord.Color.red(), timestamp=datetime.datetime.now(kst))
+                    embed.add_field(name="명령어", value=f"`/{interaction.command.name if interaction.command else 'unknown'}`", inline=True)
+                    embed.add_field(name="사용자", value=f"{interaction.user.name} ({interaction.user.id})", inline=True)
+                    
+                    # 에러 메시지가 너무 길면 잘라서 전송
+                    desc = f"```py\n{error_msg_full[-1900:]}```" # 뒤쪽 1900자 (가장 중요한 정보가 보통 뒤에 있음)
+                    embed.description = desc
+                    await channel.send(embed=embed)
+            except Exception as e:
+                logger.error(f"관리자 채널 에러 전송 실패: {e}")
 
         if not interaction.response.is_done():
             await interaction.response.send_message("❌ 명령어를 처리하는 중에 오류가 발생했습니다. 잠시 후 다시 시도해주세요.", ephemeral=True)

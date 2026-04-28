@@ -472,5 +472,45 @@ class TitleShopView(discord.ui.View):
 
         await interaction.response.send_message(f"🎊 축하합니다! `{price:,} C`를 지불하고 **[{selected}]** 칭호를 획득했습니다!")
 
+    @app_commands.command(name="선물", description="다른 유저에게 내 가방에 있는 물고기나 아이템을 선물합니다.")
+    @app_commands.autocomplete(물건=inv_autocomplete)
+    async def 선물(self, interaction: discord.Interaction, 유저: discord.Member, 물건: str, 수량: int = 1):
+        if 유저.id == interaction.user.id:
+            return await interaction.response.send_message("❌ 자기 자신에게는 선물할 수 없습니다.", ephemeral=True)
+            
+        if 수량 <= 0:
+            return await interaction.response.send_message("❌ 수량은 1개 이상이어야 합니다.", ephemeral=True)
+            
+        async with db.conn.execute("SELECT amount, is_locked FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, 물건)) as cursor:
+            res = await cursor.fetchone()
+            
+        if not res or res[0] < 수량:
+            return await interaction.response.send_message(f"❌ 가방에 **{물건}**이(가) 부족합니다.", ephemeral=True)
+            
+        if res[1] == 1:
+            return await interaction.response.send_message(f"🔒 **{물건}**은(는) 잠금 상태이므로 선물할 수 없습니다.", ephemeral=True)
+            
+        async with db.transaction():
+            # 내 가방에서 차감
+            await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name=?", (수량, interaction.user.id, 물건))
+            # 상대방 가방에 추가
+            await db.modify_inventory(유저.id, 물건, 수량)
+            # 0개 이하인 항목 삭제
+            await db.execute("DELETE FROM inventory WHERE user_id=? AND item_name=? AND amount <= 0", (interaction.user.id, 물건))
+            
+            await db.log_action(interaction.user.id, "ITEM_GIFT", f"To: {유저.name}, Item: {물건}, Qty: {수량}")
+            
+        embed = EmbedFactory.build(title="🎁 선물이 도착했습니다!", type="info")
+        embed.description = f"**{interaction.user.name}**님이 **{유저.name}**님에게 선물을 보냈습니다!"
+        embed.add_field(name="📦 선물 품목", value=f"**{물건}** x{수량}")
+        embed.set_thumbnail(url="https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=400")
+        
+        await interaction.response.send_message(f"✅ **{유저.name}**님에게 **{물건}** {수량}개를 선물했습니다!", embed=embed)
+        # 상대방에게 알림 (가능한 경우)
+        try:
+            await 유저.send(f"🔔 **{interaction.user.name}**님이 당신에게 **{물건}** {수량}개를 선물했습니다! 가방을 확인해보세요.")
+        except Exception:
+            pass
+
 async def setup(bot):
     await bot.add_cog(MarketCog(bot))

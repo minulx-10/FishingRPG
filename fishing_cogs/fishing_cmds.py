@@ -331,6 +331,39 @@ class FishingCog(commands.Cog):
         target = 유저 or interaction.user
         await self._show_inventory(interaction, target)
 
+    @app_commands.command(name="먹기", description="가방에 있는 물고기를 먹어 행동력을 소량 회복합니다. (일반/희귀 등급만 가능)")
+    @app_commands.autocomplete(물고기=inv_autocomplete)
+    async def 먹기(self, interaction: discord.Interaction, 물고기: str, 수량: int = 1):
+        if 수량 <= 0:
+            return await interaction.response.send_message("❌ 수량은 1마리 이상이어야 합니다.", ephemeral=True)
+            
+        async with db.conn.execute("SELECT amount, is_locked FROM inventory WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기)) as cursor:
+            res = await cursor.fetchone()
+            
+        if not res or res[0] < 수량:
+            return await interaction.response.send_message(f"❌ 가방에 **{물고기}**가 부족합니다.", ephemeral=True)
+            
+        if res[1] == 1:
+            return await interaction.response.send_message(f"🔒 **{물고기}**는 잠금 상태입니다. 먼저 잠금을 해제하세요.", ephemeral=True)
+            
+        grade = FISH_DATA.get(물고기, {}).get("grade", "아이템")
+        if grade not in ["일반", "희귀", "피식자"]:
+            return await interaction.response.send_message(f"🤢 **{물고기}**는 너무 커서 날것으로 먹기엔 무리가 있습니다! 요리해서 드세요.", ephemeral=True)
+            
+        # 등급별 회복량: 일반(3), 희귀(5)
+        heal_per_fish = 3 if grade in ["일반", "피식자"] else 5
+        total_heal = heal_per_fish * 수량
+        
+        async with db.transaction():
+            await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name=?", (수량, interaction.user.id, 물고기))
+            await db.execute("UPDATE user_data SET stamina = MIN(max_stamina, stamina + ?) WHERE user_id=?", (total_heal, interaction.user.id))
+            await db.execute("DELETE FROM inventory WHERE user_id=? AND item_name=? AND amount <= 0", (interaction.user.id, 물고기))
+            
+        async with db.conn.execute("SELECT stamina, max_stamina FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+            st = await cursor.fetchone()
+            
+        await interaction.response.send_message(f"😋 **{물고기}** {수량}마리를 뼈째 씹어먹었습니다! (행동력 **+{total_heal}⚡** 회복 / 현재: {st[0]}/{st[1]}⚡)")
+
     @app_commands.command(name="휴식", description="여관에서 코인을 지불하고 행동력(체력)을 즉시 전부 회복합니다. (일일 1회 무료!)")
     @app_commands.checks.cooldown(1, 5.0, key=lambda i: i.user.id)
     async def 휴식(self, interaction: discord.Interaction):
@@ -494,6 +527,48 @@ class FishingCog(commands.Cog):
         else:
             await interaction.response.send_message(embed=embed)
 
+
+    @app_commands.command(name="설정", description="개인 편의 설정을 변경합니다. (자동 가방 넣기, 자동 판매 등)")
+    @app_commands.choices(항목=[
+        app_commands.Choice(name="자동 가방 넣기 (On/Off)", value="auto_bag"),
+        app_commands.Choice(name="자동 즉시 판매 (On/Off)", value="auto_sell"),
+    ])
+    @app_commands.choices(상태=[
+        app_commands.Choice(name="켜기 (On)", value="1"),
+        app_commands.Choice(name="끄기 (Off)", value="0"),
+    ])
+    async def 설정(self, interaction: discord.Interaction, 항목: app_commands.Choice[str], 상태: app_commands.Choice[str]):
+        user_id = interaction.user.id
+        key = 항목.value
+        value = int(상태.value)
+        
+        # 서로 배타적인 설정 처리 (가방 넣기와 판매를 동시에 켤 수는 없음)
+        async with db.transaction():
+            if key == "auto_bag" and value == 1:
+                await db.execute("UPDATE user_data SET auto_bag=1, auto_sell=0 WHERE user_id=?", (user_id,))
+                msg = "✅ **자동 가방 넣기**가 활성화되었습니다. (자동 판매는 비활성화됨)"
+            elif key == "auto_sell" and value == 1:
+                await db.execute("UPDATE user_data SET auto_bag=0, auto_sell=1 WHERE user_id=?", (user_id,))
+                msg = "✅ **자동 즉시 판매**가 활성화되었습니다. (자동 가방 넣기는 비활성화됨)"
+            else:
+                await db.execute(f"UPDATE user_data SET {key}=0 WHERE user_id=?", (user_id,))
+                msg = f"❌ **{항목.name}** 기능이 비활성화되었습니다."
+        
+        await interaction.response.send_message(msg)
+
+    @app_commands.command(name="환경설정", description="나의 현재 편의 설정 상태를 확인합니다.")
+    async def 환경설정(self, interaction: discord.Interaction):
+        data = await db.get_full_user_data(interaction.user.id)
+        
+        embed = EmbedFactory.build(title=f"⚙️ {interaction.user.name}님의 편의 설정", type="info")
+        bag_status = "✅ 켜짐" if data.get("auto_bag") else "❌ 꺼짐"
+        sell_status = "✅ 켜짐" if data.get("auto_sell") else "❌ 꺼짐"
+        
+        embed.add_field(name="🎒 자동 가방 넣기", value=bag_status, inline=True)
+        embed.add_field(name="💰 자동 즉시 판매", value=sell_status, inline=True)
+        embed.description = "`/설정` 명령어를 통해 상태를 변경할 수 있습니다."
+        
+        await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="기상예측", description="기상청의 위성 자료를 분석하여 향후 3시간의 날씨 변화를 예측합니다. (비용: 3,000 C)")
     async def 기상예측(self, interaction: discord.Interaction):

@@ -122,6 +122,8 @@ class DBManager:
             (49, "CREATE TABLE IF NOT EXISTS market_prices (item_name TEXT PRIMARY KEY, current_price INTEGER DEFAULT 0)"),
             (50, "CREATE TABLE IF NOT EXISTS stats_history (id INTEGER PRIMARY KEY AUTOINCREMENT, recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, total_users INTEGER, total_coins INTEGER, avg_fish_price INTEGER)"),
             (51, "ALTER TABLE user_data ADD COLUMN visited_regions TEXT DEFAULT '[]'"),
+            (52, "ALTER TABLE user_data ADD COLUMN auto_bag INTEGER DEFAULT 0"),
+            (53, "ALTER TABLE user_data ADD COLUMN auto_sell INTEGER DEFAULT 0"),
         ]
 
         # 3. 마이그레이션 실행
@@ -207,7 +209,7 @@ class DBManager:
         # 유저가 없으면 생성
         await self.get_user_data(user_id)
         
-        query = "SELECT coins, rod_tier, rating, boat_tier, stamina, max_stamina, current_region, title FROM user_data WHERE user_id=?"
+        query = "SELECT coins, rod_tier, rating, boat_tier, stamina, max_stamina, current_region, title, auto_bag, auto_sell FROM user_data WHERE user_id=?"
         async with self.conn.execute(query, (user_id,)) as cursor:
             row = await cursor.fetchone()
             if not row: return {}
@@ -220,7 +222,9 @@ class DBManager:
                 "stamina": row[4],
                 "max_stamina": row[5],
                 "region": row[6],
-                "title": row[7]
+                "title": row[7],
+                "auto_bag": bool(row[8]),
+                "auto_sell": bool(row[9])
             }
 
     async def modify_inventory(self, user_id: int, item_name: str, amount: int) -> bool:
