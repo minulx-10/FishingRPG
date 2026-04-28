@@ -238,7 +238,7 @@ class BattleCog(commands.Cog):
                 if st and st[0] < 25:
                     return await interaction.response.send_message(f"❌ 행동력(체력)이 부족합니다! (필요: 25⚡ / 현재: {st[0]}⚡)", ephemeral=True)
 
-                async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (user_id,)) as cursor:
+                async with db.conn.execute("SELECT item_name, amount FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (user_id,)) as cursor:
                     items = await cursor.fetchall()
                 if not items:
                     return await interaction.response.send_message("❌ 전투에 출전할 잠금 처리된 물고기가 없습니다!", ephemeral=True)
