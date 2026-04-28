@@ -1,5 +1,5 @@
 import sqlite3
-import json
+
 
 def check_logs():
     conn = sqlite3.connect('fishing_rpg.db')

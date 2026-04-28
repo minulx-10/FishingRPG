@@ -514,7 +514,6 @@ class InventoryView(View):
             embed.add_field(name="비어있음", value=f"보유한 **{self.filter_grade}** 아이템이 없습니다.", inline=False)
         else:
             item_list = []
-            from fishing_core.services.market_service import MarketService
             for name, amt, locked in items_slice:
                 lock_icon = "🔒" if locked else ""
                 grade = FISH_DATA.get(name, {}).get("grade", "아이템")
