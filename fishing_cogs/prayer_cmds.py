@@ -81,73 +81,72 @@ class PrayerCommands(commands.Cog):
         bonus_chance = 0.0
         sacrifice_success = False
         fail_reason = ""
+        caught_fish = None
+        fish_size = 0
 
-        # 1. 제물 지불 로직
-        if 제물.value == "gold":
-            async with db.conn.execute("SELECT coins FROM user_data WHERE user_id = ?", (user_id,)) as cursor:
-                res = await cursor.fetchone()
-            coins = res[0] if res else 0
-            if coins < 100000:
-                fail_reason = "❌ 코인이 부족합니다! (100,000 C 필요)"
-            else:
-                await db.execute("UPDATE user_data SET coins = coins - 100000 WHERE user_id = ?", (user_id,))
-                sacrifice_success = True
-                bonus_chance = 0.0
+        async with db.transaction():
+            # 1. 제물 지불 로직
+            if 제물.value == "gold":
+                async with db.conn.execute("SELECT coins FROM user_data WHERE user_id = ?", (user_id,)) as cursor:
+                    res = await cursor.fetchone()
+                coins = res[0] if res else 0
+                if coins < 100000:
+                    fail_reason = "❌ 코인이 부족합니다! (100,000 C 필요)"
+                else:
+                    await db.execute("UPDATE user_data SET coins = coins - 100000 WHERE user_id = ?", (user_id,))
+                    sacrifice_success = True
+                    bonus_chance = 0.0
 
-        elif 제물.value == "epic":
-            if await self._sacrifice_fish_by_grade(user_id, "에픽", 20):
-                sacrifice_success = True
-                bonus_chance = 0.05
-            else:
-                fail_reason = "❌ 제물이 부족합니다! (잠금되지 않은 **에픽** 등급 물고기 20마리 필요)"
+            elif 제물.value == "epic":
+                if await self._sacrifice_fish_by_grade(user_id, "에픽", 20):
+                    sacrifice_success = True
+                    bonus_chance = 0.05
+                else:
+                    fail_reason = "❌ 제물이 부족합니다! (잠금되지 않은 **에픽** 등급 물고기 20마리 필요)"
 
-        elif 제물.value == "legend":
-            if await self._sacrifice_fish_by_grade(user_id, "레전드", 7):
-                sacrifice_success = True
-                bonus_chance = 0.10
-            else:
-                fail_reason = "❌ 제물이 부족합니다! (잠금되지 않은 **레전드** 등급 물고기 7마리 필요)"
+            elif 제물.value == "legend":
+                if await self._sacrifice_fish_by_grade(user_id, "레전드", 7):
+                    sacrifice_success = True
+                    bonus_chance = 0.10
+                else:
+                    fail_reason = "❌ 제물이 부족합니다! (잠금되지 않은 **레전드** 등급 물고기 7마리 필요)"
 
-        elif 제물.value == "ancient":
-            if await self._sacrifice_ancient_plus(user_id):
-                sacrifice_success = True
-                bonus_chance = 0.25
-            else:
-                fail_reason = "❌ 제물이 부족합니다! (잠금되지 않은 **태고 이상** 등급 물고기 1마리 필요)"
+            elif 제물.value == "ancient":
+                if await self._sacrifice_ancient_plus(user_id):
+                    sacrifice_success = True
+                    bonus_chance = 0.25
+                else:
+                    fail_reason = "❌ 제물이 부족합니다! (잠금되지 않은 **태고 이상** 등급 물고기 1마리 필요)"
 
-        if not sacrifice_success:
-            return await interaction.followup.send(fail_reason)
+            if not sacrifice_success:
+                return await interaction.followup.send(fail_reason)
 
-        await db.commit()
+            # 2. 확률 계산
+            base_chance = sum(self.special_pool.values()) # 0.036 (3.6%)
+            total_success_chance = base_chance + bonus_chance
 
-        # 2. 확률 계산
-        base_chance = sum(self.special_pool.values()) # 0.036 (3.6%)
-        total_success_chance = base_chance + bonus_chance
+            # 3. 결과 판정
+            roll = random.random()
 
-        # 3. 결과 판정
-        roll = random.random()
+            if roll <= total_success_chance:
+                # 성공! 가중치에 따라 어종 결정
+                names = list(self.special_pool.keys())
+                weights = list(self.special_pool.values())
+                caught_fish = random.choices(names, weights=weights, k=1)[0]
 
-        if roll <= total_success_chance:
-            # 성공! 가중치에 따라 어종 결정
-            names = list(self.special_pool.keys())
-            weights = list(self.special_pool.values())
-            caught_fish = random.choices(names, weights=weights, k=1)[0]
+                # 인벤토리 추가 및 도감 등록
+                await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (user_id, caught_fish))
+                await db.execute("INSERT OR IGNORE INTO fish_dex (user_id, item_name) VALUES (?, ?)", (user_id, caught_fish))
 
-            # 인벤토리 추가 및 도감 등록
-            await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (user_id, caught_fish))
-            await db.execute("INSERT OR IGNORE INTO fish_dex (user_id, item_name) VALUES (?, ?)", (user_id, caught_fish))
-
-            # 기록 갱신 (크기 생성)
-            power = FISH_DATA.get(caught_fish, {}).get("power", 1000)
-            fish_size = round(random.uniform(power * 1.5, power * 2.5), 2)
-            await db.execute("INSERT INTO fish_records (user_id, item_name, max_size) VALUES (?, ?, ?) ON CONFLICT(user_id, item_name) DO UPDATE SET max_size = MAX(max_size, excluded.max_size)", (user_id, caught_fish, fish_size))
-
-            await db.commit()
+                # 기록 갱신 (크기 생성)
+                power = FISH_DATA.get(caught_fish, {}).get("power", 1000)
+                fish_size = round(random.uniform(power * 1.5, power * 2.5), 2)
+                await db.execute("INSERT INTO fish_records (user_id, item_name, max_size) VALUES (?, ?, ?) ON CONFLICT(user_id, item_name) DO UPDATE SET max_size = MAX(max_size, excluded.max_size)", (user_id, caught_fish, fish_size))
 
             embed = EmbedFactory.build(
                 title="🌊 심연의 바다가 요동칩니다!",
                 description=f"간절한 기도가 바다의 심장부에 닿았습니다.\n수평선 너머에서 **전설 속의 신수**가 모습을 드러냅니다!\n\n🎉 **획득:** `{caught_fish}` (`{fish_size} cm`)",
-                type="info",
+                style="info",
             )
             embed.set_thumbnail(url="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExOHJqZ3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/l41lTfuxV5RWRsBPO/giphy.gif")
             embed.set_footer(text=f"적용 확률: {total_success_chance*100:.1f}% (보너스: +{bonus_chance*100:.1f}%)")
@@ -157,14 +156,14 @@ class PrayerCommands(commands.Cog):
             if caught_fish == "용왕 🐉👑":
                 await interaction.channel.send(f"📢 **[전설]** {interaction.user.name}님이 기도를 통해 바다의 진정한 주인, **{caught_fish}**를 알현했습니다!!!")
 
-        else:
-            embed = EmbedFactory.build(
-                title="🌑 바다가 고요하게 가라앉습니다...",
-                description="당신의 정성은 거품이 되어 심해로 흩어졌습니다. 바다는 아무런 응답이 없습니다.",
-                type="default",
-            )
-            embed.set_footer(text=f"성공 확률: {total_success_chance*100:.1f}% | 꽝 확률: {(1-total_success_chance)*100:.1f}%")
-            await interaction.followup.send(content=f"{interaction.user.mention}", embed=embed)
+            else:
+                embed = EmbedFactory.build(
+                    title="🌑 바다가 고요하게 가라앉습니다...",
+                    description="당신의 정성은 거품이 되어 심해로 흩어졌습니다. 바다는 아무런 응답이 없습니다.",
+                    style="default",
+                )
+                embed.set_footer(text=f"성공 확률: {total_success_chance*100:.1f}% | 꽝 확률: {(1-total_success_chance)*100:.1f}%")
+                await interaction.followup.send(content=f"{interaction.user.mention}", embed=embed)
 
     @app_commands.command(name="기도", description="오늘의 운세를 점치며 바다에 기도를 올립니다. (일일 1회)")
     @app_commands.checks.cooldown(1, 5.0, key=lambda i: i.user.id)
@@ -205,12 +204,11 @@ class PrayerCommands(commands.Cog):
             "ON CONFLICT(user_id, buff_type) DO UPDATE SET end_time = ?",
             (user_id, buff_type, end_time, end_time)
         )
-        await db.commit()
 
         embed = EmbedFactory.build(
             title="🙏 오늘의 기도 결과",
             description="바다에 정성스럽게 기도를 올렸습니다.\n수평선 너머에서 어떤 기운이 느껴집니다...",
-            type="success" if is_blessing else "warning"
+            style="success" if is_blessing else "warning"
         )
         
         status = "✨ **축복**" if is_blessing else "⚠️ **고난**"

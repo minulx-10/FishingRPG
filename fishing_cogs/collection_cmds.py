@@ -41,7 +41,7 @@ class CollectionCog(commands.Cog):
         title = await db.get_user_title(target.id)
         display_name = f"{title} {target.name}" if title else target.name
 
-        embed = EmbedFactory.build(title=f"📖 {display_name}님의 낚시 도감", type="info")
+        embed = EmbedFactory.build(title=f"📖 {display_name}님의 낚시 도감", style="info")
         if target.avatar:
             embed.set_thumbnail(url=target.avatar.url)
 
@@ -85,7 +85,7 @@ class CollectionCog(commands.Cog):
         total_species = len(FISH_DATA)
         milestones.append({"count": total_species, "reward_c": 1000000, "title": "전설의 낚시꾼", "id": "full"})
 
-        embed = EmbedFactory.build(title="📜 어종 도감 수집 보상", type="info")
+        embed = EmbedFactory.build(title="📜 어종 도감 수집 보상", style="info")
         embed.description = f"현재 수집한 어종: **{dex_count} / {total_species}** 종\n\n"
 
         can_claim = False
@@ -110,7 +110,6 @@ class CollectionCog(commands.Cog):
 
         if can_claim:
             await db.execute("UPDATE user_data SET dex_rewards = ? WHERE user_id=?", (json.dumps(claimed), interaction.user.id))
-            await db.commit()
             reward_txt = "\n".join(new_rewards)
             await interaction.response.send_message(f"🎉 **축하합니다! 새로운 보상을 수령했습니다!**\n{reward_txt}", embed=embed)
         else:
@@ -125,7 +124,7 @@ class CollectionCog(commands.Cog):
             res = await cursor.fetchone()
         claimed = json.loads(res[0]) if res and res[0] else {}
 
-        embed = EmbedFactory.build(title="📜 어류 수집 세트 컬렉션", type="warning")
+        embed = EmbedFactory.build(title="📜 어류 수집 세트 컬렉션", style="warning")
         embed.description = "특정 물고기들을 모두 도감에 등록하면 특별한 보상을 드립니다!\n\n"
 
         can_claim_any = False
@@ -154,7 +153,6 @@ class CollectionCog(commands.Cog):
 
         if can_claim_any:
             await db.execute("UPDATE user_data SET claimed_collections = ? WHERE user_id=?", (json.dumps(claimed), interaction.user.id))
-            await db.commit()
             msg = "\n".join(newly_claimed)
             await interaction.response.send_message(f"🎊 **축하합니다! 컬렉션을 완성하여 보상을 수령했습니다!**\n{msg}", embed=embed)
         else:
@@ -178,9 +176,8 @@ class CollectionCog(commands.Cog):
             await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name=?", (수량, interaction.user.id, p))
 
         await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, '고대 해적의 보물지도 🗺️', ?) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?", (interaction.user.id, 수량, 수량))
-        await db.commit()
 
-        embed = EmbedFactory.build(title="🗺️ 보물지도 합성 성공!", description=f"조각들을 정교하게 이어 붙여 **고대 해적의 보물지도 🗺️** {수량}장을 완성했습니다!", type="warning")
+        embed = EmbedFactory.build(title="🗺️ 보물지도 합성 성공!", description=f"조각들을 정교하게 이어 붙여 **고대 해적의 보물지도 🗺️** {수량}장을 완성했습니다!", style="warning")
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="지도사용", description="'고대 해적의 보물지도'를 사용하여 특별한 해역 버프(30분)를 개방합니다.")
@@ -198,7 +195,6 @@ class CollectionCog(commands.Cog):
         chosen_buff = random.choice(buffs)
 
         await db.execute("INSERT OR REPLACE INTO active_buffs (user_id, buff_type, end_time) VALUES (?, ?, ?)", (interaction.user.id, chosen_buff, end_time))
-        await db.commit()
 
         if chosen_buff == "ghost_sea_open":
             title, desc = "☠️ 망자의 해역 개방...", "앞으로 **30분 동안**, 물고기 대신 **해적의 금화 🪙, 낡은 고철 ⚙️, 보물상자 🧰**만 낚입니다!"
@@ -207,7 +203,7 @@ class CollectionCog(commands.Cog):
         else:
             title, desc = "✨ 황금 조류 발견!", "앞으로 **30분 동안**, 낚시 타이밍이 매우 넉넉해져 성공 확률이 대폭 상승합니다!"
 
-        embed = EmbedFactory.build(title=title, description=desc, type="warning")
+        embed = EmbedFactory.build(title=title, description=desc, style="warning")
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="조각교환", description="같은 지도 조각 3개를 다른 무작위 조각 1개로 교환합니다.")
@@ -229,7 +225,6 @@ class CollectionCog(commands.Cog):
 
         await db.execute("UPDATE inventory SET amount = amount - 3 WHERE user_id=? AND item_name=?", (interaction.user.id, 조각.value))
         await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id, reward_piece))
-        await db.commit()
 
         await interaction.response.send_message(f"♻️ 교환 성공! **{조각.name}** 3개를 주고 **{reward_piece}** 1개를 얻었습니다!")
 
@@ -255,9 +250,8 @@ class CollectionCog(commands.Cog):
         await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name=?", (수량, interaction.user.id, 조개종류))
         if success > 0:
             await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, '진주 ⚪', ?) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + ?", (interaction.user.id, success, success))
-        await db.commit()
 
-        embed = EmbedFactory.build(title="🐚 조개 열기 결과", type="info")
+        embed = EmbedFactory.build(title="🐚 조개 열기 결과", style="info")
         if success > 0:
             embed.add_field(name="✨ 획득 성공!", value=f"**진주 ⚪** {success}개를 발견했습니다!", inline=False)
         else:
@@ -273,7 +267,7 @@ class CollectionCog(commands.Cog):
             row = await cursor.fetchone()
         pearl_count = row[0] if row else 0
 
-        embed = EmbedFactory.build(title="⚪ 진주 비밀 상점", type="info")
+        embed = EmbedFactory.build(title="⚪ 진주 비밀 상점", style="info")
         embed.description = f"보유 중인 진주: **{pearl_count}개**"
         
         shop_items = {
@@ -305,8 +299,6 @@ class CollectionCog(commands.Cog):
                     await db.execute("INSERT INTO active_buffs (user_id, buff_type, end_time) VALUES (?, 'deep_sea_luck', ?) ON CONFLICT(user_id, buff_type) DO UPDATE SET end_time = ?", (interaction.user.id, end_time, end_time))
                 elif item_key == "map": await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, '고대 해적의 보물지도 🗺️', 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id,))
                 elif item_key == "title": await db.execute("UPDATE user_data SET title='[진주 수집가]' WHERE user_id=?", (interaction.user.id,))
-                
-                await db.commit()
                 await interaction.response.send_message(f"✅ **{item['name']}** 구매 완료!", ephemeral=True)
 
         view = View()
@@ -326,7 +318,7 @@ class CollectionCog(commands.Cog):
             {"name": "💀 심연의 공포", "items": ["심해의 파멸, 크라켄 🦑", "심연의 지배자, 레비아탄 🌋", "세계를 감싼 뱀, 요르문간드 🐍"], "bonus": "레이드 대미지 +10% 증가", "desc": "심해의 공포 완수"}
         ]
 
-        embed = EmbedFactory.build(title="📜 컬렉션 세트 효과", type="warning")
+        embed = EmbedFactory.build(title="📜 컬렉션 세트 효과", style="warning")
         for s in sets:
             collected = sum(1 for item in s["items"] if item in dex_items or item in inv_items)
             status = "✅ 활성화됨" if collected == len(s["items"]) else f"❌ 비활성 ({collected}/{len(s['items'])})"

@@ -76,7 +76,7 @@ class FishingView(View):
         if not self.is_bite:
             self.resolved = True
             self.stop()
-            embed = EmbedFactory.build(title="💨 너무 일찍 당겼습니다!", description=f"낚싯줄을 던지자마자 당겨버렸습니다.\n잠시 입질을 기다리던 **{self.target_fish}**(이)가 놀라 도망갔습니다.", type="default")
+            embed = EmbedFactory.build(title="💨 너무 일찍 당겼습니다!", description=f"낚싯줄을 던지자마자 당겨버렸습니다.\n잠시 입질을 기다리던 **{self.target_fish}**(이)가 놀라 도망갔습니다.", style="default")
             return await interaction.response.edit_message(content=None, embed=embed, view=None)
         
         self.resolved = True
@@ -93,7 +93,7 @@ class FishingView(View):
         time_limit = limit_map.get(grade, 2.0)
         
         if elapsed > time_limit:
-            embed = EmbedFactory.build(title="💨 타이밍이 늦었습니다!", description=f"찰나의 순간, **{self.target_fish}**(이)가 미끼만 쏙 빼먹고 깊은 바다로 도망갔습니다.\n(반응 속도: `{elapsed:.2f}초` / 제한: `{time_limit}초`)", type="default")
+            embed = EmbedFactory.build(title="💨 타이밍이 늦었습니다!", description=f"찰나의 순간, **{self.target_fish}**(이)가 미끼만 쏙 빼먹고 깊은 바다로 도망갔습니다.\n(반응 속도: `{elapsed:.2f}초` / 제한: `{time_limit}초`)", style="default")
             return await interaction.response.edit_message(content=None, embed=embed, view=None)
         
         if grade in ["대형 포식자", "레전드", "신화", "태고", "환상", "미스터리"]:
@@ -115,7 +115,7 @@ class FishingView(View):
                 from fishing_core.utils import broadcast_legendary_catch
                 self.bot.loop.create_task(broadcast_legendary_catch(self.bot, self.user, self.target_fish, grade))
 
-            embed = EmbedFactory.build(title="✨ 낚시 성공! 월척입니다!", type=embed_type)
+            embed = EmbedFactory.build(title="✨ 낚시 성공! 월척입니다!", style=embed_type)
             embed.set_author(name=f"{self.user.name}님의 포획 기록", icon_url=self.user.display_avatar.url)
             embed.description = f"**{self.target_fish}** (을)를 성공적으로 낚아올렸습니다!\n입질 반응 속도: `{elapsed:.2f}초`"
             embed.add_field(name="🧬 어종 등급", value=format_grade_label(grade), inline=True)
@@ -185,7 +185,7 @@ class TensionFishingView(View):
         self.max_turns = 3 if grade == "대형 포식자" else (4 if grade == "레전드" else 5)
 
     def get_embed(self):
-        embed = EmbedFactory.build(title="🎣 거대 괴수와 힘겨루기!", type="info")
+        embed = EmbedFactory.build(title="🎣 거대 괴수와 힘겨루기!", style="info")
         embed.description = f"텐션을 **20% ~ 80%** 사이로 유지하세요!\n(남은 턴: {self.max_turns - self.turn + 1})"
         bar_count = 10
         filled = int(self.tension / 10)
@@ -244,7 +244,7 @@ class BattleView(View):
         self.npc_pwr = p2_pwr
 
     def generate_embed(self):
-        embed = EmbedFactory.build(title=f'⚔️ 배틀 (Turn {self.turn})', type='error')
+        embed = EmbedFactory.build(title=f'⚔️ 배틀 (Turn {self.turn})', style='error')
         embed.add_field(name=f'🔵 {self.user.name}', value=f'HP: {self.my_hp}', inline=True)
         embed.add_field(name='🔴 적', value=f'HP: {self.npc_hp}', inline=True)
         
@@ -297,7 +297,7 @@ class PvPBattleView(View):
             self.p2_hp = self.p2_max_hp = pwr * 12
 
     def generate_embed(self, reveal=False):
-        embed = EmbedFactory.build(title=f'⚔️ 전략 수산대전 (Turn {self.turn_count})', type='warning')
+        embed = EmbedFactory.build(title=f'⚔️ 전략 수산대전 (Turn {self.turn_count})', style='warning')
         def hp_bar(hp, mhp): return create_progress_bar(hp, mhp, length=10)
         def ap_bar(ap): return '🟦' * ap + '⬜' * (8 - ap)
         
@@ -360,7 +360,7 @@ class PvPBattleView(View):
         ap = self.p1_ap if is_p1 else self.p2_ap
         
         mult = BattleService.MULTIPLIERS.get(alloc['atk'], 0.0)
-        status_embed = EmbedFactory.build(title='🛡️ 내 전략 현황', type='info')
+        status_embed = EmbedFactory.build(title='🛡️ 내 전략 현황', style='info')
         status_embed.add_field(name='⚔️ 공격', value=f'`{alloc["atk"]} pt` (**{mult}x**)', inline=True)
         status_embed.add_field(name='🛡️ 방어', value=f'`{alloc["blk"]} pt`', inline=True)
         status_embed.add_field(name='💎 남은 AP', value=f'`{ap - sum(alloc.values())} pt`', inline=True)
@@ -433,7 +433,7 @@ class PvPBattleView(View):
 
     async def end_battle(self, interaction, winner, loser):
         self.stop()
-        embed = EmbedFactory.build(title='⚔️ 전투 종료', type='warning')
+        embed = EmbedFactory.build(title='⚔️ 전투 종료', style='warning')
         embed.description = f'👑 **{winner.name}** 승리!\n💀 **{loser.name}** 패배...'
         
         # 승리 보상 (약탈)
@@ -473,7 +473,7 @@ class InventoryView(View):
         coins, rod_tier, rating, boat_str, stamina, max_stamina, title = self.stats
         display_name = f"{title} {self.target.name}" if title else self.target.name
         
-        embed = EmbedFactory.build(title=f"🎒 {display_name}님의 가방", type="info")
+        embed = EmbedFactory.build(title=f"🎒 {display_name}님의 가방", style="info")
         
         # 요약 정보 및 총 가치 계산
         from fishing_core.shared import MARKET_PRICES
@@ -615,7 +615,7 @@ class MarketPaginationView(View):
         from fishing_core.services.market_service import MarketService
         start = self.current_page * self.per_page
         items = self.all_items[start:start+self.per_page]
-        embed = EmbedFactory.build(title="📊 실시간 수산시장 시세판", type="warning")
+        embed = EmbedFactory.build(title="📊 실시간 수산시장 시세판", style="warning")
         embed.description = "시세는 30분마다 변동됩니다."
         for f, p in items:
             status = MarketService.get_price_status(f)
@@ -691,7 +691,7 @@ class RecipeBookView(View):
         end = start + self.per_page
         items = self.recipes[start:end]
         
-        embed = EmbedFactory.build(title="👨‍🍳 수산시장 요리 도감", type="warning")
+        embed = EmbedFactory.build(title="👨‍🍳 수산시장 요리 도감", style="warning")
         embed.description = f"잡은 물고기를 사용하여 특별한 요리를 만듭니다. `/요리` 명령어로 제작 가능합니다.\n(총 {len(self.recipes)}종의 레시피 보유)"
         
         for name, data in items:
@@ -724,3 +724,86 @@ class RecipeBookView(View):
         if (self.current_page + 1) * self.per_page < len(self.recipes):
             self.current_page += 1
         await interaction.response.edit_message(embed=self.make_embed(), view=self)
+
+
+class TutorialView(View):
+    """뉴비를 위한 쾌속 성장 가이드 뷰입니다."""
+    def __init__(self, user):
+        super().__init__(timeout=180)
+        self.user = user
+        self.current_page = 0
+        self.pages = [
+            {
+                "title": "🎣 1단계: 첫 낚시",
+                "desc": (
+                    "**`/낚시`** 명령어를 사용하여 물고기를 잡아보세요!\n\n"
+                    "• 입질이 올 때까지 기다린 후, 빠르게 **챔질** 버튼을 눌러야 합니다.\n"
+                    "• 너무 빨리 누르면 놓치고, 너무 늦어도 놓칩니다.\n"
+                    "• 잡은 물고기는 **가방에 넣기** / **즉시 판매** / **방생** 중 선택할 수 있습니다."
+                ),
+            },
+            {
+                "title": "💰 2단계: 코인 벌기",
+                "desc": (
+                    "물고기를 잡아서 코인을 모으세요!\n\n"
+                    "• **`/판매`** — 가방의 물고기를 일괄 판매합니다.\n"
+                    "• **`/개별판매`** — 특정 물고기만 골라 팝니다.\n"
+                    "• **`/시세`** — 시장 가격을 확인하고, 📈 떡상 어종을 노리세요!\n"
+                    "• **`/출석`** — 매일 1,000 C + 체력 전부 회복!"
+                ),
+            },
+            {
+                "title": "🛠️ 3단계: 장비 업그레이드",
+                "desc": (
+                    "코인이 모이면 장비를 강화하세요!\n\n"
+                    "• **`/강화`** — 낚싯대 레벨을 올려 대물 확률 UP!\n"
+                    "• **`/선박개조`** — 배를 업그레이드하여 새 해역과 기능 해금!\n"
+                    "• 2단계 선박(어선 🚤)부터 **상점, 요리, 의뢰** 이용 가능\n"
+                    "• 3단계 선박(쇄빙선 🛳️)부터 **배틀, 수족관** 해금!"
+                ),
+            },
+            {
+                "title": "⚔️ 4단계: 전투 & 레이드",
+                "desc": (
+                    "강해진 물고기로 전투에 참여하세요!\n\n"
+                    "• **`/잠금`** — 물고기를 배틀용 전사로 등록 (판매 보호)\n"
+                    "• **`/배틀`** — NPC와 턴제 전투 (3티어 선박 필요)\n"
+                    "• **`/레이드`** — 서버 전체 유저와 월드 보스 토벌!\n"
+                    "• **`/수산대전`** — PvP 약탈 배틀 (5티어 선박 필요)"
+                ),
+            },
+            {
+                "title": "🌟 5단계: 엔드 콘텐츠",
+                "desc": (
+                    "최종 단계에 도달하면 다양한 콘텐츠가 기다립니다!\n\n"
+                    "• **`/도감`** — 어종 수집률을 채워 특별 보상 수령\n"
+                    "• **`/바다기도`** — 제물을 바쳐 전설의 신수 소환\n"
+                    "• **`/칭호상점`** — 억 단위 코인으로 명예 칭호 구매\n"
+                    "• **`/수족관`** — 물고기를 전시하고 양식 수확\n"
+                    "• **`/컬렉션`** — 세트를 완성하여 영구 보너스 획득!"
+                ),
+            },
+        ]
+
+    def make_embed(self):
+        page = self.pages[self.current_page]
+        embed = EmbedFactory.build(title=page["title"], description=page["desc"], style="info")
+        embed.set_footer(text=f"페이지 {self.current_page + 1} / {len(self.pages)} | 💡 /도움말 에서 전체 명령어를 확인하세요!")
+        return embed
+
+    @discord.ui.button(label="◀ 이전", style=discord.ButtonStyle.secondary)
+    async def prev(self, interaction: discord.Interaction, btn):
+        if interaction.user != self.user:
+            return
+        if self.current_page > 0:
+            self.current_page -= 1
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
+
+    @discord.ui.button(label="다음 ▶", style=discord.ButtonStyle.primary)
+    async def next_page(self, interaction: discord.Interaction, btn):
+        if interaction.user != self.user:
+            return
+        if self.current_page < len(self.pages) - 1:
+            self.current_page += 1
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
+

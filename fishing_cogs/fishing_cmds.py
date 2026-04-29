@@ -78,7 +78,7 @@ class FishingCog(commands.Cog):
             total_value += unit_price * amount
             result_lines.append(f"• **{item}** x{amount}")
 
-        embed = EmbedFactory.build(title=f"🕸️ {net_name} {수량}개 투망 결과", type="info")
+        embed = EmbedFactory.build(title=f"🕸️ {net_name} {수량}개 투망 결과", style="info")
         embed.description = "그물망을 넓게 던져 한 번에 여러 자원을 건져 올렸습니다."
         embed.add_field(name="획득 목록", value="\n".join(result_lines), inline=False)
         embed.add_field(name="예상 판매 가치", value=f"`{total_value:,} C`", inline=True)
@@ -146,13 +146,12 @@ class FishingCog(commands.Cog):
             return await interaction.response.send_message(f"❌ 코인이 부족합니다. (필요: `3,000 C` / 현재: `{coins:,} C`)", ephemeral=True)
 
         await db.execute("UPDATE user_data SET coins = coins - 3000 WHERE user_id=?", (interaction.user.id,))
-        await db.commit()
 
         if "WEATHER_QUEUE" not in env_state:
             env_state["WEATHER_QUEUE"] = [random.choices(WEATHER_TYPES, weights=[40, 25, 20, 5, 10], k=1)[0] for _ in range(3)]
 
         q = env_state["WEATHER_QUEUE"]
-        embed = EmbedFactory.build(title="📡 수산시장 기상청 정밀 예보", type="info")
+        embed = EmbedFactory.build(title="📡 수산시장 기상청 정밀 예보", style="info")
         embed.description = "위성 사진과 기압골 데이터를 분석한 결과입니다."
         embed.add_field(name="1시간 뒤", value=q[0], inline=True)
         embed.add_field(name="2시간 뒤", value=q[1], inline=True)
@@ -268,7 +267,7 @@ class FishingCog(commands.Cog):
 
         view = FishingView(interaction.user, target_fish, effective_rod_tier, self.bot)
         view.double_catch = double_catch
-        embed = EmbedFactory.build(title="🎣 찌를 던졌습니다!", description=f"**{display_name}**님이 미끼를 던지고 입질을 기다립니다...{bait_text}", type="info")
+        embed = EmbedFactory.build(title="🎣 찌를 던졌습니다!", description=f"**{display_name}**님이 미끼를 던지고 입질을 기다립니다...{bait_text}", style="info")
         embed.set_image(url="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/l41lTfuxV5RWRsBPO/giphy.gif")
         embed.set_footer(text=f"내 낚싯대: Lv.{rod_tier} | 체력: {current_stamina-stamina_cost}⚡")
 
@@ -302,7 +301,7 @@ class FishingCog(commands.Cog):
             item.emoji = "‼️"
 
         try:
-            embed = EmbedFactory.build(title="❗ 입질 발생!!!!", description="**찌가 격렬하게 흔들립니다! 지금 당기세요!!!**", type="error")
+            embed = EmbedFactory.build(title="❗ 입질 발생!!!!", description="**찌가 격렬하게 흔들립니다! 지금 당기세요!!!**", style="error")
             embed.set_image(url="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/l41lTfuxV5RWRsBPO/giphy.gif")
             msg = await interaction.edit_original_response(content=None, embed=embed, view=view)
             view.message = msg
@@ -418,8 +417,7 @@ class FishingCog(commands.Cog):
             visited.append(해역.value)
             
         await db.execute("UPDATE user_data SET current_region = ?, stamina = stamina - 20, visited_regions = ? WHERE user_id = ?", 
-                         (해역.value, user_id, json.dumps(visited)))
-        await db.commit()
+                         (해역.value, json.dumps(visited), user_id))
         
         # 대해적 업적 체크 (5개 이상 해역 방문)
         if len(visited) >= 5:
@@ -428,7 +426,7 @@ class FishingCog(commands.Cog):
             if award:
                 await interaction.channel.send(f"🎊 **축하합니다! {interaction.user.mention}님이 업적 [{award['name']}]을(를) 달성했습니다!**\n*{award['desc']}*")
         
-        embed = EmbedFactory.build(title="🛳️ 항해를 시작합니다!", description=f"**{current_region}**에서 출발하여 **{해역.value}**에 무사히 도착했습니다!", type="info")
+        embed = EmbedFactory.build(title="🛳️ 항해를 시작합니다!", description=f"**{current_region}**에서 출발하여 **{해역.value}**에 무사히 도착했습니다!", style="info")
         embed.add_field(name="⛽ 소모 체력", value="-20⚡", inline=True)
         embed.add_field(name="📍 현재 위치", value=f"**{해역.value}**", inline=True)
         embed.set_image(url="https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800")
@@ -440,7 +438,7 @@ class FishingCog(commands.Cog):
         from fishing_core.services.achievement_service import AchievementService
         achievements = await AchievementService.get_user_achievements(interaction.user.id)
         
-        embed = EmbedFactory.build(title=f"🏆 {interaction.user.name}님의 업적 현황", type="warning")
+        embed = EmbedFactory.build(title=f"🏆 {interaction.user.name}님의 업적 현황", style="warning")
         
         comp_count = sum(1 for a in achievements if a["is_completed"])
         embed.description = f"현재 **{len(achievements)}개** 중 **{comp_count}개**의 업적을 달성했습니다."
@@ -506,18 +504,21 @@ class FishingCog(commands.Cog):
             res = await cursor.fetchone()
         region = res[0] if res else "연안"
 
-        embed = EmbedFactory.build(title=f"🌊 {region} - 현재 바다 상황", type="info")
+        embed = EmbedFactory.build(title=f"🌊 {region} - 현재 바다 상황", style="info")
         embed.add_field(name="현재 시간대", value=f"**{time_str}** (`{now_hour}시`)", inline=True)
         embed.add_field(name="현재 날씨", value=f"**{weather}**", inline=True)
         embed.add_field(name="현재 해역", value=f"**{region}**", inline=True)
 
         hints = f"📍 현재 **{region}**에서 항해 중입니다.\n"
+        has_special = False
         if 0 <= now_hour < 4:
             hints += "- ⚠️ [신화] 우미보즈가 출몰할 수 있는 으스스한 시간입니다.\n"
+            has_special = True
         if weather in ["🌧️ 비", "🌫️ 안개"]:
             hints += "- ⚠️ [미스터리] 네시가 활동하기 좋은 날씨입니다.\n"
-        if not hints:
-            hints = "- 평화로운 바다입니다. 낚시하기 딱 좋네요!"
+            has_special = True
+        if not has_special:
+            hints += "- 평화로운 바다입니다. 낚시하기 딱 좋네요!"
 
         embed.add_field(name="생태계 정보", value=hints, inline=False)
         embed.set_image(url=bg_url)
@@ -560,7 +561,7 @@ class FishingCog(commands.Cog):
     async def 환경설정(self, interaction: discord.Interaction):
         data = await db.get_full_user_data(interaction.user.id)
         
-        embed = EmbedFactory.build(title=f"⚙️ {interaction.user.name}님의 편의 설정", type="info")
+        embed = EmbedFactory.build(title=f"⚙️ {interaction.user.name}님의 편의 설정", style="info")
         bag_status = "✅ 켜짐" if data.get("auto_bag") else "❌ 꺼짐"
         sell_status = "✅ 켜짐" if data.get("auto_sell") else "❌ 꺼짐"
         
@@ -598,7 +599,6 @@ class FishingCog(commands.Cog):
         target_amount = 500000 # 기우제 성공 목표액
 
         await db.execute("INSERT OR REPLACE INTO server_state (key, value) VALUES ('RITUAL_COINS', ?)", (str(new_total),))
-        await db.commit()
 
         if new_total >= target_amount:
             # 기우제 성공! 날씨 변경 (폭풍우로 고정)
@@ -606,15 +606,14 @@ class FishingCog(commands.Cog):
             env_state["CURRENT_WEATHER"] = "🌩️ 폭풍우"
             # 예보 큐 초기화
             env_state.pop("WEATHER_QUEUE", None)
-            await db.commit()
 
-            embed = EmbedFactory.build(title="🌩️ 기우제 성공! 하늘이 응답했습니다!", type="warning")
+            embed = EmbedFactory.build(title="🌩️ 기우제 성공! 하늘이 응답했습니다!", style="warning")
             embed.description = f"**{interaction.user.name}**님의 마지막 정성이 닿았습니다!\n총 `{new_total:,} C`가 모여 바다에 **강력한 폭풍우**가 몰아치기 시작합니다!"
             embed.set_image(url="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4Z3R4JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/l41lTfuxV5RWRsBPO/giphy.gif") # 천둥 이미지 (예시)
             await interaction.response.send_message(embed=embed)
             await interaction.channel.send("📢 **[시스템]** 기우제 성공으로 인해 날씨가 **🌩️ 폭풍우**로 고정되었습니다! (1시간 지속)")
         else:
-            embed = EmbedFactory.build(title="🙏 기우제 정성 모집 중...", type="info")
+            embed = EmbedFactory.build(title="🙏 기우제 정성 모집 중...", style="info")
             embed.description = f"**{interaction.user.name}**님이 `{기부금:,} C`를 기부하셨습니다!\n\n현재 모인 정성: `{new_total:,} / {target_amount:,} C`\n목표 도달 시 바다에 **폭풍우**가 찾아옵니다!"
             progress = int((new_total / target_amount) * 10)
             bar = "🟦" * progress + "⬜" * (10 - progress)

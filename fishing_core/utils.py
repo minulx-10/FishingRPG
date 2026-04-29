@@ -25,11 +25,11 @@ class EmbedFactory:
     }
 
     @staticmethod
-    def build(title: str, description: str = "", type: str = "default", **kwargs) -> discord.Embed:
+    def build(title: str, description: str = "", style: str = "default", **kwargs) -> discord.Embed:
         """
         주어진 상태 타입에 맞는 색상과 레이아웃으로 임베드를 생성합니다.
         """
-        color = EmbedFactory.COLORS.get(type, EmbedFactory.COLORS["default"])
+        color = EmbedFactory.COLORS.get(style, EmbedFactory.COLORS["default"])
         embed = discord.Embed(title=title, description=description, color=color)
         
         if "author_name" in kwargs:
@@ -104,7 +104,7 @@ async def log_admin_action(bot, admin_user, target_user, action_name, detail):
     if not channel:
         return
 
-    embed = EmbedFactory.build(title="🛡️ 관리자 작업 로그", type="error", timestamp=datetime.datetime.now(kst))
+    embed = EmbedFactory.build(title="🛡️ 관리자 작업 로그", style="error", timestamp=datetime.datetime.now(kst))
     embed.add_field(name="실행자", value=f"{admin_user.mention} ({admin_user.id})", inline=True)
     if target_user:
         embed.add_field(name="대상", value=f"{target_user.mention} ({target_user.id})", inline=True)
@@ -157,7 +157,7 @@ async def recipe_autocomplete(interaction: discord.Interaction, current: str) ->
 async def usable_item_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
     """가방에 있는 아이템 중 레시피(요리)나 사용 가능한 소모품만 표시합니다."""
     # 상점 아이템 + 요리 아이템 목록
-    shop_items = ["에너지 드링크 ⚡", "가속 포션 💨", "특수 떡밥 🎣", "초급 그물망 🕸️", "튼튼한 그물망 🕸️", "레이드 작살 🔱", "레이드 작살 🔱"]
+    shop_items = ["에너지 드링크 ⚡", "가속 포션 💨", "특수 떡밥 🎣", "초급 그물망 🕸️", "튼튼한 그물망 🕸️", "레이드 작살 🔱"]
     
     async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND amount > 0", (interaction.user.id,)) as cursor:
         items = await cursor.fetchall()
@@ -185,7 +185,7 @@ def check_boat_tier(min_tier: int):
             req_name = tier_names.get(min_tier, f"Lv.{min_tier}")
             current_name = tier_names.get(tier, f"Lv.{tier}")
 
-            embed = EmbedFactory.build(title="🚫 탑승 권한 부족!", description=f"이 명령어를 사용하려면 **[{req_name}]** 이상이 필요합니다.\n(현재 선박: **{current_name}**)", type="error")
+            embed = EmbedFactory.build(title="🚫 탑승 권한 부족!", description=f"이 명령어를 사용하려면 **[{req_name}]** 이상이 필요합니다.\n(현재 선박: **{current_name}**)", style="error")
             embed.set_footer(text="💡 '/선박개조' 명령어를 통해 배를 업그레이드하세요!")
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return False

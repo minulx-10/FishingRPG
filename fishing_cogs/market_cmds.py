@@ -77,7 +77,6 @@ class MarketCog(commands.Cog):
             "ON CONFLICT(key) DO UPDATE SET value = ?",
             (json.dumps(state, ensure_ascii=False), json.dumps(state, ensure_ascii=False)),
         )
-        await db.commit()
         return state
 
     async def trigger_merchant_encounter(self, interaction: discord.Interaction):
@@ -126,9 +125,8 @@ class MarketCog(commands.Cog):
         if user_state.get("merchant_id") != state["merchant_id"]:
             user_state = {"merchant_id": state["merchant_id"], "counts": {}}
             await self._save_user_merchant_state(interaction.user.id, user_state)
-            await db.commit()
 
-        embed = EmbedFactory.build(title="🧳 떠돌이 상인", type="warning")
+        embed = EmbedFactory.build(title="🧳 떠돌이 상인", style="warning")
         embed.description = (
             "먼 바다를 떠돌던 상인이 잠시 정박했습니다.\n"
             "이번 물건은 재고가 적고, 1인 구매 제한이 있습니다."
@@ -217,7 +215,7 @@ class MarketCog(commands.Cog):
             status_info = MarketService.get_price_status(검색어)
             grade = FISH_DATA[검색어].get("grade", "일반")
 
-            embed = EmbedFactory.build(title=f"📊 {검색어} 시세 정보", type="warning")
+            embed = EmbedFactory.build(title=f"📊 {검색어} 시세 정보", style="warning")
             embed.add_field(name="등급", value=f"**{format_grade_label(grade)}**", inline=True)
             embed.add_field(name="현재 시장가", value=f"**{status_info['current']} C**", inline=True)
             embed.add_field(name="시세 상태", value=status_info['status'], inline=True)
@@ -354,7 +352,7 @@ class MarketCog(commands.Cog):
     @app_commands.command(name="상점", description="유용한 아이템을 구경할 수 있는 상점입니다.")
     @check_boat_tier(2)
     async def 상점(self, interaction: discord.Interaction):
-        embed = EmbedFactory.build(title="🏪 수산시장 아이템 상점", type="warning")
+        embed = EmbedFactory.build(title="🏪 수산시장 아이템 상점", style="warning")
         embed.add_field(name="고급 미끼 🪱 (가격: 500 C)", value="다음 낚시 때 일반 어종을 피하고 희귀 어종 등장 확률을 올려줍니다.", inline=False)
         embed.add_field(name="자석 미끼 🧲 (가격: 800 C)", value="물고기는 낚이지 않지만, 바다 밑에 가라앉은 고철이나 보물을 확정적으로 건져냅니다.", inline=False)
         embed.add_field(name="초급 그물망 🕸️ (가격: 500 C)", value="얕은 바다를 훑어 잡어, 조개류, 고철을 한 번에 5개까지 건져올립니다.", inline=False)
@@ -395,7 +393,6 @@ class MarketCog(commands.Cog):
             return await interaction.response.send_message(f"⚠️ **{물고기}**는 이미 잠금 처리되어 있습니다.", ephemeral=True)
 
         await db.execute("UPDATE inventory SET is_locked=1 WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기))
-        await db.commit()
         await interaction.response.send_message(f"🔒 **{물고기}**가 잠금(보호) 처리되었습니다! 이제 일괄 판매 시 제외되며 배틀 출전이 가능합니다.")
 
     @app_commands.command(name="잠금해제", description="잠금(보호) 처리된 물고기의 잠금을 해제합니다.")
@@ -411,24 +408,21 @@ class MarketCog(commands.Cog):
             return await interaction.response.send_message(f"⚠️ **{물고기}**는 잠겨있지 않습니다.", ephemeral=True)
 
         await db.execute("UPDATE inventory SET is_locked=0 WHERE user_id=? AND item_name=?", (interaction.user.id, 물고기))
-        await db.commit()
         await interaction.response.send_message(f"🔓 **{물고기}**의 잠금을 해제했습니다! 이제 판매할 수 있습니다.")
 
     @app_commands.command(name="일괄잠금", description="현재 가방에 있는 모든 물고기를 일괄 잠금(보호) 처리합니다.")
     async def 일괄잠금(self, interaction: discord.Interaction):
         await db.execute("UPDATE inventory SET is_locked=1 WHERE user_id=? AND amount > 0", (interaction.user.id,))
-        await db.commit()
         await interaction.response.send_message("🔒 가방에 있는 모든 물고기를 **일괄 잠금** 처리했습니다! (판매 시 보호됨)")
 
     @app_commands.command(name="일괄해제", description="현재 가방에 있는 모든 물고기의 잠금을 일괄 해제합니다.")
     async def 일괄해제(self, interaction: discord.Interaction):
         await db.execute("UPDATE inventory SET is_locked=0 WHERE user_id=? AND amount > 0", (interaction.user.id,))
-        await db.commit()
         await interaction.response.send_message("🔓 가방에 있는 모든 물고기의 **잠금을 일괄 해제**했습니다! (이제 판매가 가능합니다)")
 
     @app_commands.command(name="칭호상점", description="어마어마한 코인을 지불하여 명예로운 칭호를 구매합니다. (엔드게임 콘텐츠)")
     async def 칭호상점(self, interaction: discord.Interaction):
-        embed = EmbedFactory.build(title="🎖️ 명예의 전당 - 칭호 상점", type="warning")
+        embed = EmbedFactory.build(title="🎖️ 명예의 전당 - 칭호 상점", style="warning")
         embed.description = "부와 명예를 모두 가진 자만이 달 수 있는 특별한 칭호들입니다."
         embed.add_field(name="[갑부] 💰", value="가격: `1,000,000 C`", inline=False)
         embed.add_field(name="[강태공] 🎣", value="가격: `5,000,000 C`", inline=False)
@@ -469,7 +463,7 @@ class MarketCog(commands.Cog):
             await db.log_action(interaction.user.id, "ITEM_GIFT", f"To: {유저.name}, Item: {물건}, Qty: {수량}")
             
         from fishing_core.utils import EmbedFactory
-        embed = EmbedFactory.build(title="🎁 선물이 도착했습니다!", type="info")
+        embed = EmbedFactory.build(title="🎁 선물이 도착했습니다!", style="info")
         embed.description = f"**{interaction.user.name}**님이 **{유저.name}**님에게 선물을 보냈습니다!"
         embed.add_field(name="📦 선물 품목", value=f"**{물건}** x{수량}")
         embed.set_thumbnail(url="https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=400")
@@ -509,7 +503,6 @@ class TitleShopView(discord.ui.View):
             return await interaction.response.send_message(f"❌ 코인이 부족합니다! (필요: {price:,} C / 현재: {coins:,} C)", ephemeral=True)
 
         await db.execute("UPDATE user_data SET coins = coins - ?, title = ? WHERE user_id=?", (price, f"[{selected}]", interaction.user.id))
-        await db.commit()
 
         await interaction.response.send_message(f"🎊 축하합니다! `{price:,} C`를 지불하고 **[{selected}]** 칭호를 획득했습니다!")
 

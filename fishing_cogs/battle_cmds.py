@@ -22,7 +22,7 @@ class BattleCog(commands.Cog):
         async with db.conn.execute("SELECT item_name, amount FROM inventory WHERE user_id=? AND amount > 0 AND is_locked=1", (target.id,)) as cursor:
             items = await cursor.fetchall()
 
-        embed = EmbedFactory.build(title=f"🔒 {target.name}의 잠금(보호) 목록", type="success")
+        embed = EmbedFactory.build(title=f"🔒 {target.name}의 잠금(보호) 목록", style="success")
         if items:
             item_list = ""
             for name, amt in items:
@@ -308,7 +308,7 @@ class BattleCog(commands.Cog):
             is_defeated = result['new_hp'] <= 0
             embed_type = "success" if is_defeated else "info"
             
-            embed = EmbedFactory.build(title=f"🌌 월드 보스 레이드 (Lv.{boss_level})", type=embed_type)
+            embed = EmbedFactory.build(title=f"🌌 월드 보스 레이드 (Lv.{boss_level})", style=embed_type)
             health_bar = create_progress_bar(result['new_hp'], boss_max_hp, length=20)
             
             crit_msg = "💥 **[치명타!]** " if result['is_crit'] else "⚔️ "

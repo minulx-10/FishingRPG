@@ -71,7 +71,6 @@ class EventCog(commands.Cog):
                     SELECT user_id FROM inventory WHERE item_name = '세계를 감싼 뱀, 요르문간드 🐍' AND amount > 0
                 )
             """)
-            await db.commit()
             logger.info("요르문간드의 축복: 코인 5% 증가 처리 완료.")
         except Exception as e:
             logger.error(f"자정 태스크 에러: {e}")

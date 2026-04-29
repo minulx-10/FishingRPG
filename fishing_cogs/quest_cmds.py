@@ -43,7 +43,7 @@ class QuestCog(commands.Cog):
         title = await db.get_user_title(target.id)
         display_name = f"{title} {target.name}" if title else target.name
 
-        embed = EmbedFactory.build(title=f"🏛️ {display_name}님의 수족관", type="info")
+        embed = EmbedFactory.build(title=f"🏛️ {display_name}님의 수족관", style="info")
         if not items:
             embed.description = "수족관이 텅 비어있습니다... 휑~ 🌬️\n(`/전시` 명령어로 물고기를 전시해보세요!)"
             return await interaction.followup.send(embed=embed)
@@ -206,7 +206,7 @@ class QuestCog(commands.Cog):
                             if site not in latest_data:
                                 latest_data[site] = item
 
-                        embed = EmbedFactory.build(title="🌊 한강 주요 지점 실시간 수온", type="info")
+                        embed = EmbedFactory.build(title="🌊 한강 주요 지점 실시간 수온", style="info")
 
                         operational_sites = 0
                         for site, info in latest_data.items():
@@ -384,7 +384,7 @@ class QuestCog(commands.Cog):
                                  (q_date, q_item, q_amount, q_reward, interaction.user.id))
 
         if q_cleared == 1:
-            embed = EmbedFactory.build(title="📜 오늘의 항구 의뢰", description="오늘의 의뢰는 이미 완료했습니다!\n마을이 평화롭네요. 내일 다시 와주세요.", type="default")
+            embed = EmbedFactory.build(title="📜 오늘의 항구 의뢰", description="오늘의 의뢰는 이미 완료했습니다!\n마을이 평화롭네요. 내일 다시 와주세요.", style="default")
             return await interaction.response.send_message(embed=embed)
 
         q_grade = FISH_DATA.get(q_item, {}).get("grade", "일반")
@@ -497,7 +497,7 @@ class QuestCog(commands.Cog):
             await db.execute("UPDATE user_data SET last_farm_harvest=? WHERE user_id=?", (now.isoformat(), interaction.user.id))
         
         harvest_str = "\n".join([f"• {name} 🐟" for name in harvested])
-        embed = EmbedFactory.build(title="🧺 양식 수확 완료!", description=f"수족관에서 정성껏 키운 물고기들이 새끼를 쳤습니다!\n\n**[획득 목록]**\n{harvest_str}", type="success")
+        embed = EmbedFactory.build(title="🧺 양식 수확 완료!", description=f"수족관에서 정성껏 키운 물고기들이 새끼를 쳤습니다!\n\n**[획득 목록]**\n{harvest_str}", style="success")
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="수족관확장", description="코인을 지불하여 수족관 전시 슬롯을 하나 추가합니다.")
@@ -548,7 +548,6 @@ class QuestCog(commands.Cog):
             return await interaction.response.send_message("❌ 5,000,000 코인 이상 보유한 진정한 부자만 장착할 수 있습니다.", ephemeral=True)
 
         await db.execute("UPDATE user_data SET title=? WHERE user_id=?", (title, interaction.user.id))
-        await db.commit()
 
         display = title if title else "없음"
         await interaction.response.send_message(f"📛 칭호가 **{display}**(으)로 변경되었습니다! 이제 커맨드 사용 시 새로운 이름이 나타납니다.")
@@ -569,7 +568,6 @@ class QuestCog(commands.Cog):
 
         await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name='가라앉은 보물상자 🧰'", (interaction.user.id,))
         await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id=?", (fee, interaction.user.id))
-        await db.commit()
 
         await interaction.response.send_message("🧰 녹슨 상자의 자물쇠에 열쇠를 꽂고 강하게 비틀고 있습니다...")
         await asyncio.sleep(2.0)
@@ -599,7 +597,6 @@ class QuestCog(commands.Cog):
             await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id=?", (reward_coin, interaction.user.id))
             await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id, reward_item))
 
-        await db.commit()
         await interaction.edit_original_response(content=f"🧰 **녹슨 상자가 마침내 열렸습니다!**\n\n{reward_msg}")
 
 

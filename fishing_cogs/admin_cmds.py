@@ -70,7 +70,7 @@ class AdminCog(commands.Cog):
     @app_commands.command(name="전체공지", description="[관리자 전용] 멋진 임베드로 전체 공지사항을 띄웁니다.")
     @is_developer()
     async def 전체공지(self, interaction: discord.Interaction, 제목: str, 내용: str):
-        embed = EmbedFactory.build(title=f"📢 [시스템 공지] {제목}", description=내용.replace('\\n', '\n'), type="error")
+        embed = EmbedFactory.build(title=f"📢 [시스템 공지] {제목}", description=내용.replace('\\n', '\n'), style="error")
         embed.set_footer(text="수산시장 관리국에서 발송된 메시지입니다.")
         await interaction.channel.send(content="@everyone", embed=embed)
         await interaction.response.send_message("공지 발송 완료!", ephemeral=True)

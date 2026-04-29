@@ -44,7 +44,7 @@ class HelpSelect(discord.ui.Select):
 
     def get_embed(self, category):
         if category == "main":
-            embed = EmbedFactory.build(title="🎣 수산시장 RPG 도움말 센터", type="info")
+            embed = EmbedFactory.build(title="🎣 수산시장 RPG 도움말 센터", style="info")
             embed.description = "아래 드롭다운 메뉴를 클릭하여 카테고리별 명령어 설명을 확인하세요!\n\n" \
                                 "💡 **팁**: 모든 명령어는 슬래시(`/`)로 시작합니다.\n" \
                                 "⚓ **초보자 가이드**: `/낚시`로 물고기를 잡고 `/판매`로 돈을 벌어 `/강화`하세요!"
@@ -58,7 +58,7 @@ class HelpSelect(discord.ui.Select):
             return embed
 
         if category == "fishing":
-            embed = EmbedFactory.build(title="🎣 낚시 및 바다 명령어", type="info")
+            embed = EmbedFactory.build(title="🎣 낚시 및 바다 명령어", style="info")
             embed.add_field(name="`/낚시 [미끼]`", value="찌를 던져 물고기를 낚습니다. 타이밍 판정에 성공해야 합니다.\n(체력 10 소모 / 뉴비 5 소모)", inline=False)
             embed.add_field(name="`/그물망 [그물]`", value="그물망을 던져 여러 마리를 한꺼번에 낚습니다.", inline=False)
             embed.add_field(name="`/미끼장착 [미끼이름]`", value="자동으로 소모할 미끼를 장착하거나 해제합니다.", inline=False)
@@ -71,7 +71,7 @@ class HelpSelect(discord.ui.Select):
             return embed
 
         if category == "market":
-            embed = EmbedFactory.build(title="💰 상점 및 시세 명령어", type="warning")
+            embed = EmbedFactory.build(title="💰 상점 및 시세 명령어", style="warning")
             embed.add_field(name="`/시세 [어종]`", value="현재 수산시장의 실시간 글로벌 시세를 확인합니다.", inline=False)
             embed.add_field(name="`/판매 [제외...] [등급필터]`", value="가방 속 물고기를 일괄 판매합니다. 특정 아이템을 보호할 수 있습니다.", inline=False)
             embed.add_field(name="`/개별판매 [물고기] [수량]`", value="특정 물고기를 원하는 수량만큼만 골라서 판매합니다.", inline=False)
@@ -81,7 +81,7 @@ class HelpSelect(discord.ui.Select):
             return embed
 
         if category == "inventory":
-            embed = EmbedFactory.build(title="🎒 가방 및 보호 명령어", type="success")
+            embed = EmbedFactory.build(title="🎒 가방 및 보호 명령어", style="success")
             embed.add_field(name="`/인벤토리 [유저]`", value="가방 내용물, 코인, 선박, 강화 레벨, 체력을 확인합니다.", inline=False)
             embed.add_field(name="`/잠금 [아이템]` / `/잠금해제`", value="특정 아이템을 일괄 판매에서 제외하고 배틀용으로 보호합니다.", inline=False)
             embed.add_field(name="`/일괄잠금` / `/일괄해제`", value="가방 안의 모든 물고기를 한꺼번에 잠그거나 해제합니다.", inline=False)
@@ -91,7 +91,7 @@ class HelpSelect(discord.ui.Select):
             return embed
 
         if category == "battle":
-            embed = EmbedFactory.build(title="⚔️ 전투 및 레이드 명령어", type="error")
+            embed = EmbedFactory.build(title="⚔️ 전투 및 레이드 명령어", style="error")
             embed.add_field(name="`/배틀`", value="잠금된 전사 중 가장 강한 물고기로 NPC와 턴제 전투를 벌입니다.", inline=False)
             embed.add_field(name="`/수산대전 [상대]`", value="다른 유저와 3v3 릴레이 PvP 배틀을 벌여 코인과 RP를 약탈합니다.", inline=False)
             embed.add_field(name="`/평화모드`", value="PvP 약탈을 거부하는 상태로 전환합니다. (공격도 불가능)", inline=False)
@@ -100,7 +100,7 @@ class HelpSelect(discord.ui.Select):
             return embed
 
         if category == "quest":
-            embed = EmbedFactory.build(title="📜 도감 및 의뢰 명령어", type="default")
+            embed = EmbedFactory.build(title="📜 도감 및 의뢰 명령어", style="default")
             embed.add_field(name="`/도감 [유저]`", value="지금까지 발견한 어종 기록과 수집률, 월척 기록을 확인합니다.", inline=False)
             embed.add_field(name="`/도감보상`", value="수집한 어종 수에 따라 코인과 특별 칭호를 수령합니다.", inline=False)
             embed.add_field(name="`/의뢰`", value="매일 바뀌는 항구 게시판의 낚시 의뢰를 확인하고 납품합니다.", inline=False)
@@ -113,14 +113,14 @@ class HelpSelect(discord.ui.Select):
             return embed
 
         if category == "upgrade":
-            embed = EmbedFactory.build(title="🛠️ 강화 및 개조 명령어", type="default")
+            embed = EmbedFactory.build(title="🛠️ 강화 및 개조 명령어", style="default")
             embed.add_field(name="`/강화`", value="낚싯대 레벨을 올립니다. 레벨이 높을수록 대물과 희귀종 확률이 증가합니다.", inline=False)
             embed.add_field(name="`/선박개조`", value="배를 업그레이드하여 최대 체력을 늘리고 새로운 기능을 해금합니다.", inline=False)
             embed.set_footer(text="💡 Lv.50 강화부터는 레벨 하락 위험이 있는 '초월 강화'가 시작됩니다.")
             return embed
 
         if category == "misc":
-            embed = EmbedFactory.build(title="📦 아이템 및 기타 명령어", type="default")
+            embed = EmbedFactory.build(title="📦 아이템 및 기타 명령어", style="default")
             embed.add_field(name="`/감정`", value="'가라앉은 보물상자 🧰'를 열어 대박 아이템을 노립니다.", inline=False)
             embed.add_field(name="`/지도합성 [수량]`", value="찢어진 지도 조각(A,B,C,D) 4종을 모아 보물지도를 완성합니다.", inline=False)
             embed.add_field(name="`/조각교환 [조각]`", value="같은 지도 조각 3개를 다른 무작위 조각 1개로 교환합니다.", inline=False)
@@ -132,7 +132,7 @@ class HelpSelect(discord.ui.Select):
             return embed
 
         if category == "admin":
-            embed = EmbedFactory.build(title="🛡️ 관리자 전용 명령어", type="error")
+            embed = EmbedFactory.build(title="🛡️ 관리자 전용 명령어", style="error")
             embed.add_field(name="`/코인지급` / `/아이템지급` / `/회수`", value="유저의 재화나 아이템을 관리합니다.", inline=False)
             embed.add_field(name="`/유저스탯변경`", value="선박 티어, 낚싯대 레벨, RP 등을 강제 설정합니다.", inline=False)
             embed.add_field(name="`/전체공지`", value="모든 채널에 관리자 공지사항을 발송합니다.", inline=False)
@@ -159,7 +159,7 @@ class HelpCog(commands.Cog):
         is_admin = user.id in SUPER_ADMIN_IDS
         view = HelpView(user, is_admin)
 
-        embed = EmbedFactory.build(title="🎣 수산시장 RPG 도움말 센터", type="info")
+        embed = EmbedFactory.build(title="🎣 수산시장 RPG 도움말 센터", style="info")
         embed.description = "아래 드롭다운 메뉴를 클릭하여 카테고리별 명령어 설명을 확인하세요!\n\n" \
                             "💡 **팁**: 모든 명령어는 슬래시(`/`)로 시작합니다.\n" \
                             "⚓ **초보자 가이드**: `/낚시`로 물고기를 잡고 `/판매`로 돈을 벌어 `/강화`하세요!"
