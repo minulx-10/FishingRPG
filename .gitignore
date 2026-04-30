@@ -6,4 +6,5 @@ __pycache__/
 .env
 bot.py
 logs/
-*.log
+*.log
+scratch/
