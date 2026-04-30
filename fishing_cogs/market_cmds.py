@@ -289,11 +289,19 @@ class MarketCog(commands.Cog):
             
             price = await MarketService.calculate_sell_price(interaction.user.id, name, base_price, current_weather)
             
-            item_total = price * amt
+            # 대량 판매 슬립피지 적용
+            bulk_discount = 1.0
+            if amt > 10:
+                discount_penalty = min(0.4, (amt - 10) * 0.001) # 1마리당 0.1%씩, 최대 40% 감가
+                bulk_discount = 1.0 - discount_penalty
+                
+            item_total = int(price * amt * bulk_discount)
             total_earned += item_total
             item_grade = FISH_DATA.get(name, {}).get("grade", "아이템")
             grade_label = format_grade_label(item_grade) if name in FISH_DATA else "📦 아이템"
-            msg += f"• {name} `{grade_label}` {amt}마리 : `{item_total:,} C` (개당 {price:,}C)\n"
+            
+            discount_str = f" (대량할인 -{int((1.0 - bulk_discount) * 100)}%)" if bulk_discount < 1.0 else ""
+            msg += f"• {name} `{grade_label}` {amt}마리 : `{item_total:,} C` (개당 약 {int(price * bulk_discount):,}C){discount_str}\n"
 
         delete_targets = [(interaction.user.id, name) for name, amt in sellable_items]
         sales_logs = [(name, amt, amt) for name, amt in sellable_items]
@@ -336,7 +344,13 @@ class MarketCog(commands.Cog):
         if price_per_item <= 0:
             return await interaction.response.send_message(f"❌ **{target_fish}**는 현재 시장에 판매할 수 없는 아이템입니다.", ephemeral=True)
 
-        total_earned = price_per_item * 수량
+        # 대량 판매 슬립피지 적용
+        bulk_discount = 1.0
+        if 수량 > 10:
+            discount_penalty = min(0.4, (수량 - 10) * 0.001)
+            bulk_discount = 1.0 - discount_penalty
+            
+        total_earned = int(price_per_item * 수량 * bulk_discount)
 
         async with db.transaction():
             await db.execute("UPDATE inventory SET amount = amount - ? WHERE user_id=? AND item_name=?", (수량, interaction.user.id, target_fish))
@@ -347,7 +361,8 @@ class MarketCog(commands.Cog):
         # 삭제 후 0개인 항목 정리 (선택사항이나 깔끔함 유지)
         await db.execute("DELETE FROM inventory WHERE user_id=? AND item_name=? AND amount <= 0", (interaction.user.id, target_fish))
 
-        await interaction.response.send_message(f"💰 **{target_fish}** {수량}마리를 팔아서 총 `{total_earned:,} C`를 얻었습니다! (개당 {price_per_item}C)")
+        discount_str = f" (대량판매 감가 -{int((1.0 - bulk_discount) * 100)}% 적용됨)" if bulk_discount < 1.0 else ""
+        await interaction.response.send_message(f"💰 **{target_fish}** {수량}마리를 팔아서 총 `{total_earned:,} C`를 얻었습니다! (개당 약 {int(price_per_item * bulk_discount)}C){discount_str}")
 
     @app_commands.command(name="상점", description="유용한 아이템을 구경할 수 있는 상점입니다.")
     @check_boat_tier(2)

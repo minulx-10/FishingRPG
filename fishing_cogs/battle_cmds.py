@@ -109,6 +109,12 @@ class BattleCog(commands.Cog):
             if res and res[0] == 1:
                 return await interaction.response.send_message(f"❌ '{상대.name}'님은 현재 **평화 모드** 🕊️ 상태입니다. (약탈 불가)", ephemeral=True)
 
+            # [패시브] 모사사우루스 🦖 방어 효과 (20% 확률로 튕겨냄)
+            async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name='모사사우루스 🦖'", (상대.id,)) as cursor:
+                mosa_res = await cursor.fetchone()
+            if mosa_res and mosa_res[0] > 0 and random.random() < 0.2:
+                return await interaction.response.send_message(f"🦖 **[정점의 위협]** '{상대.name}'님의 가방에 있던 모사사우루스가 무시무시한 포효를 내질러 수산대전(배틀)을 강제로 취소시켰습니다!", ephemeral=True)
+
             now = dt.datetime.now(kst)
             today_str = now.strftime('%Y-%m-%d')
 

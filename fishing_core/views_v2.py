@@ -137,6 +137,14 @@ class FishingView(View):
                     await db.modify_inventory(self.user.id, self.target_fish, 1)
                     double_msg = " (👯 **더블 캐치!**)"
 
+                # [패시브] 아노말로카리스 🦐 - 낚시 성공 시 무작위 잡동사니 추가 획득
+                self.passive_msg = ""
+                if self.target_fish == "아노말로카리스 🦐":
+                    junk_items = ["낡은 장화 🥾", "구멍난 타이어 🛞", "빈 깡통 🥫", "찢어진 그물 🕸️", "가라앉은 보물상자 🧰"]
+                    bonus_item = random.choice(junk_items)
+                    await db.modify_inventory(self.user.id, bonus_item, 1)
+                    self.passive_msg = f"\n🦑 **[원시의 촉수]** 아노말로카리스의 촉수에 얽혀 **{bonus_item}**이(가) 딸려왔습니다!"
+
                 await AchievementService.check_achievement(self.user.id, "FIRST_CATCH")
                 if grade in ["레전드", "신화", "태고", "환상", "미스터리"]:
                     await AchievementService.check_achievement(self.user.id, "LEGENDARY_FISHER")
@@ -151,7 +159,7 @@ class FishingView(View):
 
             if auto_bag:
                 await db.modify_inventory(self.user.id, self.target_fish, 1)
-                await interaction.response.edit_message(content=f"🎊 낚았습니다!{double_msg}\n✅ **자동 가방 넣기** 설정으로 가방에 보관되었습니다.", embed=embed, view=None)
+                await interaction.response.edit_message(content=f"🎊 낚았습니다!{double_msg}{self.passive_msg}\n✅ **자동 가방 넣기** 설정으로 가방에 보관되었습니다.", embed=embed, view=None)
             elif auto_sell:
                 # 시세 조회
                 async with db.conn.execute("SELECT current_price FROM market_prices WHERE item_name=?", (self.target_fish,)) as cursor:
@@ -161,10 +169,10 @@ class FishingView(View):
                 async with db.transaction():
                     await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id = ?", (sell_price, self.user.id))
                 
-                await interaction.response.edit_message(content=f"🎊 낚았습니다!{double_msg}\n💰 **자동 즉시 판매** 설정으로 `{sell_price:,} C`에 판매되었습니다.", embed=embed, view=None)
+                await interaction.response.edit_message(content=f"🎊 낚았습니다!{double_msg}{self.passive_msg}\n💰 **자동 즉시 판매** 설정으로 `{sell_price:,} C`에 판매되었습니다.", embed=embed, view=None)
             else:
                 action_view = FishActionView(self.user, self.target_fish)
-                await interaction.response.edit_message(content=f"🎊 낚았습니다!{double_msg}", embed=embed, view=action_view)
+                await interaction.response.edit_message(content=f"🎊 낚았습니다!{double_msg}{self.passive_msg}", embed=embed, view=action_view)
                 action_view.message = await interaction.original_response()
 
         except Exception as e:
@@ -201,6 +209,25 @@ class TensionFishingView(View):
         if self.tension >= 100 or self.tension <= 0:
             self.stop()
             async with db.transaction():
+                # [패시브] 둔클레오스테우스 🦖 - 실패 시 가장 비싼 물고기 파괴
+                if self.target_fish == "둔클레오스테우스 🦖":
+                    async with db.conn.execute("SELECT item_name FROM inventory WHERE user_id=? AND is_locked=0 AND amount > 0", (self.user.id,)) as cursor:
+                        items = await cursor.fetchall()
+                    if items:
+                        from fishing_core.shared import MARKET_PRICES
+                        most_expensive = None
+                        max_price = -1
+                        for (name,) in items:
+                            price = MARKET_PRICES.get(name, FISH_DATA.get(name, {}).get("price", 0))
+                            if price > max_price:
+                                max_price = price
+                                most_expensive = name
+                        if most_expensive:
+                            await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (self.user.id, most_expensive))
+                            await db.execute("DELETE FROM inventory WHERE user_id=? AND item_name=? AND amount <= 0", (self.user.id, most_expensive))
+                            return await interaction.response.edit_message(content=f"⚠️ **[강철의 턱]** 둔클레오스테우스가 도망가면서 가방의 **{most_expensive}**(을)를 물어뜯고 도망갔습니다!", embed=None, view=None)
+
+                # 기존 로직 (바다 빠짐 등)
                 if self.grade in ["레전드", "신화", "태고", "환상", "미스터리", "대형 포식자"] and random.random() < 0.2:
                     end_time = (datetime.datetime.now(kst) + datetime.timedelta(minutes=30)).isoformat()
                     await db.execute("INSERT INTO active_buffs (user_id, buff_type, end_time) VALUES (?, 'wet_clothes', ?) ON CONFLICT(user_id, buff_type) DO UPDATE SET end_time = ?", (self.user.id, end_time, end_time))
@@ -393,8 +420,8 @@ class PvPBattleView(View):
             await self._update_view(interaction)
 
     async def resolve_turn(self, interaction):
-        p1_res = BattleService.calculate_ap_battle(self.p1_pwr, self.p1_alloc['atk'], self.p2_alloc['blk'])
-        p2_res = BattleService.calculate_ap_battle(self.p2_pwr, self.p2_alloc['atk'], self.p1_alloc['blk'])
+        p1_res = BattleService.calculate_ap_battle(self.p1_fish, self.p2_fish, self.p1_pwr, self.p1_alloc['atk'], self.p2_alloc['blk'], self.turn_count)
+        p2_res = BattleService.calculate_ap_battle(self.p2_fish, self.p1_fish, self.p2_pwr, self.p2_alloc['atk'], self.p1_alloc['blk'], self.turn_count)
         
         d1, d2 = p1_res['damage'], p2_res['damage']
         
@@ -405,7 +432,13 @@ class PvPBattleView(View):
         self.p2_hp -= d1
         self.p1_hp -= d2
         
-        self.battle_log = f'[Turn {self.turn_count} 결과]\n🔵 {self.p1.name}: {d1:,} 피해!\n🔴 {self.p2.name}: {d2:,} 피해!'
+        log_lines = [f'[Turn {self.turn_count} 결과]']
+        if p1_res.get('passive_log'): log_lines.append(p1_res['passive_log'])
+        if p2_res.get('passive_log'): log_lines.append(p2_res['passive_log'])
+        log_lines.append(f'🔵 {self.p1.name}: {d1:,} 피해!')
+        log_lines.append(f'🔴 {self.p2.name}: {d2:,} 피해!')
+        
+        self.battle_log = '\n'.join(log_lines)
         
         if self.p1_hp <= 0 or self.p2_hp <= 0:
             if self.p1_hp <= 0:
@@ -446,11 +479,30 @@ class PvPBattleView(View):
             await db.execute("UPDATE user_data SET coins = coins - ? WHERE user_id=?", (steal_amt, loser.id))
             await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id=?", (steal_amt, winner.id))
             
-            # 레이팅 변동
-            await db.execute("UPDATE user_data SET rating = rating + 25 WHERE user_id=?", (winner.id,))
-            await db.execute("UPDATE user_data SET rating = MAX(0, rating - 15) WHERE user_id=?", (loser.id,))
+            # 레이팅 변동 (제로섬 밸런스)
+            await db.execute("UPDATE user_data SET rating = rating + 20 WHERE user_id=?", (winner.id,))
+            await db.execute("UPDATE user_data SET rating = MAX(0, rating - 20) WHERE user_id=?", (loser.id,))
             
-        embed.add_field(name="💰 약탈 결과", value=f"**{winner.name}**님이 **{steal_amt:,} C**를 약탈했습니다!")
+            # [패시브] 크시팍티누스 🐟 - 배틀 승리 시 소비 아이템 약탈
+            winner_fish = self.p1_fish if winner == self.p1 else self.p2_fish
+            stolen_item_msg = ""
+            if winner_fish == "크시팍티누스 🐟" and random.random() < 0.3: # 30% 확률로 발동
+                consumables = ["고급 미끼 🪱", "자석 미끼 🧲", "에너지 드링크 ⚡", "특수 떡밥 🎣"]
+                async with db.conn.execute(
+                    "SELECT item_name FROM inventory WHERE user_id=? AND item_name IN ({}) AND amount > 0 ORDER BY RANDOM() LIMIT 1".format(
+                        ",".join("?" * len(consumables))
+                    ), 
+                    (loser.id, *consumables)
+                ) as cursor:
+                    res = await cursor.fetchone()
+                
+                if res:
+                    stolen_item = res[0]
+                    await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name=?", (loser.id, stolen_item))
+                    await db.modify_inventory(winner.id, stolen_item, 1)
+                    stolen_item_msg = f"\n🐟 **[폭식의 아가리]** 크시팍티누스가 상대방의 가방에서 **{stolen_item}**을(를) 뺏어왔습니다!"
+            
+        embed.add_field(name="💰 약탈 결과", value=f"**{winner.name}**님이 **{steal_amt:,} C**를 약탈했습니다!{stolen_item_msg}")
         
         file = discord.File("assets/battle/battle_victory.png", filename="victory.png")
         embed.set_image(url="attachment://victory.png")

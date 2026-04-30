@@ -66,12 +66,12 @@ class EventCog(commands.Cog):
         try:
             await db.execute("""
                 UPDATE user_data
-                SET coins = CAST(coins * 1.05 AS INTEGER)
+                SET coins = coins + 50000
                 WHERE user_id IN (
                     SELECT user_id FROM inventory WHERE item_name = '세계를 감싼 뱀, 요르문간드 🐍' AND amount > 0
                 )
             """)
-            logger.info("요르문간드의 축복: 코인 5% 증가 처리 완료.")
+            logger.info("요르문간드의 축복: 고정 50,000 코인 지급 완료.")
         except Exception as e:
             logger.error(f"자정 태스크 에러: {e}")
 

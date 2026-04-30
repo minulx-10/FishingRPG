@@ -184,6 +184,48 @@ class HelpCog(commands.Cog):
         view = TutorialView(interaction.user)
         await interaction.response.send_message(embed=view.make_embed(), view=view)
 
+    @app_commands.command(name="시작", description="낚시 RPG 캐릭터를 생성하고 뉴비 전용 초기 정착 지원금을 받습니다!")
+    async def 시작(self, interaction: discord.Interaction):
+        from fishing_core.database import db
+        await db.execute("INSERT OR IGNORE INTO user_data (user_id) VALUES (?)", (interaction.user.id,))
+        
+        async with db.conn.execute("SELECT is_started FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+            res = await cursor.fetchone()
+            
+        if res and res[0] == 1:
+            return await interaction.response.send_message("❌ 이미 캐릭터가 생성되어 있습니다. `/낚시`를 시작하세요!", ephemeral=True)
+            
+        async with db.transaction():
+            await db.execute("UPDATE user_data SET is_started = 1, coins = coins + 1500 WHERE user_id=?", (interaction.user.id,))
+            await db.modify_inventory(interaction.user.id, "초급 그물망 🕸️", 3)
+            await db.modify_inventory(interaction.user.id, "에너지 드링크 ⚡", 3)
+            await db.modify_inventory(interaction.user.id, "초보자 낚시 패키지 🎁", 1)
+            
+        embed = EmbedFactory.build(
+            title="🎉 낚시 RPG에 오신 것을 환영합니다!",
+            description=(
+                f"**{interaction.user.name}**님, 캐릭터 생성이 완료되었습니다!\n\n"
+                "가슴 설레는 바다로 떠날 준비가 되셨나요?\n"
+                "수산시장 협회에서 초기 정착을 위한 빵빵한 지원금을 보내왔습니다!"
+            ),
+            style="success"
+        )
+        embed.add_field(
+            name="🎁 스타터 팩 지급 완료!",
+            value="• `1,500 C` (코인)\n• **초급 그물망 🕸️** x3\n• **에너지 드링크 ⚡** x3\n• **초보자 낚시 패키지 🎁** x1",
+            inline=False
+        )
+        embed.add_field(
+            name="🚀 다음 단계",
+            value="먼저 **`/낚시`** 명령어를 입력하여 첫 물고기를 잡아보세요!\n자세한 진행 방법은 **`/가이드`**를 참고하시면 됩니다.",
+            inline=False
+        )
+        embed.set_image(url="https://images.unsplash.com/photo-1520116468816-95b69f847357?w=800")
+        
+        view = TutorialView(interaction.user)
+        await interaction.response.send_message(embed=embed, view=view)
+
+
 
 async def setup(bot):
     await bot.add_cog(HelpCog(bot))

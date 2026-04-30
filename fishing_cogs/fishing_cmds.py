@@ -9,7 +9,7 @@ from discord.ext import commands
 from fishing_core.database import db
 from fishing_core.services.fishing_service import FishingService
 from fishing_core.shared import FISH_DATA, WEATHER_TYPES, env_state, kst
-from fishing_core.utils import EmbedFactory, bait_autocomplete, inv_autocomplete, net_autocomplete
+from fishing_core.utils import EmbedFactory, bait_autocomplete, inv_autocomplete, net_autocomplete, require_start
 from fishing_core.views_v2 import FishingView, InventoryView
 
 
@@ -121,20 +121,24 @@ class FishingCog(commands.Cog):
         today = datetime.datetime.now(kst).strftime('%Y-%m-%d')
         is_free = last_free_rest != today
 
-        tier_costs = {1: 500, 2: 1000, 3: 1800, 4: 2800, 5: 4000}
-        cost = tier_costs.get(boat_tier, 2500)
+        stamina_to_recover = max_stamina - stamina
+        if stamina_to_recover <= 0:
+            return await interaction.response.send_message("❌ 이미 체력이 꽉 차있습니다!", ephemeral=True)
+
+        # 회복량 비례 코인 소모 (1 스태미나당 30 C) -> 400 스태미나 기준 12,000C
+        cost = stamina_to_recover * 30
 
         try:
             async with db.transaction():
                 if is_free:
                     await db.execute("UPDATE user_data SET stamina = max_stamina, last_free_rest = ? WHERE user_id=?", (today, interaction.user.id))
-                    msg = f"🛌 오늘의 **무료 휴식**을 사용했습니다! (체력 {max_stamina}⚡ 전부 회복 완료)\n💡 *내일 다시 무료 휴식이 충전됩니다.*"
+                    msg = f"🛌 오늘의 **무료 휴식**을 사용했습니다! (체력 {stamina_to_recover}⚡ 회복 완료)\n💡 *내일 다시 무료 휴식이 충전됩니다.*"
                 else:
                     if coins < cost:
-                        return await interaction.response.send_message(f"❌ 코인이 부족합니다. (필요: `{cost:,} C` / 현재: `{coins:,} C`)\n💡 오늘의 무료 휴식은 이미 사용했습니다. 시간이 지나면 10분마다 자연 회복됩니다.", ephemeral=True)
+                        return await interaction.response.send_message(f"❌ 코인이 부족합니다. (필요: `{cost:,} C` / 현재: `{coins:,} C`)\n💡 오늘의 무료 휴식은 이미 사용했습니다.", ephemeral=True)
                     
                     await db.execute("UPDATE user_data SET coins = coins - ?, stamina = max_stamina WHERE user_id=?", (cost, interaction.user.id))
-                    msg = f"🛌 `{cost:,} C`를 지불하고 여관에서 푹 쉬었습니다! (체력 {max_stamina}⚡ 전부 회복 완료)"
+                    msg = f"🛌 `{cost:,} C`를 지불하고 여관에서 푹 쉬었습니다! (체력 {stamina_to_recover}⚡ 회복 완료)"
             
             await interaction.response.send_message(msg)
         except Exception as e:
@@ -179,6 +183,7 @@ class FishingCog(commands.Cog):
 
     @app_commands.command(name="낚시", description="찌를 던져 물고기(또는 보물)를 낚습니다! (타이밍 미니게임 / 체력 10 소모)")
     @app_commands.checks.cooldown(1, 3.0, key=lambda i: i.user.id)
+    @require_start()
     @app_commands.autocomplete(사용할미끼=bait_autocomplete)
     async def 낚시(self, interaction: discord.Interaction, 사용할미끼: str = "none"):
         data = await db.get_full_user_data(interaction.user.id)
@@ -309,6 +314,7 @@ class FishingCog(commands.Cog):
             pass
 
     @app_commands.command(name="그물망", description="그물망을 던져 잡어와 자원을 한 번에 건져올립니다.")
+    @require_start()
     @app_commands.autocomplete(그물종류=net_autocomplete)
     async def 그물망(self, interaction: discord.Interaction, 그물종류: str, 수량: int = 1):
         await self._cast_net(interaction, 그물종류, 수량)
@@ -320,6 +326,7 @@ class FishingCog(commands.Cog):
 
     @app_commands.command(name="인벤토리", description="나 또는 특정 유저의 가방과 스탯을 확인합니다.")
     @app_commands.checks.cooldown(1, 5.0, key=lambda i: i.user.id)
+    @require_start()
     async def 인벤토리(self, interaction: discord.Interaction, 유저: discord.Member = None):
         target = 유저 or interaction.user
         await self._show_inventory(interaction, target)
@@ -365,6 +372,7 @@ class FishingCog(commands.Cog):
 
     @app_commands.command(name="휴식", description="여관에서 코인을 지불하고 행동력(체력)을 즉시 전부 회복합니다. (일일 1회 무료!)")
     @app_commands.checks.cooldown(1, 5.0, key=lambda i: i.user.id)
+    @require_start()
     async def 휴식(self, interaction: discord.Interaction):
         await self._rest_user(interaction)
 
@@ -382,6 +390,7 @@ class FishingCog(commands.Cog):
         app_commands.Choice(name="심해 (Lv.4+)", value="심해"),
         app_commands.Choice(name="북해 (Lv.5+)", value="북해"),
     ])
+    @require_start()
     async def 이동(self, interaction: discord.Interaction, 해역: app_commands.Choice[str]):
         user_id = interaction.user.id
         async with db.conn.execute("SELECT boat_tier, current_region, stamina FROM user_data WHERE user_id=?", (user_id,)) as cursor:

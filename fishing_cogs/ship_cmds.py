@@ -22,8 +22,9 @@ class ShipCog(commands.Cog):
             pity_res = await cursor.fetchone()
         pity_count = pity_res[0] if pity_res else 0
 
-        # 레벨이 오를수록 기하급수적으로 증가 (기본가 5000, 계수 1.3배수 방식)
-        cost = int(5000 * (1.3 ** (rod_tier - 1)))
+        # 레벨이 오를수록 다항식 스케일링 (기하급수적인 비용 폭발 방지)
+        # 기본가 5000 + (n-1)^2 * 5000
+        cost = 5000 + ((rod_tier - 1) ** 2) * 5000
 
         # Lv.11+ 부터 고철 추가 소모
         if rod_tier >= 30:

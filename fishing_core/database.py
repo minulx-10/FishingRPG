@@ -124,6 +124,8 @@ class DBManager:
             (51, "ALTER TABLE user_data ADD COLUMN visited_regions TEXT DEFAULT '[]'"),
             (52, "ALTER TABLE user_data ADD COLUMN auto_bag INTEGER DEFAULT 0"),
             (53, "ALTER TABLE user_data ADD COLUMN auto_sell INTEGER DEFAULT 0"),
+            (54, "ALTER TABLE user_data ADD COLUMN attendance_streak INTEGER DEFAULT 0"),
+            (55, "ALTER TABLE user_data ADD COLUMN is_started INTEGER DEFAULT 0"),
         ]
 
         # 3. 마이그레이션 실행
@@ -209,7 +211,7 @@ class DBManager:
         # 유저가 없으면 생성
         await self.get_user_data(user_id)
         
-        query = "SELECT coins, rod_tier, rating, boat_tier, stamina, max_stamina, current_region, title, auto_bag, auto_sell FROM user_data WHERE user_id=?"
+        query = "SELECT coins, rod_tier, rating, boat_tier, stamina, max_stamina, current_region, title, auto_bag, auto_sell, attendance_streak, is_started FROM user_data WHERE user_id=?"
         async with self.conn.execute(query, (user_id,)) as cursor:
             row = await cursor.fetchone()
             if not row: return {}
@@ -224,7 +226,9 @@ class DBManager:
                 "region": row[6],
                 "title": row[7],
                 "auto_bag": bool(row[8]),
-                "auto_sell": bool(row[9])
+                "auto_sell": bool(row[9]),
+                "attendance_streak": row[10],
+                "is_started": bool(row[11])
             }
 
     async def modify_inventory(self, user_id: int, item_name: str, amount: int) -> bool:

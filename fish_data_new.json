@@ -1,0 +1,2112 @@
+{
+    "낡은 장화 🥾": {
+        "grade": "잡동사니",
+        "prob": 100,
+        "base_window": 3.5,
+        "price": 20,
+        "power": 1,
+        "element": "무속성"
+    },
+    "낡은 고철 ⚙️": {
+        "grade": "잡동사니",
+        "prob": 100,
+        "base_window": 3.0,
+        "price": 40,
+        "power": 0,
+        "element": "무속성"
+    },
+    "피라미 🐟": {
+        "grade": "피식자",
+        "prob": 60,
+        "base_window": 3.0,
+        "price": 60,
+        "power": 2,
+        "element": "무속성"
+    },
+    "멸치 🐟": {
+        "grade": "피식자",
+        "prob": 60,
+        "base_window": 3.0,
+        "price": 80,
+        "power": 2,
+        "element": "표층"
+    },
+    "까나리 🐟": {
+        "grade": "피식자",
+        "prob": 60,
+        "base_window": 3.0,
+        "price": 80,
+        "power": 2,
+        "element": "표층"
+    },
+    "정어리 🐟": {
+        "grade": "피식자",
+        "prob": 60,
+        "base_window": 3.0,
+        "price": 100,
+        "power": 3,
+        "element": "표층"
+    },
+    "미꾸라지 🐟": {
+        "grade": "피식자",
+        "prob": 55,
+        "base_window": 2.8,
+        "price": 100,
+        "power": 3,
+        "element": "무속성"
+    },
+    "붕어 🐟": {
+        "grade": "피식자",
+        "prob": 55,
+        "base_window": 2.8,
+        "price": 100,
+        "power": 4,
+        "element": "무속성"
+    },
+    "떡붕어 🐟": {
+        "grade": "피식자",
+        "prob": 55,
+        "base_window": 2.8,
+        "price": 100,
+        "power": 4,
+        "element": "무속성"
+    },
+    "송사리 🐟": {
+        "grade": "피식자",
+        "prob": 60,
+        "base_window": 3.0,
+        "price": 40,
+        "power": 1,
+        "element": "무속성"
+    },
+    "구피 🐠": {
+        "grade": "피식자",
+        "prob": 55,
+        "base_window": 2.8,
+        "price": 60,
+        "power": 1,
+        "element": "무속성"
+    },
+    "금붕어 🐠": {
+        "grade": "피식자",
+        "prob": 55,
+        "base_window": 2.8,
+        "price": 80,
+        "power": 2,
+        "element": "무속성"
+    },
+    "네온테트라 🐠": {
+        "grade": "피식자",
+        "prob": 55,
+        "base_window": 2.8,
+        "price": 70,
+        "power": 1,
+        "element": "무속성"
+    },
+    "전어 🐟": {
+        "grade": "피식자",
+        "prob": 60,
+        "base_window": 3.0,
+        "price": 120,
+        "power": 3,
+        "element": "표층"
+    },
+    "잉어 🐟": {
+        "grade": "소형 포식자",
+        "prob": 50,
+        "base_window": 2.8,
+        "price": 120,
+        "power": 5,
+        "element": "무속성"
+    },
+    "비단잉어 🐟": {
+        "grade": "소형 포식자",
+        "prob": 40,
+        "base_window": 2.6,
+        "price": 300,
+        "power": 5,
+        "element": "무속성"
+    },
+    "블루길 🐟": {
+        "grade": "소형 포식자",
+        "prob": 45,
+        "base_window": 2.7,
+        "price": 80,
+        "power": 6,
+        "element": "무속성"
+    },
+    "꽁치 🐟": {
+        "grade": "소형 포식자",
+        "prob": 55,
+        "base_window": 2.8,
+        "price": 140,
+        "power": 4,
+        "element": "표층"
+    },
+    "전갱이 🐟": {
+        "grade": "소형 포식자",
+        "prob": 50,
+        "base_window": 2.8,
+        "price": 160,
+        "power": 4,
+        "element": "표층"
+    },
+    "학공치 🐟": {
+        "grade": "소형 포식자",
+        "prob": 50,
+        "base_window": 2.8,
+        "price": 160,
+        "power": 4,
+        "element": "표층"
+    },
+    "학꽁치 🐟": {
+        "grade": "소형 포식자",
+        "prob": 50,
+        "base_window": 2.8,
+        "price": 180,
+        "power": 5,
+        "element": "표층"
+    },
+    "큰입배스 🐟": {
+        "grade": "소형 포식자",
+        "prob": 40,
+        "base_window": 2.6,
+        "price": 160,
+        "power": 10,
+        "element": "무속성"
+    },
+    "자리돔 🐠": {
+        "grade": "피식자",
+        "prob": 50,
+        "base_window": 2.8,
+        "price": 180,
+        "power": 5,
+        "element": "암초"
+    },
+    "쥐노래미 🐠": {
+        "grade": "소형 포식자",
+        "prob": 55,
+        "base_window": 2.8,
+        "price": 180,
+        "power": 5,
+        "element": "암초"
+    },
+    "베도라치 🐠": {
+        "grade": "소형 포식자",
+        "prob": 45,
+        "base_window": 2.7,
+        "price": 150,
+        "power": 5,
+        "element": "암초"
+    },
+    "싱싱한 고등어 🐟": {
+        "grade": "소형 포식자",
+        "prob": 45,
+        "base_window": 2.8,
+        "price": 150,
+        "power": 6,
+        "element": "표층"
+    },
+    "줄무늬고등어 🐟": {
+        "grade": "소형 포식자",
+        "prob": 50,
+        "base_window": 2.8,
+        "price": 160,
+        "power": 6,
+        "element": "표층"
+    },
+    "가자미 🐠": {
+        "grade": "소형 포식자",
+        "prob": 50,
+        "base_window": 2.8,
+        "price": 160,
+        "power": 6,
+        "element": "암초"
+    },
+    "숭어 🐟": {
+        "grade": "소형 포식자",
+        "prob": 45,
+        "base_window": 2.7,
+        "price": 180,
+        "power": 7,
+        "element": "표층"
+    },
+    "쥐치 🐠": {
+        "grade": "소형 포식자",
+        "prob": 45,
+        "base_window": 2.7,
+        "price": 180,
+        "power": 7,
+        "element": "암초"
+    },
+    "양태 🐠": {
+        "grade": "소형 포식자",
+        "prob": 45,
+        "base_window": 2.7,
+        "price": 190,
+        "power": 7,
+        "element": "암초"
+    },
+    "은어 🐟": {
+        "grade": "피식자",
+        "prob": 50,
+        "base_window": 2.8,
+        "price": 210,
+        "power": 5,
+        "element": "무속성"
+    },
+    "파랑돔 🐠": {
+        "grade": "피식자",
+        "prob": 45,
+        "base_window": 2.7,
+        "price": 210,
+        "power": 8,
+        "element": "암초"
+    },
+    "용치놀래기 🐠": {
+        "grade": "소형 포식자",
+        "prob": 40,
+        "base_window": 2.6,
+        "price": 220,
+        "power": 8,
+        "element": "암초"
+    },
+    "성대 🐠": {
+        "grade": "소형 포식자",
+        "prob": 40,
+        "base_window": 2.6,
+        "price": 240,
+        "power": 9,
+        "element": "암초"
+    },
+    "쭈꾸미 🐙": {
+        "grade": "소형 포식자",
+        "prob": 50,
+        "base_window": 2.7,
+        "price": 240,
+        "power": 5,
+        "element": "암초"
+    },
+    "우산해파리 🪼": {
+        "grade": "피식자",
+        "prob": 40,
+        "base_window": 2.6,
+        "price": 240,
+        "power": 2,
+        "element": "심해"
+    },
+    "노무라입깃해파리 🪼": {
+        "grade": "피식자",
+        "prob": 35,
+        "base_window": 2.5,
+        "price": 270,
+        "power": 5,
+        "element": "표층"
+    },
+    "보름달물해파리 🪼": {
+        "grade": "피식자",
+        "prob": 45,
+        "base_window": 2.7,
+        "price": 150,
+        "power": 1,
+        "element": "표층"
+    },
+    "가리비 🐚": {
+        "grade": "피식자",
+        "prob": 40,
+        "base_window": 3.0,
+        "price": 300,
+        "power": 1,
+        "element": "암초"
+    },
+    "낙지 🐙": {
+        "grade": "소형 포식자",
+        "prob": 45,
+        "base_window": 2.6,
+        "price": 360,
+        "power": 8,
+        "element": "암초"
+    },
+    "심해 갯지렁이 🐛": {
+        "grade": "피식자",
+        "prob": 35,
+        "base_window": 2.5,
+        "price": 450,
+        "power": 3,
+        "element": "심해"
+    },
+    "붉은 산호 🪸": {
+        "grade": "피식자",
+        "prob": 30,
+        "base_window": 3.0,
+        "price": 120,
+        "power": 1,
+        "element": "암초"
+    },
+    "부채 산호 🪸": {
+        "grade": "피식자",
+        "prob": 25,
+        "base_window": 3.0,
+        "price": 160,
+        "power": 1,
+        "element": "암초"
+    },
+    "뇌산호 🪸": {
+        "grade": "피식자",
+        "prob": 20,
+        "base_window": 3.0,
+        "price": 150,
+        "power": 1,
+        "element": "암초"
+    },
+    "불가사리 ⭐": {
+        "grade": "피식자",
+        "prob": 45,
+        "base_window": 3.0,
+        "price": 60,
+        "power": 1,
+        "element": "암초"
+    },
+    "성게 🦔": {
+        "grade": "피식자",
+        "prob": 40,
+        "base_window": 2.8,
+        "price": 140,
+        "power": 2,
+        "element": "암초"
+    },
+    "해삼 🥒": {
+        "grade": "피식자",
+        "prob": 40,
+        "base_window": 2.8,
+        "price": 160,
+        "power": 2,
+        "element": "암초"
+    },
+    "말미잘 🌺": {
+        "grade": "피식자",
+        "prob": 40,
+        "base_window": 2.8,
+        "price": 100,
+        "power": 1,
+        "element": "암초"
+    },
+    "꽃게 🦀": {
+        "grade": "소형 포식자",
+        "prob": 35,
+        "base_window": 2.6,
+        "price": 240,
+        "power": 10,
+        "element": "암초"
+    },
+    "소라 🐚": {
+        "grade": "피식자",
+        "prob": 45,
+        "base_window": 2.8,
+        "price": 120,
+        "power": 1,
+        "element": "암초"
+    },
+    "바지락 🐚": {
+        "grade": "피식자",
+        "prob": 55,
+        "base_window": 3.0,
+        "price": 40,
+        "power": 1,
+        "element": "암초"
+    },
+    "홍합 🐚": {
+        "grade": "피식자",
+        "prob": 55,
+        "base_window": 3.0,
+        "price": 45,
+        "power": 1,
+        "element": "암초"
+    },
+    "새우 🦐": {
+        "grade": "피식자",
+        "prob": 60,
+        "base_window": 3.0,
+        "price": 60,
+        "power": 1,
+        "element": "표층"
+    },
+    "군소 🐌": {
+        "grade": "피식자",
+        "prob": 40,
+        "base_window": 2.7,
+        "price": 180,
+        "power": 2,
+        "element": "암초"
+    },
+    "소라게 🐚": {
+        "grade": "피식자",
+        "prob": 40,
+        "base_window": 3.0,
+        "price": 150,
+        "power": 1,
+        "element": "암초"
+    },
+    "해적의 금화 🪙": {
+        "grade": "잡동사니",
+        "prob": 20,
+        "base_window": 2.0,
+        "price": 5000,
+        "power": 0,
+        "element": "무속성"
+    },
+    "날치 🐟": {
+        "grade": "피식자",
+        "prob": 25,
+        "base_window": 2.5,
+        "price": 360,
+        "power": 10,
+        "element": "표층"
+    },
+    "꺽지 🐟": {
+        "grade": "소형 포식자",
+        "prob": 25,
+        "base_window": 2.5,
+        "price": 360,
+        "power": 15,
+        "element": "무속성"
+    },
+    "실꼬리돔 🐟": {
+        "grade": "소형 포식자",
+        "prob": 20,
+        "base_window": 2.4,
+        "price": 390,
+        "power": 12,
+        "element": "표층"
+    },
+    "삼치 🐟": {
+        "grade": "대형 포식자",
+        "prob": 25,
+        "base_window": 2.5,
+        "price": 450,
+        "power": 15,
+        "element": "표층"
+    },
+    "꼬치고기 🐠": {
+        "grade": "소형 포식자",
+        "prob": 25,
+        "base_window": 2.5,
+        "price": 450,
+        "power": 18,
+        "element": "암초"
+    },
+    "메기 🐟": {
+        "grade": "소형 포식자",
+        "prob": 25,
+        "base_window": 2.5,
+        "price": 450,
+        "power": 18,
+        "element": "무속성"
+    },
+    "가다랑어 🐟": {
+        "grade": "대형 포식자",
+        "prob": 25,
+        "base_window": 2.5,
+        "price": 480,
+        "power": 16,
+        "element": "표층"
+    },
+    "방어 🐟": {
+        "grade": "대형 포식자",
+        "prob": 25,
+        "base_window": 2.5,
+        "price": 540,
+        "power": 18,
+        "element": "표층"
+    },
+    "조피볼락 (우럭) 🐠": {
+        "grade": "소형 포식자",
+        "prob": 25,
+        "base_window": 2.5,
+        "price": 540,
+        "power": 20,
+        "element": "암초"
+    },
+    "동자개 (빠가사리) 🐟": {
+        "grade": "소형 포식자",
+        "prob": 22,
+        "base_window": 2.4,
+        "price": 540,
+        "power": 18,
+        "element": "무속성"
+    },
+    "만재기 🐟": {
+        "grade": "대형 포식자",
+        "prob": 20,
+        "base_window": 2.3,
+        "price": 540,
+        "power": 20,
+        "element": "표층"
+    },
+    "피라니아 🐟": {
+        "grade": "소형 포식자",
+        "prob": 20,
+        "base_window": 2.3,
+        "price": 400,
+        "power": 30,
+        "element": "무속성"
+    },
+    "참돔 🐠": {
+        "grade": "대형 포식자",
+        "prob": 25,
+        "base_window": 2.5,
+        "price": 400,
+        "power": 22,
+        "element": "암초"
+    },
+    "갈치 🐟": {
+        "grade": "소형 포식자",
+        "prob": 20,
+        "base_window": 2.4,
+        "price": 400,
+        "power": 20,
+        "element": "표층"
+    },
+    "농어 🐟": {
+        "grade": "대형 포식자",
+        "prob": 22,
+        "base_window": 2.4,
+        "price": 420,
+        "power": 24,
+        "element": "표층"
+    },
+    "무지개송어 🐟": {
+        "grade": "소형 포식자",
+        "prob": 22,
+        "base_window": 2.4,
+        "price": 440,
+        "power": 22,
+        "element": "무속성"
+    },
+    "감성돔 🐠": {
+        "grade": "대형 포식자",
+        "prob": 25,
+        "base_window": 2.5,
+        "price": 440,
+        "power": 25,
+        "element": "암초"
+    },
+    "광어 (넙치) 🐠": {
+        "grade": "대형 포식자",
+        "prob": 22,
+        "base_window": 2.4,
+        "price": 460,
+        "power": 26,
+        "element": "암초"
+    },
+    "도다리 🐠": {
+        "grade": "소형 포식자",
+        "prob": 22,
+        "base_window": 2.4,
+        "price": 480,
+        "power": 27,
+        "element": "암초"
+    },
+    "벵에돔 🐠": {
+        "grade": "소형 포식자",
+        "prob": 22,
+        "base_window": 2.4,
+        "price": 500,
+        "power": 28,
+        "element": "암초"
+    },
+    "점다랑어 🐟": {
+        "grade": "대형 포식자",
+        "prob": 20,
+        "base_window": 2.3,
+        "price": 500,
+        "power": 28,
+        "element": "표층"
+    },
+    "쏘가리 🐟": {
+        "grade": "소형 포식자",
+        "prob": 22,
+        "base_window": 2.4,
+        "price": 500,
+        "power": 25,
+        "element": "무속성"
+    },
+    "붕장어 🐠": {
+        "grade": "소형 포식자",
+        "prob": 20,
+        "base_window": 2.3,
+        "price": 520,
+        "power": 30,
+        "element": "암초"
+    },
+    "문어 🐙": {
+        "grade": "소형 포식자",
+        "prob": 20,
+        "base_window": 2.3,
+        "price": 540,
+        "power": 25,
+        "element": "암초"
+    },
+    "점성어 (홍민어) 🐠": {
+        "grade": "대형 포식자",
+        "prob": 20,
+        "base_window": 2.3,
+        "price": 560,
+        "power": 32,
+        "element": "암초"
+    },
+    "복어 🐡": {
+        "grade": "소형 포식자",
+        "prob": 20,
+        "base_window": 2.3,
+        "price": 600,
+        "power": 35,
+        "element": "암초"
+    },
+    "랜턴피쉬 🐟": {
+        "grade": "소형 포식자",
+        "prob": 22,
+        "base_window": 2.4,
+        "price": 600,
+        "power": 25,
+        "element": "심해"
+    },
+    "연어 🐟": {
+        "grade": "대형 포식자",
+        "prob": 20,
+        "base_window": 2.3,
+        "price": 600,
+        "power": 28,
+        "element": "무속성"
+    },
+    "곰장어 (먹장어) 🐍": {
+        "grade": "피식자",
+        "prob": 18,
+        "base_window": 2.2,
+        "price": 640,
+        "power": 15,
+        "element": "암초"
+    },
+    "심해홍어 🦇": {
+        "grade": "소형 포식자",
+        "prob": 20,
+        "base_window": 2.3,
+        "price": 700,
+        "power": 30,
+        "element": "심해"
+    },
+    "해마 🐉": {
+        "grade": "피식자",
+        "prob": 20,
+        "base_window": 2.3,
+        "price": 700,
+        "power": 10,
+        "element": "암초"
+    },
+    "황소개구리 🐸": {
+        "grade": "소형 포식자",
+        "prob": 15,
+        "base_window": 2.1,
+        "price": 700,
+        "power": 30,
+        "element": "무속성"
+    },
+    "산천어 🐟": {
+        "grade": "소형 포식자",
+        "prob": 20,
+        "base_window": 2.3,
+        "price": 760,
+        "power": 20,
+        "element": "무속성"
+    },
+    "초롱아귀 🐟": {
+        "grade": "소형 포식자",
+        "prob": 20,
+        "base_window": 2.3,
+        "price": 800,
+        "power": 35,
+        "element": "심해"
+    },
+    "유령멍게 🫧": {
+        "grade": "피식자",
+        "prob": 15,
+        "base_window": 2.2,
+        "price": 800,
+        "power": 2,
+        "element": "심해"
+    },
+    "은상어 🦈": {
+        "grade": "포식자-상어",
+        "prob": 18,
+        "base_window": 2.2,
+        "price": 900,
+        "power": 40,
+        "element": "심해"
+    },
+    "전복 🐚": {
+        "grade": "피식자",
+        "prob": 15,
+        "base_window": 2.8,
+        "price": 900,
+        "power": 2,
+        "element": "암초"
+    },
+    "덤보문어 🐙": {
+        "grade": "피식자",
+        "prob": 18,
+        "base_window": 2.2,
+        "price": 1000,
+        "power": 15,
+        "element": "심해"
+    },
+    "심해아귀 🐟": {
+        "grade": "대형 포식자",
+        "prob": 15,
+        "base_window": 2.1,
+        "price": 1200,
+        "power": 45,
+        "element": "심해"
+    },
+    "대게 🦀": {
+        "grade": "피식자",
+        "prob": 18,
+        "base_window": 2.2,
+        "price": 800,
+        "power": 15,
+        "element": "심해"
+    },
+    "흰동가리 (니모) 🐠": {
+        "grade": "피식자",
+        "prob": 20,
+        "base_window": 2.3,
+        "price": 700,
+        "power": 5,
+        "element": "암초"
+    },
+    "블루탱 (도리) 🐠": {
+        "grade": "피식자",
+        "prob": 20,
+        "base_window": 2.3,
+        "price": 760,
+        "power": 5,
+        "element": "암초"
+    },
+    "나비고기 🐠": {
+        "grade": "피식자",
+        "prob": 22,
+        "base_window": 2.4,
+        "price": 560,
+        "power": 4,
+        "element": "암초"
+    },
+    "보리새우 🦐": {
+        "grade": "피식자",
+        "prob": 25,
+        "base_window": 2.5,
+        "price": 450,
+        "power": 3,
+        "element": "표층"
+    },
+    "대하 🦐": {
+        "grade": "피식자",
+        "prob": 25,
+        "base_window": 2.5,
+        "price": 540,
+        "power": 4,
+        "element": "표층"
+    },
+    "딱총새우 🦐": {
+        "grade": "소형 포식자",
+        "prob": 20,
+        "base_window": 2.3,
+        "price": 500,
+        "power": 25,
+        "element": "암초"
+    },
+    "가오리 🦇": {
+        "grade": "소형 포식자",
+        "prob": 18,
+        "base_window": 2.2,
+        "price": 600,
+        "power": 15,
+        "element": "무속성"
+    },
+    "바다거북 🐢": {
+        "grade": "소형 포식자",
+        "prob": 15,
+        "base_window": 2.1,
+        "price": 1300,
+        "power": 20,
+        "element": "표층"
+    },
+    "물개 🦭": {
+        "grade": "대형 포식자",
+        "prob": 15,
+        "base_window": 2.1,
+        "price": 1400,
+        "power": 25,
+        "element": "표층"
+    },
+    "바다이구아나 🦎": {
+        "grade": "피식자",
+        "prob": 18,
+        "base_window": 2.2,
+        "price": 900,
+        "power": 18,
+        "element": "암초"
+    },
+    "레몬상어 🦈": {
+        "grade": "포식자-상어",
+        "prob": 15,
+        "base_window": 2.1,
+        "price": 1600,
+        "power": 45,
+        "element": "표층"
+    },
+    "노랑가오리 🦇": {
+        "grade": "소형 포식자",
+        "prob": 20,
+        "base_window": 2.3,
+        "price": 800,
+        "power": 20,
+        "element": "표층"
+    },
+    "엔젤피쉬 🐠": {
+        "grade": "피식자",
+        "prob": 22,
+        "base_window": 2.4,
+        "price": 500,
+        "power": 5,
+        "element": "무속성"
+    },
+    "디스커스 🐠": {
+        "grade": "피식자",
+        "prob": 20,
+        "base_window": 2.3,
+        "price": 600,
+        "power": 5,
+        "element": "무속성"
+    },
+    "부시리 🐟": {
+        "grade": "대형 포식자",
+        "prob": 12,
+        "base_window": 2.0,
+        "price": 800,
+        "power": 38,
+        "element": "표층"
+    },
+    "줄삼치 🐟": {
+        "grade": "대형 포식자",
+        "prob": 10,
+        "base_window": 1.9,
+        "price": 900,
+        "power": 40,
+        "element": "표층"
+    },
+    "특급 참치 🍣": {
+        "grade": "대형 포식자",
+        "prob": 12,
+        "base_window": 2.0,
+        "price": 1000,
+        "power": 40,
+        "element": "표층"
+    },
+    "잿방어 🐟": {
+        "grade": "대형 포식자",
+        "prob": 10,
+        "base_window": 1.9,
+        "price": 1000,
+        "power": 45,
+        "element": "표층"
+    },
+    "만새기 🐟": {
+        "grade": "대형 포식자",
+        "prob": 10,
+        "base_window": 1.9,
+        "price": 1100,
+        "power": 42,
+        "element": "표층"
+    },
+    "가시복 🐡": {
+        "grade": "소형 포식자",
+        "prob": 12,
+        "base_window": 2.0,
+        "price": 1200,
+        "power": 40,
+        "element": "암초"
+    },
+    "미역치 🐠": {
+        "grade": "소형 포식자",
+        "prob": 12,
+        "base_window": 2.0,
+        "price": 1200,
+        "power": 38,
+        "element": "암초"
+    },
+    "황다랑어 🐟": {
+        "grade": "대형 포식자",
+        "prob": 10,
+        "base_window": 1.9,
+        "price": 1200,
+        "power": 45,
+        "element": "표층"
+    },
+    "씬벵이 🐠": {
+        "grade": "소형 포식자",
+        "prob": 12,
+        "base_window": 2.0,
+        "price": 1300,
+        "power": 35,
+        "element": "암초"
+    },
+    "옥돔 🐠": {
+        "grade": "소형 포식자",
+        "prob": 12,
+        "base_window": 2.0,
+        "price": 1400,
+        "power": 42,
+        "element": "암초"
+    },
+    "눈다랑어 🐟": {
+        "grade": "대형 포식자",
+        "prob": 8,
+        "base_window": 1.8,
+        "price": 1500,
+        "power": 50,
+        "element": "표층"
+    },
+    "호박돔 🐠": {
+        "grade": "소형 포식자",
+        "prob": 10,
+        "base_window": 1.9,
+        "price": 1500,
+        "power": 45,
+        "element": "암초"
+    },
+    "가물치 🐟": {
+        "grade": "대형 포식자",
+        "prob": 10,
+        "base_window": 1.9,
+        "price": 1600,
+        "power": 55,
+        "element": "무속성"
+    },
+    "돛새치 🐟": {
+        "grade": "대형 포식자",
+        "prob": 8,
+        "base_window": 1.8,
+        "price": 1600,
+        "power": 55,
+        "element": "표층"
+    },
+    "쏠배감펭 (라이온피시) 🐠": {
+        "grade": "소형 포식자",
+        "prob": 10,
+        "base_window": 1.9,
+        "price": 1600,
+        "power": 48,
+        "element": "암초"
+    },
+    "암초의 돌돔 🐠": {
+        "grade": "소형 포식자",
+        "prob": 12,
+        "base_window": 2.0,
+        "price": 1600,
+        "power": 45,
+        "element": "암초"
+    },
+    "쑤기미 🐠": {
+        "grade": "소형 포식자",
+        "prob": 10,
+        "base_window": 1.9,
+        "price": 1700,
+        "power": 50,
+        "element": "암초"
+    },
+    "어름돔 🐠": {
+        "grade": "소형 포식자",
+        "prob": 10,
+        "base_window": 1.9,
+        "price": 1700,
+        "power": 52,
+        "element": "암초"
+    },
+    "은대구 🐟": {
+        "grade": "대형 포식자",
+        "prob": 12,
+        "base_window": 2.0,
+        "price": 1700,
+        "power": 45,
+        "element": "심해"
+    },
+    "곰치 🐍": {
+        "grade": "대형 포식자",
+        "prob": 10,
+        "base_window": 1.9,
+        "price": 1800,
+        "power": 55,
+        "element": "암초"
+    },
+    "심해장어 🐍": {
+        "grade": "대형 포식자",
+        "prob": 12,
+        "base_window": 2.0,
+        "price": 1800,
+        "power": 50,
+        "element": "심해"
+    },
+    "환도상어 🦈": {
+        "grade": "포식자-상어",
+        "prob": 8,
+        "base_window": 1.8,
+        "price": 1800,
+        "power": 60,
+        "element": "표층"
+    },
+    "넙치농어 🐠": {
+        "grade": "대형 포식자",
+        "prob": 8,
+        "base_window": 1.8,
+        "price": 1500,
+        "power": 55,
+        "element": "암초"
+    },
+    "세다리물고기 🐟": {
+        "grade": "소형 포식자",
+        "prob": 10,
+        "base_window": 1.9,
+        "price": 1500,
+        "power": 55,
+        "element": "심해"
+    },
+    "참다랑어 🐟": {
+        "grade": "대형 포식자",
+        "prob": 8,
+        "base_window": 1.8,
+        "price": 1500,
+        "power": 65,
+        "element": "표층"
+    },
+    "쿠키커터상어 🦈": {
+        "grade": "포식자-상어",
+        "prob": 10,
+        "base_window": 1.9,
+        "price": 1600,
+        "power": 70,
+        "element": "심해"
+    },
+    "흑새치 🐟": {
+        "grade": "대형 포식자",
+        "prob": 7,
+        "base_window": 1.7,
+        "price": 1600,
+        "power": 70,
+        "element": "표층"
+    },
+    "능성어 🐠": {
+        "grade": "대형 포식자",
+        "prob": 8,
+        "base_window": 1.8,
+        "price": 1800,
+        "power": 60,
+        "element": "암초"
+    },
+    "풍선장어 🐍": {
+        "grade": "대형 포식자",
+        "prob": 8,
+        "base_window": 1.8,
+        "price": 1800,
+        "power": 50,
+        "element": "심해"
+    },
+    "아로와나 🐟": {
+        "grade": "대형 포식자",
+        "prob": 8,
+        "base_window": 1.8,
+        "price": 1800,
+        "power": 60,
+        "element": "무속성"
+    },
+    "귀신고기 🐟": {
+        "grade": "대형 포식자",
+        "prob": 10,
+        "base_window": 1.9,
+        "price": 1800,
+        "power": 65,
+        "element": "심해"
+    },
+    "나폴레옹피쉬 🐠": {
+        "grade": "대형 포식자",
+        "prob": 8,
+        "base_window": 1.8,
+        "price": 1900,
+        "power": 65,
+        "element": "암초"
+    },
+    "바이퍼피쉬 🐟": {
+        "grade": "대형 포식자",
+        "prob": 9,
+        "base_window": 1.8,
+        "price": 2100,
+        "power": 75,
+        "element": "심해"
+    },
+    "흡혈오징어 🦑": {
+        "grade": "대형 포식자",
+        "prob": 10,
+        "base_window": 1.9,
+        "price": 2100,
+        "power": 60,
+        "element": "심해"
+    },
+    "관해파리 🪼": {
+        "grade": "피식자",
+        "prob": 9,
+        "base_window": 1.8,
+        "price": 2200,
+        "power": 50,
+        "element": "심해"
+    },
+    "마귀상어 (고블린) 🦈": {
+        "grade": "포식자-상어",
+        "prob": 8,
+        "base_window": 1.8,
+        "price": 2200,
+        "power": 80,
+        "element": "심해"
+    },
+    "전기뱀장어 ⚡": {
+        "grade": "대형 포식자",
+        "prob": 8,
+        "base_window": 1.8,
+        "price": 2200,
+        "power": 80,
+        "element": "무속성"
+    },
+    "피문어 🐙": {
+        "grade": "대형 포식자",
+        "prob": 8,
+        "base_window": 1.9,
+        "price": 2200,
+        "power": 60,
+        "element": "암초"
+    },
+    "통안어 (배럴아이) 🐟": {
+        "grade": "소형 포식자",
+        "prob": 8,
+        "base_window": 1.8,
+        "price": 2400,
+        "power": 60,
+        "element": "심해"
+    },
+    "블랙드래곤피쉬 🐉": {
+        "grade": "대형 포식자",
+        "prob": 7,
+        "base_window": 1.7,
+        "price": 2700,
+        "power": 85,
+        "element": "심해"
+    },
+    "엘리게이터 가아 🐊": {
+        "grade": "대형 포식자",
+        "prob": 6,
+        "base_window": 1.6,
+        "price": 2700,
+        "power": 95,
+        "element": "무속성"
+    },
+    "우파루파 🦎": {
+        "grade": "피식자",
+        "prob": 5,
+        "base_window": 2.0,
+        "price": 3000,
+        "power": 5,
+        "element": "무속성"
+    },
+    "철갑상어 🦈": {
+        "grade": "포식자-상어",
+        "prob": 5,
+        "base_window": 1.6,
+        "price": 3000,
+        "power": 90,
+        "element": "무속성"
+    },
+    "골리앗 타이거피쉬 🐟": {
+        "grade": "대형 포식자",
+        "prob": 5,
+        "base_window": 1.6,
+        "price": 3300,
+        "power": 105,
+        "element": "무속성"
+    },
+    "진주조개 🦪": {
+        "grade": "피식자",
+        "prob": 5,
+        "base_window": 2.5,
+        "price": 3700,
+        "power": 1,
+        "element": "암초"
+    },
+    "황금빛 알비노 돌돔 ⭐": {
+        "grade": "피식자",
+        "prob": 1.0,
+        "base_window": 2.2,
+        "price": 7200,
+        "power": 500,
+        "element": "암초"
+    },
+    "킹크랩 🦀": {
+        "grade": "대형 포식자",
+        "prob": 10,
+        "base_window": 1.9,
+        "price": 2200,
+        "power": 30,
+        "element": "심해"
+    },
+    "바닷가재 (랍스터) 🦞": {
+        "grade": "소형 포식자",
+        "prob": 10,
+        "base_window": 1.9,
+        "price": 2400,
+        "power": 35,
+        "element": "암초"
+    },
+    "갯가재 (맨티스 쉬림프) 🦐": {
+        "grade": "소형 포식자",
+        "prob": 12,
+        "base_window": 2.0,
+        "price": 1600,
+        "power": 65,
+        "element": "암초"
+    },
+    "장수거북 🐢": {
+        "grade": "대형 포식자",
+        "prob": 8,
+        "base_window": 1.8,
+        "price": 2700,
+        "power": 45,
+        "element": "표층"
+    },
+    "해달 🦦": {
+        "grade": "소형 포식자",
+        "prob": 7,
+        "base_window": 1.7,
+        "price": 3000,
+        "power": 30,
+        "element": "표층"
+    },
+    "듀공 🐋": {
+        "grade": "포식자-고래",
+        "prob": 6,
+        "base_window": 1.6,
+        "price": 3300,
+        "power": 40,
+        "element": "표층"
+    },
+    "매너티 🐋": {
+        "grade": "포식자-고래",
+        "prob": 6,
+        "base_window": 1.6,
+        "price": 3100,
+        "power": 38,
+        "element": "표층"
+    },
+    "전기가오리 ⚡": {
+        "grade": "대형 포식자",
+        "prob": 9,
+        "base_window": 1.8,
+        "price": 2500,
+        "power": 75,
+        "element": "암초"
+    },
+    "나뭇잎해룡 🐉": {
+        "grade": "피식자",
+        "prob": 8,
+        "base_window": 1.8,
+        "price": 2800,
+        "power": 25,
+        "element": "암초"
+    },
+    "갑오징어 🦑": {
+        "grade": "소형 포식자",
+        "prob": 10,
+        "base_window": 1.9,
+        "price": 1500,
+        "power": 20,
+        "element": "암초"
+    },
+    "앵무조개 🐚": {
+        "grade": "피식자",
+        "prob": 8,
+        "base_window": 1.8,
+        "price": 3700,
+        "power": 10,
+        "element": "심해"
+    },
+    "개복치 🐟": {
+        "grade": "대형 포식자",
+        "prob": 4,
+        "base_window": 1.5,
+        "price": 3000,
+        "power": 70,
+        "element": "표층"
+    },
+    "돌가자미 🐠": {
+        "grade": "대형 포식자",
+        "prob": 5,
+        "base_window": 1.6,
+        "price": 3700,
+        "power": 90,
+        "element": "암초"
+    },
+    "블롭피쉬 💧": {
+        "grade": "피식자",
+        "prob": 5,
+        "base_window": 1.6,
+        "price": 3700,
+        "power": 50,
+        "element": "심해"
+    },
+    "청새치 🐟": {
+        "grade": "대형 포식자",
+        "prob": 4,
+        "base_window": 1.5,
+        "price": 3700,
+        "power": 90,
+        "element": "표층"
+    },
+    "황새치 🗡️": {
+        "grade": "대형 포식자",
+        "prob": 4,
+        "base_window": 1.5,
+        "price": 4200,
+        "power": 100,
+        "element": "표층"
+    },
+    "꼼치 🐟": {
+        "grade": "소형 포식자",
+        "prob": 5,
+        "base_window": 1.6,
+        "price": 4200,
+        "power": 80,
+        "element": "심해"
+    },
+    "쥐상어 🦈": {
+        "grade": "포식자-상어",
+        "prob": 4,
+        "base_window": 1.5,
+        "price": 4200,
+        "power": 95,
+        "element": "표층"
+    },
+    "청상아리 🦈": {
+        "grade": "포식자-상어",
+        "prob": 3,
+        "base_window": 1.4,
+        "price": 4500,
+        "power": 110,
+        "element": "표층"
+    },
+    "쥐가오리 (만타) 🦇": {
+        "grade": "대형 포식자",
+        "prob": 3,
+        "base_window": 1.4,
+        "price": 4500,
+        "power": 100,
+        "element": "표층"
+    },
+    "혹돔 🐠": {
+        "grade": "대형 포식자",
+        "prob": 4,
+        "base_window": 1.5,
+        "price": 4500,
+        "power": 100,
+        "element": "암초"
+    },
+    "귀상어 🦈": {
+        "grade": "포식자-상어",
+        "prob": 3,
+        "base_window": 1.4,
+        "price": 4600,
+        "power": 105,
+        "element": "표층"
+    },
+    "뱀상어 (타이거) 🦈": {
+        "grade": "포식자-상어",
+        "prob": 3,
+        "base_window": 1.4,
+        "price": 4800,
+        "power": 115,
+        "element": "표층"
+    },
+    "파란고리문어 🐙": {
+        "grade": "소형 포식자",
+        "prob": 3,
+        "base_window": 1.4,
+        "price": 4800,
+        "power": 110,
+        "element": "암초"
+    },
+    "대왕쥐가오리 🦇": {
+        "grade": "대형 포식자",
+        "prob": 4,
+        "base_window": 1.5,
+        "price": 5200,
+        "power": 120,
+        "element": "심해"
+    },
+    "백상아리 🦈": {
+        "grade": "포식자-상어",
+        "prob": 3,
+        "base_window": 1.4,
+        "price": 5200,
+        "power": 120,
+        "element": "표층"
+    },
+    "붉바리 🐠": {
+        "grade": "대형 포식자",
+        "prob": 4,
+        "base_window": 1.5,
+        "price": 5200,
+        "power": 110,
+        "element": "암초"
+    },
+    "대왕문어 🐙": {
+        "grade": "대형 포식자",
+        "prob": 3,
+        "base_window": 1.4,
+        "price": 5700,
+        "power": 120,
+        "element": "암초"
+    },
+    "다금바리 (자바리) 🐠": {
+        "grade": "대형 포식자",
+        "prob": 3,
+        "base_window": 1.4,
+        "price": 6000,
+        "power": 130,
+        "element": "암초"
+    },
+    "주름상어 🦈": {
+        "grade": "포식자-상어",
+        "prob": 3,
+        "base_window": 1.4,
+        "price": 6000,
+        "power": 125,
+        "element": "심해"
+    },
+    "메가마우스상어 🦈": {
+        "grade": "포식자-상어",
+        "prob": 3,
+        "base_window": 1.4,
+        "price": 6300,
+        "power": 135,
+        "element": "심해"
+    },
+    "자이언트 그루퍼 🐠": {
+        "grade": "대형 포식자",
+        "prob": 3,
+        "base_window": 1.4,
+        "price": 6300,
+        "power": 140,
+        "element": "암초"
+    },
+    "산갈치 🐉": {
+        "grade": "대형 포식자",
+        "prob": 3,
+        "base_window": 1.4,
+        "price": 6700,
+        "power": 140,
+        "element": "심해"
+    },
+    "아마존의 제왕, 피라루쿠 🐟": {
+        "grade": "대형 포식자",
+        "prob": 3,
+        "base_window": 1.4,
+        "price": 6700,
+        "power": 140,
+        "element": "무속성"
+    },
+    "남극하트오징어 🦑": {
+        "grade": "대형 포식자",
+        "prob": 2,
+        "base_window": 1.3,
+        "price": 7500,
+        "power": 180,
+        "element": "심해"
+    },
+    "아마존 강돌고래 🐬": {
+        "grade": "포식자-고래",
+        "prob": 2,
+        "base_window": 1.3,
+        "price": 7500,
+        "power": 120,
+        "element": "무속성"
+    },
+    "고래상어 🦈": {
+        "grade": "포식자-상어",
+        "prob": 2,
+        "base_window": 1.3,
+        "price": 7500,
+        "power": 150,
+        "element": "표층"
+    },
+    "콜로살 오징어 🦑": {
+        "grade": "대형 포식자",
+        "prob": 2,
+        "base_window": 1.3,
+        "price": 8200,
+        "power": 190,
+        "element": "심해"
+    },
+    "실러캔스 🐟": {
+        "grade": "대형 포식자",
+        "prob": 2,
+        "base_window": 1.3,
+        "price": 8200,
+        "power": 160,
+        "element": "심해"
+    },
+    "전설의 흰수염고래 🐋": {
+        "grade": "포식자-고래",
+        "prob": 2,
+        "base_window": 1.3,
+        "price": 9000,
+        "power": 200,
+        "element": "심해"
+    },
+    "황금빛 알비노 참다랑어 ⭐": {
+        "grade": "소형 포식자",
+        "prob": 0.5,
+        "base_window": 1.8,
+        "price": 9700,
+        "power": 150,
+        "element": "표층"
+    },
+    "바다의 무법자, 범고래 🐋": {
+        "grade": "포식자-고래",
+        "prob": 1,
+        "base_window": 1.2,
+        "price": 10500,
+        "power": 250,
+        "element": "표층"
+    },
+    "대왕고래 🐋": {
+        "grade": "포식자-고래",
+        "prob": 1,
+        "base_window": 1.2,
+        "price": 12000,
+        "power": 300,
+        "element": "심해"
+    },
+    "가라앉은 보물상자 🧰": {
+        "grade": "잡동사니",
+        "prob": 3,
+        "base_window": 1.5,
+        "price": 15000,
+        "power": 0,
+        "element": "무속성"
+    },
+    "황금빛 알비노 철갑상어 ⭐": {
+        "grade": "대형 포식자",
+        "prob": 0.4,
+        "base_window": 1.8,
+        "price": 11000,
+        "power": 250,
+        "element": "무속성"
+    },
+    "황금빛 알비노 청새치 ⭐": {
+        "grade": "소형 포식자",
+        "prob": 0.3,
+        "base_window": 1.6,
+        "price": 13700,
+        "power": 400,
+        "element": "표층"
+    },
+    "황금빛 알비노 백상아리 ⭐": {
+        "grade": "대형 포식자",
+        "prob": 0.2,
+        "base_window": 1.5,
+        "price": 23100,
+        "power": 600,
+        "element": "심해"
+    },
+    "황금빛 알비노 피라루쿠 ⭐": {
+        "grade": "소형 포식자",
+        "prob": 0.2,
+        "base_window": 1.6,
+        "price": 24700,
+        "power": 500,
+        "element": "무속성"
+    },
+    "황금빛 알비노 고래상어 ⭐": {
+        "grade": "대형 포식자",
+        "prob": 0.1,
+        "base_window": 1.4,
+        "price": 38500,
+        "power": 800,
+        "element": "심해"
+    },
+    "바다코끼리 🦭": {
+        "grade": "대형 포식자",
+        "prob": 3,
+        "base_window": 1.4,
+        "price": 8200,
+        "power": 130,
+        "element": "표층"
+    },
+    "일각고래 🦄": {
+        "grade": "포식자-고래",
+        "prob": 2,
+        "base_window": 1.3,
+        "price": 9300,
+        "power": 170,
+        "element": "심해"
+    },
+    "벨루가 (흰고래) 🐋": {
+        "grade": "포식자-고래",
+        "prob": 2,
+        "base_window": 1.3,
+        "price": 9000,
+        "power": 160,
+        "element": "표층"
+    },
+    "향유고래 🐋": {
+        "grade": "포식자-고래",
+        "prob": 1,
+        "base_window": 1.2,
+        "price": 11200,
+        "power": 280,
+        "element": "심해"
+    },
+    "톱상어 🦈": {
+        "grade": "포식자-상어",
+        "prob": 3,
+        "base_window": 1.4,
+        "price": 7200,
+        "power": 145,
+        "element": "표층"
+    },
+    "내가 참치로 보이니? (멸치) 🐟": {
+        "grade": "레전드",
+        "prob": 0.2,
+        "base_window": 1.5,
+        "price": 7700,
+        "power": 1,
+        "element": "무속성"
+    },
+    "심해의 용궁 가디언 🐉": {
+        "grade": "레전드",
+        "prob": 0.5,
+        "base_window": 1.3,
+        "price": 16500,
+        "power": 400,
+        "element": "심해"
+    },
+    "백색의 재앙, 모비딕 🐋": {
+        "grade": "레전드",
+        "prob": 0.5,
+        "base_window": 1.2,
+        "price": 18700,
+        "power": 450,
+        "element": "표층"
+    },
+    "메갈로돈 🦈": {
+        "grade": "태고",
+        "prob": 0.2,
+        "base_window": 1.1,
+        "price": 33000,
+        "power": 2100,
+        "element": "무속성",
+        "description": "길이 20m, 이빨 하나가 사람 손바닥만 한 역사상 가장 거대한 상어.",
+        "skill": "[최상위 포식자] 일반 낚싯대로는 절대 낚을 수 없고, '강화 레벨 최고치'의 낚싯대만 버틸 수 있습니다."
+    },
+    "둔클레오스테우스 🦖": {
+        "grade": "태고",
+        "prob": 0.2,
+        "base_window": 1.1,
+        "price": 27500,
+        "power": 2550,
+        "element": "암초",
+        "description": "머리 전체가 두꺼운 강철 같은 장갑판으로 덮인 고생대 데본기의 포식자.",
+        "skill": "[강철의 턱] 낚시에 실패하면 가방에 있는 '가장 비싼 물고기'를 물어뜯고 도망간다는 아찔한 페널티를 줍니다."
+    },
+    "모사사우루스 🦖": {
+        "grade": "태고",
+        "prob": 0.2,
+        "base_window": 1.1,
+        "price": 30800,
+        "power": 2700,
+        "element": "표층",
+        "description": "공룡 시대 바다의 최상위 포식자인 거대 해양 파충류.",
+        "skill": "[정점의 위협] 도감에 등록되면, 이후 다른 유저의 배틀 도전을 일정 확률로 알아서 튕겨내는(위협) 패시브 효과를 줍니다."
+    },
+    "헬리코프리온 🦈": {
+        "grade": "태고",
+        "prob": 0.15,
+        "base_window": 1.0,
+        "price": 29700,
+        "power": 1560,
+        "element": "무속성",
+        "description": "아래턱이 둥근 톱니바퀴 모양으로 말려있는 기괴한 고대 연골어류.",
+        "skill": "[회전 톱날] 배틀 시 치명타가 터지면 상대방의 방어력을 영구적으로 깎아내립니다."
+    },
+    "리비아탄 멜빌레이 🐋": {
+        "grade": "태고",
+        "prob": 0.1,
+        "base_window": 1.0,
+        "price": 35200,
+        "power": 2620,
+        "element": "무속성",
+        "description": "메갈로돈과 바다의 패권을 다투던 30cm 이빨을 가진 고대 향유고래.",
+        "skill": "[태고의 격돌] 상대방이 상어류일 경우 입히는 대미지가 2배로 증가합니다."
+    },
+    "아노말로카리스 🦐": {
+        "grade": "태고",
+        "prob": 0.25,
+        "base_window": 1.1,
+        "price": 24200,
+        "power": 1000,
+        "element": "암초",
+        "description": "캄브리아기 바다를 지배했던 최초의 거대 포식자.",
+        "skill": "[원시의 촉수] 낚시 성공 시 무작위 등급의 잡동사니 아이템 1개를 추가로 건져 올립니다."
+    },
+    "아르켈론 🐢": {
+        "grade": "태고",
+        "prob": 0.2,
+        "base_window": 1.1,
+        "price": 26400,
+        "power": 1200,
+        "element": "표층",
+        "description": "소형 자동차만한 크기를 자랑하는 백악기의 거대 바다거북.",
+        "skill": "[백악기의 방패] 장착 시 배틀에서 받는 치명타 대미지를 일반 대미지로 감소시킵니다."
+    },
+    "팔라이옥토퍼스 🐙": {
+        "grade": "태고",
+        "prob": 0.2,
+        "base_window": 1.1,
+        "price": 25300,
+        "power": 1800,
+        "element": "심해",
+        "description": "백악기 바다를 누비던 원시 문어. 오늘날의 문어와 달리 지느러미와 내부 껍질이 발달했습니다.",
+        "skill": "[먹물 은신] 배틀 시 첫 번째 턴에서 적의 공격을 100% 확률로 회피합니다."
+    },
+    "리오플레우로돈 🐊": {
+        "grade": "태고",
+        "prob": 0.15,
+        "base_window": 1.0,
+        "price": 34100,
+        "power": 2000,
+        "element": "표층",
+        "description": "쥬라기 바다의 지배자. 엄청난 후각으로 수 킬로미터 밖의 먹잇감도 추적합니다.",
+        "skill": "[추적자의 이빨] 상대방의 회피율을 무시하고 반드시 명중하는 공격을 가합니다."
+    },
+    "크시팍티누스 🐟": {
+        "grade": "태고",
+        "prob": 0.2,
+        "base_window": 1.1,
+        "price": 28600,
+        "power": 1540,
+        "element": "표층",
+        "description": "불독 물고기라는 별명을 가진 백악기의 거대 육식 물고기. 자신보다 큰 먹이도 통째로 삼킵니다.",
+        "skill": "[폭식의 아가리] 배틀에서 승리할 경우, 일정 확률로 상대방이 사용한 소모성 아이템을 뺏어옵니다."
+    },
+    "삼엽충 🐚": {
+        "grade": "태고",
+        "prob": 0.25,
+        "base_window": 1.2,
+        "price": 23100,
+        "power": 1420,
+        "element": "암초",
+        "description": "고생대 바다의 살아있는 화석. 수억 년 동안 바다 밑바닥을 지켜온 딱딱한 껍질의 소유자.",
+        "skill": "[고생대의 갑옷] 방어력이 파워의 50%만큼 추가로 계산되어 배틀 시 받는 피해를 크게 줄입니다."
+    },
+    "바다의 파괴자, 루스카 🐙": {
+        "grade": "환상",
+        "prob": 0.1,
+        "base_window": 1.0,
+        "price": 38500,
+        "power": 1650,
+        "element": "심해",
+        "description": "카리브해 블루홀에 산다는 반은 상어, 반은 거대 문어인 끔찍한 키메라.",
+        "skill": "[생태계 교란] 상어의 '치명타'와 문어의 '회피' 스탯을 모두 가진 배틀 생태계의 교란종입니다."
+    },
+    "움직이는 섬, 자라탄 🐢": {
+        "grade": "환상",
+        "prob": 0.08,
+        "base_window": 1.0,
+        "price": 44000,
+        "power": 1700,
+        "element": "무속성",
+        "description": "등딱지에 흙이 쌓이고 숲이 자라나 사람들이 섬인 줄 알고 상륙한다는 거대한 바다거북.",
+        "skill": "[풍요의 등딱지] 낚으면 물고기가 아니라, 그 등딱지에서 자라난 '희귀 광물'이나 '신비한 열매(강화 재료)' 같은 특수 아이템을 매일 수확할 수 있습니다."
+    },
+    "여섯 개의 머리, 스킬라 🐉": {
+        "grade": "환상",
+        "prob": 0.09,
+        "base_window": 1.0,
+        "price": 41800,
+        "power": 3000,
+        "element": "암초",
+        "description": "좁은 해협에 숨어 지나가는 배의 선원 6명을 한 번에 낚아채 먹는다는 그리스 신화의 괴수.",
+        "skill": "[무자비한 포식] 배틀에 출전시키면 6번 연속 공격을 가하는 사기적인 다단 히트 스킬을 가집니다."
+    },
+    "해초의 망령, 켈피 🐎": {
+        "grade": "환상",
+        "prob": 0.12,
+        "base_window": 1.0,
+        "price": 34100,
+        "power": 2000,
+        "element": "표층",
+        "description": "아름다운 말의 모습을 하고 물가로 사람을 유인해 익사시키는 물의 정령.",
+        "skill": "[수중 결박] 배틀 시 상대방의 스피드를 1로 고정시켜 무조건 선공을 가져옵니다."
+    },
+    "바다의 수호자, 히포캄포스 🧜‍♂️": {
+        "grade": "환상",
+        "prob": 0.1,
+        "base_window": 1.0,
+        "price": 36300,
+        "power": 2000,
+        "element": "무속성",
+        "description": "상반신은 말, 하반신은 물고기 형태를 한 바다의 성수. 포세이돈의 전차를 끕니다.",
+        "skill": "[성스러운 파도] 배틀 중 잃은 체력의 30%를 매 턴마다 서서히 회복합니다."
+    },
+    "심해의 유령선, 플라잉 더치맨 🏴‍☠️": {
+        "grade": "환상",
+        "prob": 0.05,
+        "base_window": 0.9,
+        "price": 49500,
+        "power": 2500,
+        "element": "표층",
+        "description": "영원히 항구에 정박하지 못하고 저주받은 바다를 떠도는 유령선.",
+        "skill": "[저주받은 포격] 고기가 아니지만 낚입니다. 상대방의 아이템 효과를 배틀 중 완전히 무효화시킵니다."
+    },
+    "네스호의 그림자, 네시 🦕": {
+        "grade": "미스터리",
+        "prob": 0.05,
+        "base_window": 0.9,
+        "price": 55000,
+        "power": 2000,
+        "element": "무속성",
+        "description": "안개 낀 호수에서 목격되는 긴 목을 가진 미확인 수장룡. 항상 흐릿한 형체로만 목격됩니다.",
+        "skill": "[흐릿한 실루엣] 배틀 중 상대방의 치명타나 강력한 스킬 공격을 받을 때, 50% 확률로 그것이 '떠다니는 통나무(가짜)'로 판명되며 대미지를 0으로 무효화합니다."
+    },
+    "심연의 울음소리, 더 블룹 🔊": {
+        "grade": "미스터리",
+        "prob": 0.03,
+        "base_window": 0.9,
+        "price": 66000,
+        "power": 2850,
+        "element": "심해",
+        "description": "1997년 태평양 심해에서 녹음된, 지구상 어떤 생물보다 큰 소리를 내는 미지의 존재.",
+        "skill": "[미지의 형체] 낚아 올렸을 때 형태가 있는 물고기가 아니라 [정체를 알 수 없는 검은 음파의 결정체] 형태로 가방에 들어옵니다."
+    },
+    "남극의 인간형 거수, 닝겐 👻": {
+        "grade": "미스터리",
+        "prob": 0.04,
+        "base_window": 0.9,
+        "price": 60500,
+        "power": 2820,
+        "element": "표층",
+        "description": "남극의 얼음 바다 아래를 헤엄치는 거대하고 새하얀 인간 형태의 괴생명체.",
+        "skill": "[불쾌한 골짜기] 낚시 성공 메시지에 물고기 사진 대신 기괴하게 웃는 이모티콘만 텍스트로 출력되어 유저들을 소름 돋게 만듭니다."
+    },
+    "차원의 구멍, 버뮤다 트라이앵글 🌀": {
+        "grade": "미스터리",
+        "prob": 0.02,
+        "base_window": 0.8,
+        "price": 77000,
+        "power": 2900,
+        "element": "무속성",
+        "description": "수많은 배와 비행기가 흔적도 없이 사라진 마의 해역 그 자체.",
+        "skill": "[차원 흡수] 배틀에서 승리할 경우, 아주 낮은 확률로 상대방의 장착 물고기를 아예 삭제(소멸)시켜버립니다."
+    },
+    "심해의 눈, USO 🛸": {
+        "grade": "미스터리",
+        "prob": 0.04,
+        "base_window": 0.9,
+        "price": 63800,
+        "power": 2030,
+        "element": "심해",
+        "description": "심해 탐사 카메라에 가끔 찍히는, 비정상적인 속도로 기동하는 미확인 잠수 물체.",
+        "skill": "[외계 기술] 낚시 도구의 내구도를 닳지 않게 보호하며, 배틀 중 상대방의 스킬을 1회 복사해 사용합니다."
+    },
+    "심연의 지배자, 레비아탄 🌋": {
+        "grade": "신화",
+        "prob": 0.01,
+        "base_window": 0.7,
+        "price": 330000,
+        "power": 3500,
+        "element": "심해",
+        "description": "바다 그 자체를 상징하는 성서 속의 거대 괴수. 입에서 불을 뿜고 바다를 끓어오르게 합니다.",
+        "skill": "[종말의 끓는 바다] 수산대전(배틀)에서 상대방의 모든 물고기를 한 번에 즉사시킬 수 있는 광역 스킬을 보유합니다."
+    },
+    "심해의 파멸, 크라켄 🦑": {
+        "grade": "신화",
+        "prob": 0.01,
+        "base_window": 0.7,
+        "price": 308000,
+        "power": 3000,
+        "element": "심해",
+        "description": "수십 척의 거대 범선을 단숨에 심해로 끌고 들어가는 북유럽 전설의 거대 두족류.",
+        "skill": "[심해의 약탈자] 낚시 성공 시, 낮은 확률로 상대방 인벤토리의 코인을 '약탈(촉수로 훔쳐옴)'해옵니다."
+    },
+    "세계를 감싼 뱀, 요르문간드 🐍": {
+        "grade": "신화",
+        "prob": 0.005,
+        "base_window": 0.6,
+        "price": 550000,
+        "power": 4500,
+        "element": "무속성",
+        "description": "끝없는 덩치로 지구의 바다를 한 바퀴 빙 둘러 자신의 꼬리를 물고 있다는 재앙의 뱀.",
+        "skill": "[끝없는 순환] 가방에 가지고만 있어도 매일 자정마다 50,000 코인을 얻게 됩니다."
+    },
+    "대소용돌이의 재앙, 카리브디스 🌀": {
+        "grade": "신화",
+        "prob": 0.005,
+        "base_window": 0.6,
+        "price": 495000,
+        "power": 4500,
+        "element": "표층",
+        "description": "하루에 세 번 바닷물을 모두 들이마셨다 뱉어내며 거대한 소용돌이를 일으키는 그리스 전설의 마수.",
+        "skill": "[끝없는 심연] 배틀 시 상대방의 회피율이나 방어력을 0으로 만들어버리는(소용돌이로 빨아들이는) 디버프를 부여합니다."
+    },
+    "바다의 원혼, 우미보즈 🌑": {
+        "grade": "신화",
+        "prob": 0.002,
+        "base_window": 0.5,
+        "price": 880000,
+        "power": 5000,
+        "element": "무속성",
+        "description": "칠흑 같은 밤, 바다 한가운데서 거대한 검은 형상으로 솟아올라 배를 부수는 일본 요괴.",
+        "skill": "[칠흑의 공포] 오직 디스코드 서버 시간이 새벽(밤 12시~4시)일 때만 아주 극악의 확률로 낚입니다."
+    },
+    "이름 없는 심해의 고대신 (크툴루) 👁️": {
+        "grade": "신화",
+        "prob": 0.001,
+        "base_window": 0.4,
+        "price": 1100000,
+        "power": 5000,
+        "element": "심해",
+        "description": "우주에서 날아와 심해 밑바닥에 잠들어 있는 미지의 존재. 보는 것만으로도 정신이 붕괴됩니다.",
+        "skill": "[형언할 수 없는 광기] 이 괴수를 장착하고 채팅을 치면 다른 유저들의 채팅이 가끔 알 수 없는 외계어로 변환되어 보이는 이스터에그가 발동합니다."
+    },
+    "죽음의 선율, 세이렌의 군주 🧜‍♀️": {
+        "grade": "신화",
+        "prob": 0.005,
+        "base_window": 0.6,
+        "price": 385000,
+        "power": 3000,
+        "element": "표층",
+        "description": "아름다운 목소리로 선원들을 유혹하던 세이렌들의 정점. 그가 노래를 시작하면 바다의 모든 파도가 멈추고 적들은 무아지경에 빠집니다.",
+        "skill": "[매혹의 선율] 배틀 시 3턴 동안 상대방이 공격을 하지 못하게 만들며, 일정 확률로 상대방이 자기 자신을 공격하게 합니다."
+    },
+    "강철 지느러미, 아스피도켈론 🐢": {
+        "grade": "신화",
+        "prob": 0.004,
+        "base_window": 0.5,
+        "price": 440000,
+        "power": 3800,
+        "element": "암초",
+        "description": "등껍질이 거대한 섬처럼 보이는 전설의 거대 거북. 지느러미는 다이아몬드보다 단단한 강철로 덮여 있으며, 그 위에는 울창한 숲이 숨겨져 있습니다.",
+        "skill": "[움직이는 요새] 가방에 보유 시 배틀에서 받는 모든 대미지의 50%를 무효화하며, 내구도가 무한인 '절대 방패' 역할을 수행합니다."
+    },
+    "차원의 포식자, 보이드 샤크 🌌": {
+        "grade": "신화",
+        "prob": 0.003,
+        "base_window": 0.5,
+        "price": 660000,
+        "power": 4000,
+        "element": "심해",
+        "description": "현실이 아닌 공허(Void)에서 헤엄치는 검은 상어. 몸의 절반이 투명하며 지느러미가 지나간 자리에는 차원이 찢어지는 균열이 남습니다.",
+        "skill": "[차원 도약] 낚시 실패 시, 시간을 되돌려 100% 확률로 다시 낚을 수 있는 기회를 부여합니다. (1일 1회)"
+    },
+    "벼락의 신수, 이쿠치 ⚡": {
+        "grade": "신화",
+        "prob": 0.004,
+        "base_window": 0.5,
+        "price": 495000,
+        "power": 6000,
+        "element": "무속성",
+        "description": "몸길이가 수 킬로미터에 달하는 거대한 바다 뱀. 몸 전체에서 끈적이는 기름과 강력한 전류를 내뿜어 배를 순식간에 부식시키고 침몰시킵니다.",
+        "skill": "[초고압 방전] 상대방이 물 속성일 경우 대미지를 3배로 입히며, 배틀 승리 시 상대방의 강화 재료를 무작위로 파괴합니다."
+    },
+    "황금의 눈먼 왕, 엘도라도 리바이어던 👑": {
+        "grade": "신화",
+        "prob": 0.001,
+        "base_window": 0.4,
+        "price": 1650000,
+        "power": 5000,
+        "element": "심해",
+        "description": "가라앉은 황금 도시를 지키는 고대의 용. 눈은 보이지 않지만 진동만으로 적을 파악하며, 온몸이 순금 비늘로 덮여 눈부신 광채를 내뿜습니다.",
+        "skill": "[황금의 축복] 낚시 성공 시 획득 코인량이 영구적으로 2배 증가하며, 일정 확률로 희귀한 '황금 아이템'을 추가 획득합니다."
+    },
+    "얼어붙은 분노, 이미르의 눈물 ❄️": {
+        "grade": "신화",
+        "prob": 0.002,
+        "base_window": 0.4,
+        "price": 770000,
+        "power": 4500,
+        "element": "심해",
+        "description": "북해 가장 깊은 곳에 잠든 거대 빙하 괴수. 숨을 내뱉을 때마다 주변 바다를 얼려버리며, 그가 깨어나는 날은 세상에 빙하기가 찾아옵니다.",
+        "skill": "[절대 영도] 배틀 시작과 동시에 상대방의 스피드와 특수 스킬을 완전히 봉인하여 무력화시킵니다."
+    },
+    "창세의 바다, 티아맛 🐉": {
+        "grade": "신화",
+        "prob": 0.002,
+        "base_window": 0.4,
+        "price": 990000,
+        "power": 4200,
+        "element": "무속성",
+        "description": "모든 바다와 괴물들의 어머니이자 염수(소금물)의 화신인 신화 속 드래곤.",
+        "skill": "[생명의 기원] 보유하고 있으면 매일 무작위 일반~에픽 등급의 물고기 5마리를 인벤토리에 자동 생성합니다."
+    },
+    "대지진의 징조, 오오나마즈 🐟": {
+        "grade": "신화",
+        "prob": 0.003,
+        "base_window": 0.5,
+        "price": 605000,
+        "power": 4000,
+        "element": "암초",
+        "description": "대지 밑에 깔려 살며, 꼬리를 칠 때마다 지진과 해일을 일으키는 거대 괴물 메기.",
+        "skill": "[대재앙의 요동] 배틀 시 일정 확률로 지진을 일으켜 양측 모두의 버프를 해제하고 상대에게 기절을 부여합니다."
+    },
+    "우주를 유영하는 별, 바하무트 🌌": {
+        "grade": "신화",
+        "prob": 0.001,
+        "base_window": 0.4,
+        "price": 2200000,
+        "power": 5777,
+        "element": "무속성",
+        "description": "바다를 넘어 우주의 은하수를 헤엄치며 별을 삼킨다는 초월적 스케일의 빛나는 고래.",
+        "skill": "[성운의 궤적] 모든 속성에 대해 상성 우위를 점하며, 패배 시 상대의 파워를 영구히 10% 흡수합니다."
+    },
+    "심해의 포획자, 아나키온 🐍": {
+        "grade": "신화",
+        "prob": 0.001,
+        "base_window": 0.4,
+        "price": 1100000,
+        "power": 6000,
+        "element": "심해",
+        "description": "심해의 협곡 사이를 가로지르는 끝을 알 수 없는 몸길이의 거대 아나콘다. 먹잇감을 발견하면 소리 없이 다가가 몸으로 휘감아 뼈와 영혼까지 으스러뜨립니다.",
+        "skill": "[심연의 구속] 배틀 시작 시 첫 번째 턴에서는 상대의 공격을 완전히 봉쇄하고 본인만 단독 공격하며, 이후 매 턴 종료 시마다 상대방의 파워를 20%씩 영구적으로 감소시킵니다."
+    },
+    "용왕 👑": {
+        "grade": "해신(海神)",
+        "prob": 0.001,
+        "base_window": 0.4,
+        "price": 11000000,
+        "power": 15000,
+        "element": "무속성",
+        "description": "바다의 모든 생물을 다스리는 수중 궁전의 지배자.",
+        "skill": "[해신의 권능] 낚은 유저는 [서버의 바다 날씨를 바꿀 권한] 또는 [다른 유저들의 낚시 성공 확률을 1시간 동안 올려주는 버프 발동 권한] 등 게임 마스터(GM)에 준하는 특권을 일회성으로 얻게 됩니다."
+    },
+    "💎 GSM 황금 키보드": {
+        "grade": "히든",
+        "prob": 0.001,
+        "base_window": 0.5,
+        "price": 550000,
+        "power": 6800,
+        "element": "무속성"
+    }
+}

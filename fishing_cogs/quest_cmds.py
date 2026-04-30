@@ -161,22 +161,49 @@ class QuestCog(commands.Cog):
             embed.description = f"*(이미지 렌더링 오류 발생. 텍스트로 대체합니다)*\n\n{desc}"
             await interaction.followup.send(embed=embed)
 
-    @app_commands.command(name="출석", description="하루에 한 번 출석체크하고 1000 코인을 받습니다!")
+    @app_commands.command(name="출석", description="하루에 한 번 출석체크하고 코인 보상과 체력을 회복합니다! (연속 출석 시 보상 증가)")
     async def 출석(self, interaction: discord.Interaction):
         await db.get_user_data(interaction.user.id)
         today = datetime.datetime.now(kst).strftime('%Y-%m-%d')
+        yesterday = (datetime.datetime.now(kst) - datetime.timedelta(days=1)).strftime('%Y-%m-%d')
 
-        async with db.conn.execute("SELECT last_daily FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
-            last_daily = (await cursor.fetchone())[0]
+        async with db.conn.execute("SELECT last_daily, attendance_streak FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+            row = await cursor.fetchone()
+            last_daily = row[0] if row else ""
+            streak = row[1] if row and len(row) > 1 and row[1] is not None else 0
 
         if last_daily == today:
             return await interaction.response.send_message("❌ 오늘은 이미 출석하셨습니다! 내일 다시 와주세요.", ephemeral=True)
 
-        reward = 1000
-        async with db.transaction():
-            await db.execute("UPDATE user_data SET coins = coins + ?, stamina = max_stamina, last_daily = ? WHERE user_id = ?", (reward, today, interaction.user.id))
+        if last_daily == yesterday:
+            streak += 1
+        else:
+            streak = 1 # Reset or start at 1
 
-        await interaction.response.send_message(f"✅ 출석 완료! 보상으로 `{reward} C`를 받고 **행동력(체력)이 모두 회복**되었습니다! ⚡ (잔액 확인: `/인벤토리`)")
+        reward = 1000 + (streak - 1) * 500
+        if reward > 3000:
+            reward = 3000 # Cap at 3000
+            
+        bonus_msg = ""
+        items_to_give = []
+        if streak >= 5:
+            items_to_give.append(("에너지 드링크 ⚡", 1))
+            bonus_msg = "\n🎁 **[5연속 출석 보너스]** 에너지 드링크 ⚡ x1 획득!"
+        elif streak >= 3:
+            items_to_give.append(("고급 미끼 🪱", 1))
+            bonus_msg = "\n🎁 **[3연속 출석 보너스]** 고급 미끼 🪱 x1 획득!"
+
+        async with db.transaction():
+            await db.execute("UPDATE user_data SET coins = coins + ?, stamina = max_stamina, last_daily = ?, attendance_streak = ? WHERE user_id = ?", (reward, today, streak, interaction.user.id))
+            for item, amt in items_to_give:
+                await db.modify_inventory(interaction.user.id, item, amt)
+
+        embed = EmbedFactory.build(
+            title=f"📅 {interaction.user.name}님의 출석체크", 
+            description=f"✅ 출석 완료! (현재 **{streak}일** 연속 출석 중!)\n보상으로 `{reward:,} C`를 받고 **행동력(체력)이 모두 회복**되었습니다! ⚡{bonus_msg}",
+            style="success"
+        )
+        await interaction.response.send_message(embed=embed)
 
 
     @app_commands.command(name="한강물", description="모든 측정소의 한강 수온을 확인합니다. (우회 접속)")

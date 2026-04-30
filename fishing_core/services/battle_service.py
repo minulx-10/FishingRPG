@@ -32,23 +32,48 @@ class BattleService:
         return BattleService.MULTIPLIERS.get(points, points * 3.5)
 
     @staticmethod
-    def calculate_ap_battle(atk_pwr: int, atk_pts: int, def_pts: int) -> dict[str, Any]:
-        """AP 시스템 기반 데미지 계산"""
-        # 공격 포인트에서 방어 포인트를 차감
+    def calculate_ap_battle(atk_fish: str, def_fish: str, atk_pwr: int, atk_pts: int, def_pts: int, turn_count: int = 1) -> dict[str, Any]:
+        """AP 시스템 기반 데미지 계산 및 패시브 스킬 적용"""
         effective_pts = max(0, atk_pts - def_pts)
         
+        # [패시브] 팔라이옥토퍼스 🐙 - 첫 턴 확정 회피
+        if def_fish == "팔라이옥토퍼스 🐙" and turn_count == 1:
+            return {"damage": 0, "is_blocked": True, "effective_pts": 0, "passive_log": "🐙 팔라이옥토퍼스가 먹물을 뿜고 첫 공격을 완벽히 회피했습니다!"}
+            
+        # [패시브] 리오플레우로돈 🐊 - 회피 무시 반드시 명중 (블록 무시)
+        if atk_fish == "리오플레우로돈 🐊":
+            effective_pts = atk_pts
+            
         if effective_pts <= 0:
-            return {"damage": 0, "is_blocked": True, "effective_pts": 0}
+            return {"damage": 0, "is_blocked": True, "effective_pts": 0, "passive_log": ""}
             
         base_dmg = atk_pwr * BattleService.get_ap_multiplier(effective_pts)
         
+        # [패시브] 리비아탄 멜빌레이 🐋 - 상어류 대상 2배 데미지
+        def_grade = FISH_DATA.get(def_fish, {}).get("grade", "")
+        if atk_fish == "리비아탄 멜빌레이 🐋" and "상어" in def_grade:
+            base_dmg *= 2.0
+            
+        # [패시브] 이쿠치 ⚡ - 속성 무시 1.5배 (AP 룰에서는 단순 1.5배로 적용)
+        if atk_fish == "벼락의 신수, 이쿠치 ⚡":
+            base_dmg *= 1.5
+            
+        # [패시브] 삼엽충 🐚 - 받는 피해 30% 감소
+        if def_fish == "삼엽충 🐚":
+            base_dmg *= 0.7
+            
+        # [패시브] 아스피도켈론 🐢 - 받는 피해 50% 감소
+        if def_fish == "강철 지느러미, 아스피도켈론 🐢":
+            base_dmg *= 0.5
+            
         # 난수 적용 (소폭)
         final_dmg = int(base_dmg * random.uniform(0.95, 1.05))
         
         return {
             "damage": final_dmg,
             "is_blocked": False,
-            "effective_pts": effective_pts
+            "effective_pts": effective_pts,
+            "passive_log": ""
         }
 
     @staticmethod

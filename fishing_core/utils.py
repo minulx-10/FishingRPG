@@ -191,3 +191,23 @@ def check_boat_tier(min_tier: int):
             return False
         return True
     return app_commands.check(predicate)
+
+def require_start():
+    async def predicate(interaction: discord.Interaction):
+        await db.execute("INSERT OR IGNORE INTO user_data (user_id) VALUES (?)", (interaction.user.id,))
+        async with db.conn.execute("SELECT is_started FROM user_data WHERE user_id=?", (interaction.user.id,)) as cursor:
+            res = await cursor.fetchone()
+        
+        is_started = res[0] if res else 0
+        if not is_started:
+            embed = EmbedFactory.build(
+                title="🎣 낚시 RPG에 오신 것을 환영합니다!", 
+                description=f"**{interaction.user.name}**님, 환영합니다!\n원활한 게임 진행을 위해 먼저 **`/시작`** 명령어를 입력하여 캐릭터를 생성하고 초기 정착 지원금을 받아주세요!", 
+                style="success"
+            )
+            embed.set_image(url="https://images.unsplash.com/photo-1516574187841-cb9cc2ca948b?w=800")
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return False
+        return True
+    return app_commands.check(predicate)
+

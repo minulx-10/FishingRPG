@@ -1,206 +1,300 @@
 {
     "장어 덮밥 🍱": {
-        "ingredients": {"민물장어 (뱀장어) 🐍": 2},
+        "ingredients": {
+            "민물장어 (뱀장어) 🐍": 2
+        },
         "description": "1시간 동안 낚시 대기 시간이 짧아집니다 (1~3초).",
         "buff_type": "cooldown_reduction",
         "duration": 60,
-        "price": 800
+        "price": 1200
     },
     "복어 지리탕 🍲": {
-        "ingredients": {"복어 🐡": 2, "미역치 🐠": 1},
+        "ingredients": {
+            "복어 🐡": 2,
+            "미역치 🐠": 1
+        },
         "description": "30분 동안 희귀/심해 어종 낚시 확률이 대폭 증가합니다. (단, 10% 확률로 독에 걸려 5,000C 상실)",
         "buff_type": "deep_sea_boost",
         "duration": 30,
-        "price": 1200
+        "price": 3600
     },
     "특급 참치 초밥 🍣": {
-        "ingredients": {"특급 참치 🍣": 2},
+        "ingredients": {
+            "특급 참치 🍣": 2
+        },
         "description": "버프는 없지만, 판매 시 아주 비싼 가격에 팔립니다.",
         "buff_type": "sell_only",
-        "price": 2000
+        "price": 4000
     },
     "어부의 모둠 생선구이 🍳": {
-        "ingredients": {"싱싱한 고등어 🐟": 2, "전갱이 🐟": 2, "삼치 🐟": 1},
+        "ingredients": {
+            "싱싱한 고등어 🐟": 2,
+            "전갱이 🐟": 2,
+            "삼치 🐟": 1
+        },
         "description": "1시간 동안 일반 등급 물고기 낚시 시 획득하는 코인이 2배로 증가합니다.",
         "buff_type": "coin_boost_normal",
         "duration": 60,
-        "price": 500
+        "price": 1600
     },
     "최상급 모둠 활어회 🐟": {
-        "ingredients": {"광어 (넙치) 🐠": 1, "조피볼락 (우럭) 🐠": 1, "참돔 🐠": 1},
+        "ingredients": {
+            "광어 (넙치) 🐠": 1,
+            "조피볼락 (우럭) 🐠": 1,
+            "참돔 🐠": 1
+        },
         "description": "30분 동안 모든 낚시 수입(코인)이 1.5배가 됩니다.",
         "buff_type": "coin_boost_all",
         "duration": 30,
-        "price": 1500
+        "price": 2200
     },
     "가물치 진액 엑기스 🧃": {
-        "ingredients": {"가물치 🐟": 1, "붕어 🐟": 3},
+        "ingredients": {
+            "가물치 🐟": 1,
+            "붕어 🐟": 3
+        },
         "description": "1시간 동안 낚싯줄이 끊어지거나 물고기를 놓칠 확률이 0%가 됩니다.",
         "buff_type": "never_fail",
         "duration": 60,
-        "price": 1100
+        "price": 2800
     },
     "쏘가리 매운탕 🥘": {
-        "ingredients": {"쏘가리 🐟": 2, "메기 🐟": 1},
+        "ingredients": {
+            "쏘가리 🐟": 2,
+            "메기 🐟": 1
+        },
         "description": "15분 동안 일반 등급 물고기가 낚이지 않습니다! (희귀 이상 100% 보장)",
         "buff_type": "skip_normal",
         "duration": 15,
-        "price": 1300
+        "price": 2100
     },
     "국민 밥도둑 멸치볶음 🍚": {
-        "ingredients": {"멸치 🐟": 5, "까나리 🐟": 3},
+        "ingredients": {
+            "멸치 🐟": 5,
+            "까나리 🐟": 3
+        },
         "description": "2시간 동안 낚시로 얻는 경험치가 1.5배 증가합니다.",
         "buff_type": "exp_boost",
         "duration": 120,
-        "price": 300
+        "price": 950
     },
     "외래종 퇴치 피쉬 앤 칩스 🍟": {
-        "ingredients": {"큰입배스 🐟": 2, "블루길 🐟": 3},
+        "ingredients": {
+            "큰입배스 🐟": 2,
+            "블루길 🐟": 3
+        },
         "description": "30분 동안 '무속성' 어종이 등장할 확률이 절반으로 감소합니다.",
         "buff_type": "reduce_freshwater",
         "duration": 30,
-        "price": 400
+        "price": 800
     },
     "톡톡 터지는 날치알 마끼 🍣": {
-        "ingredients": {"날치 🐟": 3},
+        "ingredients": {
+            "날치 🐟": 3
+        },
         "description": "20분 동안 낚시 캐스팅 속도가 엄청나게 빨라집니다 (쿨타임 70% 감소).",
         "buff_type": "rapid_cast",
         "duration": 20,
-        "price": 900
+        "price": 1600
     },
     "개복치 멘탈 케어 수액 💧": {
-        "ingredients": {"개복치 🐟": 5},
+        "ingredients": {
+            "개복치 🐟": 5
+        },
         "description": "30분 동안 낚싯줄이 끊어지거나 도망가는 이벤트가 절대 발생하지 않습니다.",
         "buff_type": "never_fail",
         "duration": 60,
-        "price": 5000
+        "price": 22500
     },
     "해마 보양술 🍶": {
-        "ingredients": {"해마 🐉": 2, "곰치 🐍": 1},
+        "ingredients": {
+            "해마 🐉": 2,
+            "곰치 🐍": 1
+        },
         "description": "1시간 동안 플레이어의 배틀 전투력(Power)이 +100 증가합니다.",
         "buff_type": "power_boost",
         "duration": 60,
-        "price": 2500
+        "price": 4800
     },
     "황실 캐비어 카나페 🍘": {
-        "ingredients": {"철갑상어 🦈": 1},
+        "ingredients": {
+            "철갑상어 🦈": 1
+        },
         "description": "초호화 요리입니다. 판매 시 6,000C를 얻을 수 있습니다.",
         "buff_type": "sell_only",
-        "price": 6000
+        "price": 12000
     },
     "피의 상어 스튜 🍲": {
-        "ingredients": {"청상아리 🦈": 1, "뱀상어 (타이거) 🦈": 1},
+        "ingredients": {
+            "청상아리 🦈": 1,
+            "뱀상어 (타이거) 🦈": 1
+        },
         "description": "1시간 동안 전투력(Power)이 +250 증가하지만, 낚시 대기 시간은 2배로 늘어납니다.",
         "buff_type": "power_surge_slow_cast",
         "duration": 60,
-        "price": 8000
+        "price": 13900
     },
     "맹독 암초 마라샹궈 🌶️": {
-        "ingredients": {"쏠배감펭 (라이온피시) 🐠": 1, "가시복 🐡": 1, "쑤기미 🐠": 1},
+        "ingredients": {
+            "쏠배감펭 (라이온피시) 🐠": 1,
+            "가시복 🐡": 1,
+            "쑤기미 🐠": 1
+        },
         "description": "30분간 '초희귀' 어종 확률이 3배가 되지만, 20% 확률로 10분간 기절합니다.",
         "buff_type": "high_risk_rare_boost",
         "duration": 30,
-        "price": 3500
+        "price": 6700
     },
     "아마존 번개구이 꼬치 ⚡": {
-        "ingredients": {"전기뱀장어 ⚡": 1, "피라니아 🐟": 3},
+        "ingredients": {
+            "전기뱀장어 ⚡": 1,
+            "피라니아 🐟": 3
+        },
         "description": "30분 동안 낚시 성공 시 10% 확률로 해당 물고기를 1+1으로 획득합니다.",
         "buff_type": "double_catch_chance",
         "duration": 30,
-        "price": 4000
+        "price": 6000
     },
     "심해의 발광 야식 세트 🦑": {
-        "ingredients": {"랜턴피쉬 🐟": 2, "초롱아귀 🐟": 1},
+        "ingredients": {
+            "랜턴피쉬 🐟": 2,
+            "초롱아귀 🐟": 1
+        },
         "description": "2시간 동안 낚시 쿨타임이 절반으로 줄어듭니다.",
         "buff_type": "cooldown_halved",
         "duration": 120,
-        "price": 2500
+        "price": 3700
     },
     "황금 샥스핀 찜 🍲": {
-        "ingredients": {"백상아리 🦈": 1, "귀상어 🦈": 1},
+        "ingredients": {
+            "백상아리 🦈": 1,
+            "귀상어 🦈": 1
+        },
         "description": "최상위 포식자 요리. 판매 시 15,000C에 팔립니다.",
         "buff_type": "sell_only",
-        "price": 15000
+        "price": 30000
     },
     "👑 전설의 해신탕 🍲": {
-        "ingredients": {"전설의 흰수염고래 🐋": 1, "산갈치 🐉": 1, "다금바리 (자바리) 🐠": 1},
+        "ingredients": {
+            "전설의 흰수염고래 🐋": 1,
+            "산갈치 🐉": 1,
+            "다금바리 (자바리) 🐠": 1
+        },
         "description": "10분 동안, [대형 포식자] 등급 어종 등장 확률이 5배로 폭증합니다.",
         "buff_type": "large_predator_frenzy",
         "duration": 10,
-        "price": 25000
+        "price": 37500
     },
     "심해의 기괴한 젤리 푸딩 🍮": {
-        "ingredients": {"블롭피쉬 💧": 2, "꼼치 🐟": 2},
+        "ingredients": {
+            "블롭피쉬 💧": 2,
+            "꼼치 🐟": 2
+        },
         "description": "섭취 즉시 다음 3회의 낚시에서 무조건 '심해' 어종만 등장합니다.",
         "buff_type": "next_3_deep_sea",
         "duration": 0,
-        "price": 7000
+        "price": 23700
     },
     "전설의 3대장 돔구이 🍱": {
-        "ingredients": {"참돔 🐠": 1, "감성돔 🐠": 1, "벵에돔 🐠": 1},
+        "ingredients": {
+            "참돔 🐠": 1,
+            "감성돔 🐠": 1,
+            "벵에돔 🐠": 1
+        },
         "description": "판매 시 3,000C를 즉시 획득합니다.",
         "buff_type": "sell_only",
-        "price": 3000
+        "price": 6000
     },
     "살아있는 화석 스테이크 🥩": {
-        "ingredients": {"실러캔스 🐟": 1, "메가마우스상어 🦈": 1},
+        "ingredients": {
+            "실러캔스 🐟": 1,
+            "메가마우스상어 🦈": 1
+        },
         "description": "암시장에 팔아 무려 25,000C를 챙깁니다.",
         "buff_type": "sell_only",
-        "price": 25000
+        "price": 50000
     },
     "심해룡의 여의주 탕 🔮": {
-        "ingredients": {"블랙드래곤피쉬 🐉": 1, "아로와나 🐟": 1},
+        "ingredients": {
+            "블랙드래곤피쉬 🐉": 1,
+            "아로와나 🐟": 1
+        },
         "description": "판매 시 18,000C를 획득하며 서버 전체에 알림이 뜹니다.",
         "buff_type": "sell_with_announce",
-        "price": 18000
+        "price": 27000
     },
     "🔱 포세이돈의 만찬 🔱": {
-        "ingredients": {"대왕고래 🐋": 1, "백상아리 🦈": 1, "범고래 🐋": 1},
+        "ingredients": {
+            "대왕고래 🐋": 1,
+            "백상아리 🦈": 1,
+            "범고래 🐋": 1
+        },
         "description": "30분간 [대형 포식자] 등급 이하 모든 어종의 등장 확률이 동일해집니다! (전설 등급 제외)",
         "buff_type": "large_predator_equalizer",
         "duration": 30,
-        "price": 50000
+        "price": 75000
     },
     "🌌 아비규환 심해 전골 🍲": {
-        "ingredients": {"남극하트오징어 🦑": 1, "콜로살 오징어 🦑": 1, "심해아귀 🐟": 2},
+        "ingredients": {
+            "남극하트오징어 🦑": 1,
+            "콜로살 오징어 🦑": 1,
+            "심해아귀 🐟": 2
+        },
         "description": "20분 동안 심해 어종 등장 확률이 80%가 되며, 일반/희귀 등급이 낚이지 않습니다.",
         "buff_type": "deep_sea_sniper",
         "duration": 20,
-        "price": 15000
+        "price": 27100
     },
     "💀 사신의 에픽 데스 소스 🌶️": {
-        "ingredients": {"마귀상어 (고블린) 🦈": 1, "쿠키커터상어 🦈": 1, "바이퍼피쉬 🐟": 1},
+        "ingredients": {
+            "마귀상어 (고블린) 🦈": 1,
+            "쿠키커터상어 🦈": 1,
+            "바이퍼피쉬 🐟": 1
+        },
         "description": "15분 동안 [일반/희귀/초희귀] 등급이 아예 등장하지 않습니다! 오직 [대형 포식자] 등급만 노립니다.",
         "buff_type": "only_large_predator_mode",
         "duration": 15,
-        "price": 12000
+        "price": 18000
     },
     "🧪 심해 유물 증기찜 💨": {
-        "ingredients": {"앵무조개 🐚": 2, "유령멍게 🫧": 3, "심해 갯지렁이 🐛": 5},
+        "ingredients": {
+            "앵무조개 🐚": 2,
+            "유령멍게 🫧": 3,
+            "심해 갯지렁이 🐛": 5
+        },
         "description": "40분 동안 심해에서 낚이는 모든 물고기의 판매 가격이 2배가 됩니다.",
         "buff_type": "deep_sea_double_price",
         "duration": 40,
-        "price": 9000
+        "price": 18000
     },
     "🧊 극지방 얼음 화채 🍨": {
-        "ingredients": {"일각고래 🦄": 1, "벨루가 (흰고래) 🐋": 1, "바다코끼리 🦭": 1},
+        "ingredients": {
+            "일각고래 🦄": 1,
+            "벨루가 (흰고래) 🐋": 1,
+            "바다코끼리 🦭": 1
+        },
         "description": "[에픽] 등급 이하 모든 어종이 1시간 동안 낚시 성공 확률이 100%가 됩니다.",
         "buff_type": "arctic_frenzy",
         "duration": 60,
-        "price": 20000
+        "price": 39700
     },
     "🍲 영양 가득 해물탕": {
-        "ingredients": {"*ANY_FISH*": 3},
+        "ingredients": {
+            "*ANY_FISH*": 3
+        },
         "description": "아무 물고기나 넣고 끓인 실속 만점 해물탕입니다. 5분 동안 낚시 성공 확률이 소폭 상승합니다.",
         "buff_type": "common_success_boost",
         "duration": 5,
-        "price": 3000
+        "price": 4500
     },
     "🌶️ 얼큰한 매운탕": {
-        "ingredients": {"*ANY_FISH*": 2, "낡은 고철 ⚙️": 1},
+        "ingredients": {
+            "*ANY_FISH*": 2,
+            "낡은 고철 ⚙️": 1
+        },
         "description": "고철(?)을 넣고 끓인 기괴하지만 얼큰한 매운탕입니다. 10분 동안 행동력 소모량이 1 감소합니다.",
         "buff_type": "stamina_save_1",
         "duration": 10,
-        "price": 5000
+        "price": 7500
     }
 }
