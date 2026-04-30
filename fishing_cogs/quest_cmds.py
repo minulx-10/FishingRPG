@@ -181,8 +181,7 @@ class QuestCog(commands.Cog):
             streak = 1 # Reset or start at 1
 
         reward = 1000 + (streak - 1) * 500
-        if reward > 3000:
-            reward = 3000 # Cap at 3000
+        reward = min(reward, 3000) # Cap at 3000
             
         bonus_msg = ""
         items_to_give = []
