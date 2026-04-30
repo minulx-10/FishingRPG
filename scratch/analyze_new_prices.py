@@ -1,6 +1,6 @@
 import json
 
-with open("fish_data_new.json", "r", encoding="utf-8") as f:
+with open("fish_data_new.json", encoding="utf-8") as f:
     data = json.load(f)
 
 grades = {}

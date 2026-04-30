@@ -1,11 +1,11 @@
 import json
 
 # Load fish data first to get new prices
-with open("fish_data.json", "r", encoding="utf-8") as f:
+with open("fish_data.json", encoding="utf-8") as f:
     fish_data = json.load(f)
 
 # Load recipes
-with open("recipes.json", "r", encoding="utf-8") as f:
+with open("recipes.json", encoding="utf-8") as f:
     recipes = json.load(f)
 
 new_recipes = {}

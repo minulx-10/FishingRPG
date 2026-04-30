@@ -1,6 +1,6 @@
 import json
 
-with open("collections.json", "r", encoding="utf-8") as f:
+with open("collections.json", encoding="utf-8") as f:
     data = json.load(f)
 
 for name, info in data.items():
