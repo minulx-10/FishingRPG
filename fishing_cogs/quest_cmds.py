@@ -581,7 +581,7 @@ class QuestCog(commands.Cog):
 
     @app_commands.command(name="감정", description="코인을 지불하고 '가라앉은 보물상자 🧰'를 열어 대박을 노립니다!")
     async def 감정(self, interaction: discord.Interaction):
-        fee = 2000
+        fee = 5000
         coins, _, _ = await db.get_user_data(interaction.user.id)
 
         async with db.conn.execute("SELECT amount FROM inventory WHERE user_id=? AND item_name='가라앉은 보물상자 🧰'", (interaction.user.id,)) as cursor:
@@ -607,7 +607,7 @@ class QuestCog(commands.Cog):
             await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 5) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 5", (interaction.user.id, "낡은 고철 ⚙️"))
 
         elif rand < 0.75:
-            reward_coin = random.randint(20000, 40000)
+            reward_coin = random.randint(3000, 10000)
             reward_msg = f"✨ 번쩍이는 금은보화가 가득합니다! 귀금속을 팔아 **`{reward_coin:,} C`**를 얻었습니다."
             await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id=?", (reward_coin, interaction.user.id))
 
@@ -619,7 +619,7 @@ class QuestCog(commands.Cog):
 
         else:
             reward_item = "💎 GSM 황금 키보드"
-            reward_coin = 100000
+            reward_coin = 50000
             reward_msg = f"🚨 **[기적] 상자 밑바닥에서 엄청난 빛이 뿜어져 나옵니다!!!**\n**`{reward_coin:,} C`**와 함께 전설의 아이템 **{reward_item}**를 손에 넣었습니다!"
             await db.execute("UPDATE user_data SET coins = coins + ? WHERE user_id=?", (reward_coin, interaction.user.id))
             await db.execute("INSERT INTO inventory (user_id, item_name, amount) VALUES (?, ?, 1) ON CONFLICT(user_id, item_name) DO UPDATE SET amount = amount + 1", (interaction.user.id, reward_item))

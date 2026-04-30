@@ -29,7 +29,13 @@ class FishingService:
         weights = []
 
         if "ghost_sea_open" in active_buffs:
-            ghost_items = {"해적의 금화 🪙": 60, "가라앉은 보물상자 🧰": 25, "낡은 고철 ⚙️": 15}
+            # 보물지도 구역 밸런스 조정: 수익성 아이템 확률 하향 및 잡동사니(꽝) 비중 확대
+            ghost_items = {
+                "해적의 금화 🪙": 35, 
+                "가라앉은 보물상자 🧰": 5, 
+                "낡은 고철 ⚙️": 30,
+                "낡은 장화 🥾": 30
+            }
             for item, prob in ghost_items.items():
                 candidates.append(item)
                 weights.append(prob)

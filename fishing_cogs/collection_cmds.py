@@ -190,7 +190,7 @@ class CollectionCog(commands.Cog):
 
         await db.execute("UPDATE inventory SET amount = amount - 1 WHERE user_id=? AND item_name='고대 해적의 보물지도 🗺️'", (interaction.user.id,))
 
-        end_time = (datetime.datetime.now(kst) + datetime.timedelta(minutes=30)).strftime('%Y-%m-%d %H:%M:%S')
+        end_time = (datetime.datetime.now(kst) + datetime.timedelta(minutes=15)).strftime('%Y-%m-%d %H:%M:%S')
         buffs = ["ghost_sea_open", "deep_sea_rift", "golden_tide"]
         chosen_buff = random.choice(buffs)
 
